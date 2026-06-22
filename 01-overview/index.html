@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft Simulator — Technical Deep Dive</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+<style>
+  :root {
+    --bg-dark: #1a1a2e;
+    --accent: #e94560;
+    --secondary: #0f3460;
+    --highlight: #53d8fb;
+    --text: #e8e8e8;
+    --dim: #8892b0;
+    --code-bg: #16213e;
+    --success: #4ade80;
+    --warn: #fbbf24;
+  }
+  .reveal { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: var(--text); }
+  .reveal .slides { text-align: left; }
+  .reveal .slides section { background: var(--bg-dark); }
+  .reveal h1 { font-size: 2.2em; color: var(--accent); font-weight: 700; text-align: center; margin-bottom: 0.3em; }
+  .reveal h2 { font-size: 1.6em; color: var(--highlight); font-weight: 600; border-bottom: 2px solid var(--accent); padding-bottom: 0.15em; margin-bottom: 0.4em; }
+  .reveal h3 { font-size: 1.2em; color: var(--accent); font-weight: 600; margin-bottom: 0.3em; }
+  .reveal h4 { font-size: 1.0em; color: var(--highlight); margin-bottom: 0.2em; }
+  .reveal p, .reveal li { font-size: 0.72em; line-height: 1.55; }
+  .reveal ul { margin-left: 1.2em; }
+  .reveal li { margin-bottom: 0.2em; }
+  .reveal code { background: var(--code-bg); color: var(--highlight); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
+  .reveal pre { background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 8px; padding: 0.7em; margin: 0.4em 0; }
+  .reveal pre code { background: transparent; padding: 0; font-size: 0.7em; }
+  .reveal .accent { color: var(--accent); }
+  .reveal .hl { color: var(--highlight); }
+  .reveal .dim { color: var(--dim); }
+  .reveal .success { color: var(--success); }
+  .reveal .warn { color: var(--warn); }
+  .reveal strong { color: var(--accent); }
+  .reveal em { color: var(--highlight); font-style: normal; }
+
+  /* ================================================================ */
+  /* DIAGRAM FRAMEWORK                                                */
+  /* ================================================================ */
+  .diagram-box {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.45em 0.9em; border-radius: 8px; font-size: 0.68em;
+    font-weight: 600; text-align: center; line-height: 1.3;
+    white-space: nowrap; min-width: 2.5em;
+  }
+  .box-primary   { background: var(--secondary); border: 2px solid var(--highlight); color: var(--highlight); }
+  .box-accent    { background: #3b1029; border: 2px solid var(--accent); color: var(--accent); }
+  .box-success   { background: #0c2e1c; border: 2px solid var(--success); color: var(--success); }
+  .box-warn      { background: #2e2a0c; border: 2px solid var(--warn); color: var(--warn); }
+  .box-dim       { background: #1e1e3a; border: 2px solid var(--dim); color: var(--dim); }
+  .box-gpu       { background: #1a0a2e; border: 2px solid #a855f7; color: #a855f7; }
+  .box-amd       { background: #2e0a0a; border: 2px solid #ef4444; color: #ef4444; }
+
+  .arrow { color: var(--dim); font-size: 1.3em; margin: 0 0.3em; display: inline-flex; align-items: center; }
+  .arrow-down { color: var(--dim); font-size: 1.2em; text-align: center; margin: 0.2em 0; }
+
+  .flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em; margin: 0.5em 0; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; gap: 0.15em; margin: 0.4em 0; }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8em; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1em; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 1em; }
+
+  /* Cards */
+  .card {
+    background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 10px;
+    padding: 0.7em; margin: 0.3em 0;
+  }
+  .card-accent { border-color: var(--accent); }
+  .card-hl     { border-color: var(--highlight); }
+
+  /* File tree */
+  .file-tree { font-family: 'Consolas', 'Fira Code', monospace; font-size: 0.62em; line-height: 1.6; }
+  .file-tree .dir  { color: var(--highlight); }
+  .file-tree .file { color: var(--dim); }
+  .file-tree .note { color: var(--accent); font-style: italic; }
+
+  /* Table */
+  .reveal table { font-size: 0.65em; border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+  .reveal th { background: var(--secondary); color: var(--highlight); padding: 0.4em 0.6em; border: 1px solid #2a3a5e; text-align: left; }
+  .reveal td { padding: 0.35em 0.6em; border: 1px solid #2a3a5e; }
+
+  /* State diagram */
+  .state-block {
+    display: flex; align-items: stretch; border: 2px solid var(--highlight);
+    border-radius: 10px; overflow: hidden; margin: 0.5em auto; max-width: 90%;
+  }
+  .state-segment {
+    padding: 0.5em 0.8em; text-align: center; font-size: 0.62em;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .state-label { font-weight: 700; font-size: 1.1em; margin-bottom: 0.2em; }
+  .state-detail { font-size: 0.85em; color: var(--dim); }
+
+  /* GPU thread diagram */
+  .gpu-grid { display: grid; gap: 3px; margin: 0.3em auto; }
+  .gpu-cell {
+    width: 100%; aspect-ratio: 1; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.45em; font-weight: 600;
+  }
+  .gpu-cell-active { background: #a855f7; color: #fff; }
+  .gpu-cell-idle   { background: #2a2a4e; color: #666; }
+
+  /* Performance bar */
+  .perf-bar-container { margin: 0.3em 0; }
+  .perf-bar-label { font-size: 0.62em; color: var(--dim); margin-bottom: 0.15em; }
+  .perf-bar-track { background: #1e1e3a; border-radius: 6px; height: 28px; position: relative; overflow: hidden; }
+  .perf-bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 0.5em;
+    font-size: 0.6em; font-weight: 700; color: #fff; transition: width 0.8s ease; }
+
+  /* Big number */
+  .big-num { font-size: 2.5em; font-weight: 800; color: var(--accent); text-align: center; margin: 0.2em 0; }
+  .big-label { font-size: 0.7em; color: var(--dim); text-align: center; }
+
+  /* Pipeline step boxes */
+  .pipeline-step {
+    display: flex; align-items: flex-start; gap: 0.6em; margin: 0.35em 0;
+  }
+  .pipeline-num {
+    flex-shrink: 0; width: 1.8em; height: 1.8em; border-radius: 50%;
+    background: var(--accent); color: #fff; display: flex; align-items: center;
+    justify-content: center; font-weight: 800; font-size: 0.75em;
+  }
+  .pipeline-content { flex: 1; }
+
+  /* Opcode table compact */
+  .opcode-group { margin-bottom: 0.4em; }
+  .opcode-group-title { font-size: 0.7em; color: var(--accent); font-weight: 700; border-bottom: 1px solid #2a3a5e; padding-bottom: 0.15em; margin-bottom: 0.2em; }
+  .opcode-list { font-size: 0.58em; color: var(--dim); line-height: 1.5; font-family: 'Consolas', monospace; }
+  .opcode-list .op { color: var(--highlight); }
+
+  /* Title slide */
+  .title-slide { text-align: center !important; }
+  .title-slide h1 { font-size: 3em; margin-bottom: 0.1em; }
+  .title-slide .subtitle { font-size: 1.1em; color: var(--highlight); margin-bottom: 1.5em; }
+  .title-slide .meta { font-size: 0.7em; color: var(--dim); }
+
+  /* Section divider */
+  .section-divider { text-align: center !important; display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+  .section-divider h1 { font-size: 2.8em; }
+  .section-divider .section-num { font-size: 5em; font-weight: 900; color: var(--secondary); opacity: 0.5; margin-bottom: -0.3em; }
+
+  /* Horizontal rule */
+  .reveal hr { border: none; border-top: 1px solid #2a3a5e; margin: 0.5em 0; }
+
+  /* Fragment highlight */
+  .reveal .fragment.highlight-accent.visible { color: var(--accent); }
+
+  /* Responsive fixes */
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+  }
+/* font-size-override-applied */
+      .reveal { font-size: 24px !important; }
+      .reveal h1 { font-size: 1.8em !important; }
+      .reveal h2 { font-size: 1.4em !important; }
+      .reveal h3 { font-size: 1.1em !important; }
+      .reveal h4 { font-size: 0.9em !important; }
+      .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+      .reveal pre { font-size: 0.75em !important; }
+      .reveal code { font-size: 0.85em !important; }
+      .reveal .small { font-size: 0.7em !important; }
+      .reveal table { font-size: 0.8em !important; }
+      </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================== -->
+<!-- TITLE SLIDE                                                     -->
+<!-- ============================================================== -->
+<section class="title-slide">
+  <h1>Clifft Simulator</h1>
+  <div class="subtitle">Fast Exact Simulation of Near-Clifford Quantum Circuits</div>
+  <div style="margin: 1em 0;">
+    <div class="flow-row">
+      <span class="diagram-box box-primary">CPU (upstream)</span>
+      <span class="arrow">+</span>
+      <span class="diagram-box box-gpu">CUDA</span>
+      <span class="arrow">+</span>
+      <span class="diagram-box box-amd">AMD HIP</span>
+    </div>
+  </div>
+  <div class="meta">
+    Technical Deep Dive &mdash; All Three Codebases<br>
+    Maintained by Unitary Foundation (Brad Chase) &bull; GPU ports for QEC workloads
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 1: WHAT IS CLIFFT?                                     -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">1</div>
+  <h1>What is Clifft?</h1>
+</section>
+
+<section>
+  <h2>Clifft at a Glance</h2>
+  <div class="grid-2">
+    <div>
+      <ul>
+        <li><strong>Fast exact simulator</strong> for near-Clifford quantum circuits</li>
+        <li>Maintained by <em>Unitary Foundation</em> (Brad Chase)</li>
+        <li>Primary target: <strong>QEC circuit simulation</strong></li>
+        <li>Written in C++20, header-only core, pybind11 Python bindings</li>
+        <li>ISA-optimized: AVX-512, AVX2, scalar backends (runtime CPUID)</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>Why "Near-Clifford"?</h4>
+      <p>A QEC circuit with <em>n</em> qubits may have thousands of gates, but the vast majority are <strong>Clifford gates</strong> (H, S, CNOT, CZ) &mdash; classically simulable in O(n&sup2;) via the Gottesman-Knill theorem.</p>
+      <p>Only a handful of <strong>non-Clifford gates</strong> (T, arbitrary rotations) require exponential-cost statevector operations.</p>
+      <p style="color:var(--accent);font-weight:700;">Clifft exploits this asymmetry.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The Key Insight</h2>
+  <div class="flow-col" style="margin:0.8em 0;">
+    <div class="state-block" style="width:100%;">
+      <div class="state-segment" style="background:var(--secondary);flex:4;">
+        <div class="state-label" style="color:var(--highlight);">Clifford Gates</div>
+        <div class="state-detail">H, S, CNOT, CZ, SWAP</div>
+        <div class="state-detail" style="color:var(--success);">O(n) &mdash; Pauli frame update only</div>
+      </div>
+      <div class="state-segment" style="background:#3b1029;flex:1;">
+        <div class="state-label" style="color:var(--accent);">Non-Clifford</div>
+        <div class="state-detail">T, Rz(&theta;)</div>
+        <div class="state-detail" style="color:var(--accent);">O(2^k) &mdash; statevector</div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.5em;">
+    <h4>Factored State Representation</h4>
+    <div style="text-align:center;font-size:0.85em;margin:0.3em 0;">
+      <code>|&psi;&rang; = &gamma; &middot; U_C &middot; P &middot; ( |&phi;&rang;_A &otimes; |0&rang;_D )</code>
+    </div>
+    <div class="grid-2" style="font-size:0.9em;">
+      <div>
+        <ul>
+          <li><code>&gamma;</code> &mdash; global scalar (phase + normalization)</li>
+          <li><code>U_C</code> &mdash; Clifford unitary (absorbed into tableau)</li>
+          <li><code>P</code> &mdash; Pauli frame (<code>p_x</code>, <code>p_z</code> bitmasks)</li>
+        </ul>
+      </div>
+      <div>
+        <ul>
+          <li><code>|&phi;&rang;_A</code> &mdash; active statevector: <em>2^k</em> amplitudes</li>
+          <li><code>|0&rang;_D</code> &mdash; dormant qubits (not stored)</li>
+          <li><code>k</code> = <strong>active rank</strong> (typically 1&ndash;3 for QEC)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Why This Matters for QEC</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Surface Code Magic State Cultivation</h4>
+      <ul>
+        <li>Distance d=5, noise p=0.001</li>
+        <li>Circuit: ~hundreds of qubits</li>
+        <li>Active dimension: <strong>k = 1&ndash;3</strong></li>
+        <li>Need <em>billions</em> of shots to find rare logical errors (~10<sup>-9</sup>)</li>
+        <li>Post-selection: discard failed attempts</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card card-hl" style="text-align:center;">
+        <div class="big-num">2<sup>k</sup></div>
+        <div class="big-label">amplitudes stored<br>(not 2<sup>n</sup>)</div>
+        <hr>
+        <div style="font-size:0.7em;margin-top:0.3em;">
+          For k=3, n=100:<br>
+          <span class="accent">8 complex numbers</span> instead of<br>
+          <span class="dim">2<sup>100</sup> &asymp; 10<sup>30</sup></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 2: REPOSITORY STRUCTURE                                -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">2</div>
+  <h1>Repository Structure</h1>
+</section>
+
+<section>
+  <h2>Three Codebases</h2>
+  <div class="flow-col" style="margin:0.6em 0;">
+    <div class="flow-row">
+      <span class="diagram-box box-primary" style="font-size:0.75em;padding:0.6em 1.2em;">
+        clifft-upstream<br><span style="font-size:0.8em;color:var(--dim);">CPU &bull; C++20 &bull; Header-only</span>
+      </span>
+    </div>
+    <div class="arrow-down" style="font-size:1.5em;">&#x2193;</div>
+    <div class="flow-row" style="gap:2em;">
+      <div class="flow-col" style="gap:0.1em;">
+        <span class="diagram-box box-gpu" style="font-size:0.75em;padding:0.6em 1.2em;">
+          clifft-cuda<br><span style="font-size:0.8em;color:var(--dim);">NVIDIA fork</span>
+        </span>
+        <div style="font-size:0.55em;color:var(--dim);">embeds upstream as third_party/clifft</div>
+      </div>
+      <div class="flow-col" style="gap:0.1em;">
+        <span class="diagram-box box-amd" style="font-size:0.75em;padding:0.6em 1.2em;">
+          clifft-amd<br><span style="font-size:0.8em;color:var(--dim);">AMD HIP fork</span>
+        </span>
+        <div style="font-size:0.55em;color:var(--dim);">adds hip_sampler.hip to CUDA fork</div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.3em;">
+    <div class="grid-3" style="font-size:0.85em;">
+      <div>
+        <h4>upstream (CPU)</h4>
+        <ul>
+          <li>Full compilation pipeline</li>
+          <li>SVM execution engine</li>
+          <li>All optimizer passes</li>
+          <li>AVX-512 / AVX2 / scalar</li>
+          <li>Python bindings</li>
+        </ul>
+      </div>
+      <div>
+        <h4>CUDA fork</h4>
+        <ul>
+          <li>Embeds upstream as submodule</li>
+          <li>Adds <code>cuda_sampler.cu</code> (1960 lines)</li>
+          <li>GPU kernel: one thread = one shot</li>
+          <li>Python wrapper via pybind11</li>
+        </ul>
+      </div>
+      <div>
+        <h4>AMD fork</h4>
+        <ul>
+          <li>Fork of CUDA fork</li>
+          <li>Adds <code>hip_sampler.hip</code> (1960 lines)</li>
+          <li>Mechanical port: cuda* &rarr; hip*</li>
+          <li>Retains CUDA path as fallback</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>File Tree &mdash; Upstream Core</h2>
+  <div class="grid-2">
+    <div class="file-tree">
+      <span class="dir">src/clifft/</span><br>
+      <span class="dir">&nbsp;&nbsp;circuit/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;circuit.h</span> <span class="note">&larr; Circuit data structure</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;parser.h</span> <span class="note">&larr; Stim format parser (+T/S/RZ)</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;gate_data.h</span> <span class="note">&larr; Gate metadata tables</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;target.h</span> <span class="note">&larr; Qubit/record targets</span><br>
+      <br>
+      <span class="dir">&nbsp;&nbsp;frontend/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;frontend.h</span> <span class="note">&larr; Stim tableau &rarr; HIR trace</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;hir.h</span> <span class="note">&larr; Heisenberg IR data structures</span><br>
+      <br>
+      <span class="dir">&nbsp;&nbsp;optimizer/</span> <span class="note">(11 pass files)</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;pass_registry.h</span> <span class="note">&larr; Single source of truth</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;hir_pass.h</span> <span class="note">&larr; HIR pass base class</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;bytecode_pass.h</span> <span class="note">&larr; Bytecode pass base class</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;peephole.h</span> <span class="note">&larr; PeepholeFusionPass</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;statevector_squeeze_pass.h</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;expand_t_pass.h</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;single_axis_fusion_pass.h</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;tile_axis_fusion_pass.h</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;...</span><br>
+    </div>
+    <div class="file-tree">
+      <span class="dir">&nbsp;&nbsp;backend/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;backend.h</span> <span class="note">&larr; Opcodes + Instruction (32B)</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;compiler_context.h</span> <span class="note">&larr; AOT compiler</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;source_map.h</span> <span class="note">&larr; Debug source mapping</span><br>
+      <br>
+      <span class="dir">&nbsp;&nbsp;svm/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;svm.h</span> <span class="note">&larr; Schr&ouml;dinger VM + state</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;svm_internal.h</span> <span class="note">&larr; ISA dispatch (AVX-512/2)</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;svm_math.h</span> <span class="note">&larr; Array kernels</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;svm_forced_kernels.h</span> <span class="note">&larr; Forced-outcome variants</span><br>
+      <br>
+      <span class="dir">&nbsp;&nbsp;util/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;bitmask.h</span> <span class="note">&larr; PauliBitMask (n-qubit)</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;pauli_arena.h</span> <span class="note">&larr; Arena allocator for masks</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;config.h</span> <span class="note">&larr; Compile-time configuration</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;mask_view.h</span> <span class="note">&larr; Mask access helpers</span><br>
+      <br>
+      <span class="dir">&nbsp;&nbsp;api/</span><br>
+      <span class="file">&nbsp;&nbsp;&nbsp;&nbsp;reference_syndrome.h</span> <span class="note">&larr; Syndrome API</span><br>
+      <br>
+      <span class="dir">src/python/</span> <span class="note">&larr; pybind11 bindings</span><br>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>File Tree &mdash; GPU Forks</h2>
+  <div class="grid-2">
+    <div>
+      <h4 style="color:#a855f7;">clifft-cuda/</h4>
+      <div class="file-tree">
+        <span class="dir">src/</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.cu</span> <span class="note">&larr; 1960 lines &bull; GPU kernel</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.cpp</span> <span class="note">&larr; Host-side launcher</span><br>
+        <span class="dir">include/clifft_cuda/</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.h</span> <span class="note">&larr; Public API</span><br>
+        <span class="dir">clifft_cuda/</span><br>
+        <span class="file">&nbsp;&nbsp;backends.py</span> <span class="note">&larr; Python backend selector</span><br>
+        <span class="file">&nbsp;&nbsp;compiler.py</span> <span class="note">&larr; Compile + dispatch</span><br>
+        <span class="dir">third_party/clifft/</span> <span class="note">&larr; upstream as submodule</span><br>
+        <span class="dir">third_party/stim/</span> <span class="note">&larr; Stim dependency</span><br>
+        <span class="dir">tools/</span><br>
+        <span class="file">&nbsp;&nbsp;run_msc.py</span> <span class="note">&larr; Magic state cultivation runner</span><br>
+        <span class="file">&nbsp;&nbsp;run_msc_cuda.cpp</span> <span class="note">&larr; C++ MSC runner</span><br>
+      </div>
+    </div>
+    <div>
+      <h4 style="color:#ef4444;">clifft-amd/</h4>
+      <div class="file-tree">
+        <span class="dir">src/</span><br>
+        <span class="file">&nbsp;&nbsp;hip_sampler.hip</span> <span class="note">&larr; 1960 lines &bull; HIP kernel</span><br>
+        <span class="file">&nbsp;&nbsp;hip_sampler_stub.cpp</span> <span class="note">&larr; Stub when no ROCm</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.cu</span> <span class="note">&larr; CUDA path retained</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.cpp</span> <span class="note">&larr; Host-side (CUDA)</span><br>
+        <span class="dir">include/clifft_cuda/</span><br>
+        <span class="file">&nbsp;&nbsp;cuda_sampler.h</span><br>
+        <span class="file">&nbsp;&nbsp;hip_sampler.h</span> <span class="note">&larr; HIP public API</span><br>
+        <span class="dir">scripts/</span><br>
+        <span class="file">&nbsp;&nbsp;compare_oracle.py</span> <span class="note">&larr; Validation against CPU</span><br>
+        <span class="dir">tools/</span><br>
+        <span class="file">&nbsp;&nbsp;run_msc_hip.cpp</span> <span class="note">&larr; HIP MSC runner</span><br>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 3: ARCHITECTURE - THE FULL PIPELINE                    -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">3</div>
+  <h1>Architecture</h1>
+  <div style="font-size:0.5em;color:var(--dim);">The Full Compilation &amp; Execution Pipeline</div>
+</section>
+
+<section>
+  <h2>Pipeline Overview</h2>
+  <div class="flow-col" style="gap:0.15em;">
+    <div class="flow-row">
+      <span class="diagram-box box-dim">.stim file</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary">Parser<br><span style="font-size:0.75em;">circuit/parser.h</span></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary">Circuit</span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-primary">Circuit</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">Frontend<br><span style="font-size:0.75em;">frontend/frontend.h</span></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">HIR<br><span style="font-size:0.75em;">HirModule</span></span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-accent">HIR</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-warn">Optimizer<br><span style="font-size:0.75em;">11 passes</span></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-warn">Optimized HIR</span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-warn">Optimized HIR</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">Backend<br><span style="font-size:0.75em;">backend/backend.h</span></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">CompiledModule<br><span style="font-size:0.75em;">Bytecode + ConstantPool</span></span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-success">CompiledModule</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary" style="border-color:var(--accent);">SVM<br><span style="font-size:0.75em;">svm/svm.h</span></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-dim">Results<br><span style="font-size:0.75em;">measurements, detectors, observables</span></span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Each Stage at a Glance</h2>
+  <div class="pipeline-step">
+    <div class="pipeline-num">1</div>
+    <div class="pipeline-content">
+      <h4>Parser</h4>
+      <p>Reads <code>.stim</code> format with extensions: <code>T</code>, <code>T_DAG</code>, <code>S</code>, <code>S_DAG</code>, <code>RZ(&theta;)</code>. Produces a <code>Circuit</code> object (gate list + qubit metadata).</p>
+    </div>
+  </div>
+  <div class="pipeline-step">
+    <div class="pipeline-num">2</div>
+    <div class="pipeline-content">
+      <h4>Frontend (Tableau Trace)</h4>
+      <p>Drives Stim's <code>TableauSimulator</code>. Cliffords are absorbed. Non-Clifford gates and measurements emit <code>HeisenbergOp</code>s with rewound Pauli masks into the <code>HirModule</code>.</p>
+    </div>
+  </div>
+  <div class="pipeline-step">
+    <div class="pipeline-num">3</div>
+    <div class="pipeline-content">
+      <h4>Optimizer</h4>
+      <p>11 registered passes (4 HIR-level, 7 bytecode-level). Fuse gates, minimize active rank <em>k</em>, eliminate noise, peephole optimize. Single pass manager drives all.</p>
+    </div>
+  </div>
+  <div class="pipeline-step">
+    <div class="pipeline-num">4</div>
+    <div class="pipeline-content">
+      <h4>Backend Compiler (AOT)</h4>
+      <p>Localizes global qubit topology into virtual-axis operations. Emits 32-byte aligned bytecode instructions + <code>ConstantPool</code> (Pauli masks, fused unitaries, noise channels).</p>
+    </div>
+  </div>
+  <div class="pipeline-step">
+    <div class="pipeline-num">5</div>
+    <div class="pipeline-content">
+      <h4>SVM Execution</h4>
+      <p>Iterates bytecode, dispatches to ISA-specific kernels. Each shot: reset state &rarr; execute &rarr; collect measurements/detectors/observables. PRNG: <code>Xoshiro256++</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 4: COMPILATION PIPELINE DEEP DIVE                      -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">4</div>
+  <h1>Compilation Pipeline</h1>
+  <div style="font-size:0.5em;color:var(--dim);">Deep Dive</div>
+</section>
+
+<section>
+  <h2>Circuit Parsing</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Stim Format + Extensions</h4>
+      <ul>
+        <li>Base: full <strong>Stim</strong> instruction set (H, CNOT, CZ, S, M, R, DETECTOR, OBSERVABLE_INCLUDE, ...)</li>
+        <li>Clifft extensions:
+          <ul>
+            <li><code>T</code> / <code>T_DAG</code> &mdash; pi/8 phase gates</li>
+            <li><code>RZ(alpha)</code> &mdash; continuous Z-rotation</li>
+            <li>Handled by custom parser layer on top of Stim</li>
+          </ul>
+        </li>
+        <li>Output: <code>Circuit</code> struct with gate list + metadata</li>
+        <li>Qubit limit: <strong>65,536</strong> (uint16_t axis indices)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="card">
+        <h4>Example .stim Input</h4>
+        <pre><code>R 0 1 2 3 4
+H 0
+CNOT 0 1
+T 1
+CNOT 1 2
+H 2
+M 0 1 2
+DETECTOR rec[-1] rec[-2]
+OBSERVABLE_INCLUDE(0) rec[-3]</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>HIR &mdash; Heisenberg Intermediate Representation</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Operation Types (OpType enum)</h4>
+      <table>
+        <tr><th>OpType</th><th>Description</th></tr>
+        <tr><td><code>T_GATE</code></td><td>T or T_dag (FLAG_IS_DAGGER distinguishes)</td></tr>
+        <tr><td><code>MEASURE</code></td><td>Destructive Z/X/multi-Pauli measurement</td></tr>
+        <tr><td><code>CONDITIONAL_PAULI</code></td><td>Classical feedback: apply Pauli if meas=1</td></tr>
+        <tr><td><code>NOISE</code></td><td>Stochastic Pauli channel &rarr; NoiseSite</td></tr>
+        <tr><td><code>READOUT_NOISE</code></td><td>Classical bit-flip on meas result</td></tr>
+        <tr><td><code>PHASE_ROTATION</code></td><td>Continuous Rz(&alpha;) rotation</td></tr>
+        <tr><td><code>DETECTOR</code></td><td>Parity check over meas records</td></tr>
+        <tr><td><code>OBSERVABLE</code></td><td>Logical observable accumulator</td></tr>
+        <tr><td><code>EXP_VAL</code></td><td>Non-destructive expectation value</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="card card-accent">
+        <h4>Key Design Principle</h4>
+        <p>Clifford gates <strong>never appear</strong> in the HIR. They are fully absorbed into Stim's tableau during the frontend trace. Only non-Clifford operations and measurements survive.</p>
+        <p>Each <code>HeisenbergOp</code> carries:</p>
+        <ul>
+          <li><code>PauliMaskHandle</code> &mdash; reference into arena</li>
+          <li>Weight (complex coefficient)</li>
+          <li>Axis indices (virtual qubit positions)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Side Tables on HirModule</h4>
+        <ul style="font-size:0.9em;">
+          <li><code>noise_sites</code> &mdash; NoiseSite channels</li>
+          <li><code>detector_targets</code> &mdash; measurement record indices</li>
+          <li><code>observable_targets</code> &mdash; observable accumulators</li>
+          <li><code>readout_noise</code> &mdash; bit-flip entries</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Frontend Transformation</h2>
+  <div class="card" style="margin-bottom:0.5em;">
+    <h4>Algorithm: Tableau-Driven Trace</h4>
+    <div style="font-size:0.85em;">
+      <ol>
+        <li>Initialize Stim <code>TableauSimulator</code> with identity tableau</li>
+        <li>For each gate in the circuit:
+          <ul>
+            <li><strong>Clifford</strong> (H, S, CNOT, CZ, SWAP): Apply to simulator &mdash; absorbed into tableau, <em>no HIR op emitted</em></li>
+            <li><strong>T / T_DAG</strong>: Extract rewound Z-observable from <code>inv_state.zs[q]</code>, emit <code>T_GATE</code> HeisenbergOp with Pauli mask</li>
+            <li><strong>Measurement</strong>: Extract rewound observable, emit <code>MEASURE</code></li>
+            <li><strong>Classical feedback</strong> (CX/CZ with <code>rec</code> targets): Extract rewound Pauli, emit <code>CONDITIONAL_PAULI</code></li>
+          </ul>
+        </li>
+        <li>Return <code>HirModule</code> with all emitted operations</li>
+      </ol>
+    </div>
+  </div>
+  <div class="flow-row">
+    <span class="diagram-box box-dim">Clifford gates</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-primary">Stim Tableau</span>
+    <span class="arrow" style="color:var(--accent);">&times;</span>
+    <span class="diagram-box box-accent">T gate on qubit q</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-warn">Extract Z_q from<br>inv_state.zs[q]</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-success">HeisenbergOp<br>(T_GATE, mask, weight)</span>
+  </div>
+</section>
+
+<section>
+  <h2>Optimizer Passes</h2>
+  <div class="grid-2">
+    <div>
+      <h4>HIR Passes (pre-compilation)</h4>
+      <div class="card" style="margin-bottom:0.3em;">
+        <div style="font-size:0.75em;">
+          <div style="margin-bottom:0.3em;">
+            <code class="accent">PeepholeFusionPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Local gate fusion &mdash; merges adjacent same-axis ops into fused U2/U4 unitaries</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="accent">StatevectorSqueezePass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Minimizes peak active rank k by reordering operations &mdash; critical for keeping 2<sup>k</sup> small</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="accent">RemoveNoisePass</code> <span class="dim">[default: OFF]</span><br>
+            <span class="dim">Strips all noise channels for noiseless simulation</span>
+          </div>
+          <div>
+            <code class="accent">DropNonUnitaryPass</code> <span class="dim">[default: OFF]</span><br>
+            <span class="dim">Strips measurements for probability computation mode</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h4>Bytecode Passes (post-compilation)</h4>
+      <div class="card" style="margin-bottom:0.3em;">
+        <div style="font-size:0.75em;">
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">NoiseBlockPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Groups contiguous noise sites into OP_NOISE_BLOCK</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">MultiGatePass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses consecutive CNOT/CZ into OP_ARRAY_MULTI_CNOT/CZ</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">ExpandTPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses OP_EXPAND + OP_ARRAY_T into single OP_EXPAND_T</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">ExpandRotPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses OP_EXPAND + OP_ARRAY_ROT into OP_EXPAND_ROT</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">SwapMeasPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses OP_ARRAY_SWAP + OP_MEAS into OP_SWAP_MEAS</span>
+          </div>
+          <div style="margin-bottom:0.3em;">
+            <code class="hl">TileAxisFusionPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses gates across tile boundaries</span>
+          </div>
+          <div>
+            <code class="hl">SingleAxisFusionPass</code> <span class="dim">[default: ON]</span><br>
+            <span class="dim">Fuses consecutive same-axis operations</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Bytecode: The VM Instruction Set</h2>
+  <div class="grid-2">
+    <div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Frame Opcodes (zero-cost Pauli updates)</div>
+        <div class="opcode-list">
+          <span class="op">OP_FRAME_CNOT</span>, <span class="op">OP_FRAME_CZ</span>,
+          <span class="op">OP_FRAME_H</span>, <span class="op">OP_FRAME_S</span>,
+          <span class="op">OP_FRAME_S_DAG</span>, <span class="op">OP_FRAME_SWAP</span>
+        </div>
+      </div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Array Opcodes (touch v[] + frame)</div>
+        <div class="opcode-list">
+          <span class="op">OP_ARRAY_CNOT</span>, <span class="op">OP_ARRAY_CZ</span>,
+          <span class="op">OP_ARRAY_SWAP</span>, <span class="op">OP_ARRAY_H</span>,
+          <span class="op">OP_ARRAY_S</span>/<span class="op">S_DAG</span>,
+          <span class="op">OP_ARRAY_T</span>/<span class="op">T_DAG</span>,
+          <span class="op">OP_ARRAY_ROT</span>,
+          <span class="op">OP_ARRAY_U2</span>, <span class="op">OP_ARRAY_U4</span><br>
+          <span class="op">OP_ARRAY_MULTI_CNOT</span>, <span class="op">OP_ARRAY_MULTI_CZ</span>
+        </div>
+      </div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Subspace Expansion (k &rarr; k+1)</div>
+        <div class="opcode-list">
+          <span class="op">OP_EXPAND</span>, <span class="op">OP_EXPAND_T</span>,
+          <span class="op">OP_EXPAND_T_DAG</span>, <span class="op">OP_EXPAND_ROT</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Measurement (may reduce k)</div>
+        <div class="opcode-list">
+          <span class="op">OP_MEAS_DORMANT_STATIC</span><br>
+          <span class="op">OP_MEAS_DORMANT_RANDOM</span><br>
+          <span class="op">OP_MEAS_ACTIVE_DIAGONAL</span> <span style="color:var(--dim);">(k&rarr;k-1)</span><br>
+          <span class="op">OP_MEAS_ACTIVE_INTERFERE</span> <span style="color:var(--dim);">(k&rarr;k-1)</span><br>
+          <span class="op">OP_SWAP_MEAS_INTERFERE</span> <span style="color:var(--dim);">(fused)</span><br>
+          + 5 <code>*_FORCED</code> variants for record_probabilities()
+        </div>
+      </div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Classical / Noise / Bookkeeping</div>
+        <div class="opcode-list">
+          <span class="op">OP_APPLY_PAULI</span>, <span class="op">OP_NOISE</span>,
+          <span class="op">OP_NOISE_BLOCK</span>, <span class="op">OP_READOUT_NOISE</span><br>
+          <span class="op">OP_DETECTOR</span>, <span class="op">OP_POSTSELECT</span>,
+          <span class="op">OP_OBSERVABLE</span>, <span class="op">OP_EXP_VAL</span>
+        </div>
+      </div>
+      <div class="card card-hl" style="margin-top:0.4em;">
+        <h4>Instruction Layout: 32 bytes exactly</h4>
+        <p style="font-size:0.85em;">2 instructions per 64-byte L1 cache line. Fields: <code>opcode</code> (1B), <code>flags</code> (1B), <code>axis_1</code>/<code>axis_2</code> (2B each), 24B payload union (math / classical / pauli / multi_gate / u2 / u4).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Compilation Example: Simple Circuit</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <h4>Input Circuit</h4>
+        <pre><code>H 0
+CNOT 0 1
+T 1
+M 0 1</code></pre>
+      </div>
+      <div class="card" style="margin-top:0.3em;">
+        <h4>HIR (after frontend trace)</h4>
+        <pre><code>// H, CNOT absorbed into tableau
+T_GATE  axis=0  mask=X0*Z1  weight=1
+MEASURE axis=0  mask=Z0      idx=0
+MEASURE axis=1  mask=X0*X1   idx=1</code></pre>
+        <p style="font-size:0.7em;color:var(--dim);">Masks are "rewound" through the Clifford tableau &mdash; they represent the Heisenberg-picture observable.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h4>Bytecode (after backend + optimizer)</h4>
+        <pre><code>OP_EXPAND_T       axis=0   // k: 0->1, fused T
+OP_MEAS_ACTIVE_DIAGONAL
+                  axis=0   // k: 1->0
+                  idx=0
+OP_MEAS_DORMANT_RANDOM
+                  axis=1
+                  idx=1</code></pre>
+      </div>
+      <div class="flow-col" style="margin-top:0.3em;">
+        <div style="font-size:0.65em;color:var(--dim);text-align:center;">Optimizer fused OP_EXPAND + OP_ARRAY_T into OP_EXPAND_T</div>
+        <div class="flow-row" style="gap:0.5em;">
+          <div style="text-align:center;">
+            <div style="font-size:0.6em;color:var(--dim);">peak k</div>
+            <div style="font-size:1.8em;color:var(--accent);font-weight:800;">1</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:0.6em;color:var(--dim);">instructions</div>
+            <div style="font-size:1.8em;color:var(--highlight);font-weight:800;">3</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:0.6em;color:var(--dim);">amplitudes</div>
+            <div style="font-size:1.8em;color:var(--success);font-weight:800;">2</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 5: THE SVM                                             -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">5</div>
+  <h1>The SVM</h1>
+  <div style="font-size:0.5em;color:var(--dim);">Schr&ouml;dinger Virtual Machine</div>
+</section>
+
+<section>
+  <h2>SchrodingerState Layout</h2>
+  <div class="state-block" style="margin:0.4em auto;">
+    <div class="state-segment" style="background:var(--secondary);flex:1;border-right:2px solid var(--highlight);">
+      <div class="state-label" style="color:var(--highlight);">&gamma;</div>
+      <div class="state-detail">Global scalar<br>(phase + norm)</div>
+    </div>
+    <div class="state-segment" style="background:#0c2e1c;flex:2;border-right:2px solid var(--highlight);">
+      <div class="state-label" style="color:var(--success);">v[0..2<sup>k</sup>-1]</div>
+      <div class="state-detail">Active amplitudes<br>64B aligned, complex&lt;double&gt;</div>
+    </div>
+    <div class="state-segment" style="background:#3b1029;flex:2;border-right:2px solid var(--highlight);">
+      <div class="state-label" style="color:var(--accent);">p_x[n bits]</div>
+      <div class="state-detail">Pauli X frame<br>ceil(n/64) uint64 words</div>
+    </div>
+    <div class="state-segment" style="background:#2e2a0c;flex:2;">
+      <div class="state-label" style="color:var(--warn);">p_z[n bits]</div>
+      <div class="state-detail">Pauli Z frame<br>ceil(n/64) uint64 words</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:0.4em;">
+    <div class="card">
+      <h4>StateConfig Parameters</h4>
+      <table>
+        <tr><td><code>peak_rank</code></td><td>Max k ever reached &mdash; sizes v[] allocation</td></tr>
+        <tr><td><code>num_qubits</code></td><td>n &mdash; sizes Pauli frame storage</td></tr>
+        <tr><td><code>num_measurements</code></td><td>Total meas slots in record</td></tr>
+        <tr><td><code>num_detectors</code></td><td>Detector count</td></tr>
+        <tr><td><code>num_observables</code></td><td>Observable count</td></tr>
+        <tr><td><code>seed</code></td><td>Optional PRNG seed (Xoshiro256++)</td></tr>
+      </table>
+    </div>
+    <div class="card card-accent">
+      <h4>Memory Per Shot (CPU)</h4>
+      <ul>
+        <li><code>v[]</code>: 2<sup>peak_rank</sup> &times; 16 bytes</li>
+        <li><code>p_x, p_z</code>: 2 &times; ceil(n/64) &times; 8 bytes</li>
+        <li><code>meas_record</code>: num_meas bits</li>
+        <li>PRNG state: 32 bytes (4 &times; uint64)</li>
+        <li style="color:var(--accent);">For k=3, n=100: ~160 bytes total</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How Operations Act on the State</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card" style="border-color:var(--success);">
+        <h4 style="color:var(--success);">Clifford (Frame Opcodes) &mdash; O(n)</h4>
+        <p>Only update <code>p_x</code> and <code>p_z</code> bitmasks. <strong>Never touch v[]</strong>.</p>
+        <ul>
+          <li><code>OP_FRAME_H(q)</code>: swap p_x[q] &harr; p_z[q]</li>
+          <li><code>OP_FRAME_S(q)</code>: p_x[q] ^= p_z[q]</li>
+          <li><code>OP_FRAME_CNOT(c,t)</code>: p_x[t] ^= p_x[c]; p_z[c] ^= p_z[t]</li>
+          <li><code>OP_FRAME_CZ(a,b)</code>: p_x[a] ^= p_z[b]; p_x[b] ^= p_z[a]</li>
+        </ul>
+        <p style="font-size:0.85em;color:var(--success);">Cost: a few XOR operations on 64-bit words</p>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--accent);">
+        <h4 style="color:var(--accent);">Non-Clifford (Array Opcodes) &mdash; O(2<sup>k</sup>)</h4>
+        <p>Must loop over all 2<sup>k</sup> amplitudes in <code>v[]</code>.</p>
+        <ul>
+          <li><code>OP_ARRAY_T(axis)</code>: v[i] *= e<sup>i&pi;/4</sup> where bit <em>axis</em> is set</li>
+          <li><code>OP_ARRAY_H(axis)</code>: butterfly on pairs (Hadamard)</li>
+          <li><code>OP_ARRAY_CNOT(c,t)</code>: swap v[] pairs by bitmask</li>
+          <li><code>OP_EXPAND(axis)</code>: k &rarr; k+1, &gamma; /= &radic;2</li>
+        </ul>
+        <p style="font-size:0.85em;color:var(--accent);">Cost: proportional to array size 2<sup>k</sup></p>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.3em;">
+    <h4>Measurement (k may decrease)</h4>
+    <div class="flow-row">
+      <span class="diagram-box box-dim">Dormant Static</span>
+      <span style="font-size:0.6em;color:var(--dim);margin:0 0.3em;">deterministic from p_x</span>
+      <span class="diagram-box box-warn">Dormant Random</span>
+      <span style="font-size:0.6em;color:var(--dim);margin:0 0.3em;">random pivot, k unchanged</span>
+      <span class="diagram-box box-accent">Active Diagonal</span>
+      <span style="font-size:0.6em;color:var(--dim);margin:0 0.3em;">Z-filter, k&rarr;k-1</span>
+      <span class="diagram-box box-primary">Active Interfere</span>
+      <span style="font-size:0.6em;color:var(--dim);margin:0 0.3em;">X-fold, k&rarr;k-1</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Execution Loop &amp; ISA Backends</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <h4>Main Execution Loop (per shot)</h4>
+        <pre><code>state.reset();          // v = |0>, p_x = p_z = 0
+for (auto& instr : bytecode) {
+    switch (instr.opcode) {
+        case OP_FRAME_H:
+            // swap p_x[axis] <-> p_z[axis]
+            break;
+        case OP_EXPAND_T:
+            // k -> k+1, apply T phase
+            break;
+        case OP_MEAS_ACTIVE_DIAGONAL:
+            // sample, collapse, k -> k-1
+            break;
+        case OP_NOISE:
+            // roll RNG, maybe apply Pauli
+            break;
+        // ... ~35 opcodes total
+    }
+}
+// collect measurements, detectors, observables</code></pre>
+      </div>
+    </div>
+    <div>
+      <div class="card card-hl">
+        <h4>ISA Detection &amp; Dispatch</h4>
+        <p>Runtime CPUID selects the best available kernel implementation:</p>
+        <div style="margin:0.3em 0;">
+          <div class="flow-row" style="justify-content:flex-start;gap:0.5em;">
+            <span class="diagram-box box-success">AVX-512</span>
+            <span style="font-size:0.65em;color:var(--dim);">8 complex doubles per SIMD op</span>
+          </div>
+          <div class="flow-row" style="justify-content:flex-start;gap:0.5em;margin-top:0.2em;">
+            <span class="diagram-box box-warn">AVX2</span>
+            <span style="font-size:0.65em;color:var(--dim);">4 complex doubles per SIMD op</span>
+          </div>
+          <div class="flow-row" style="justify-content:flex-start;gap:0.5em;margin-top:0.2em;">
+            <span class="diagram-box box-dim">Scalar</span>
+            <span style="font-size:0.65em;color:var(--dim);">Fallback, no SIMD</span>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:0.3em;">
+        <h4>PRNG: Xoshiro256++</h4>
+        <ul>
+          <li>Period: 2<sup>256</sup> - 1</li>
+          <li>State: <strong>32 bytes</strong> (vs MT19937's 2504 bytes)</li>
+          <li>Deterministic cross-platform (pure bitwise)</li>
+          <li>Seeded via SplitMix64 expansion</li>
+          <li>Guarantees identical sequences: GCC = Clang = MSVC</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 6: SAMPLING MODES                                      -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">6</div>
+  <h1>Sampling Modes</h1>
+</section>
+
+<section>
+  <h2>Available Sampling APIs</h2>
+  <table>
+    <tr>
+      <th>API</th>
+      <th>Description</th>
+      <th>Use Case</th>
+    </tr>
+    <tr>
+      <td><code>sample(N)</code></td>
+      <td>Run N shots, collect measurement / detector / observable records</td>
+      <td>Standard Monte Carlo sampling</td>
+    </tr>
+    <tr>
+      <td><code>sample_survivors(N)</code></td>
+      <td>Run N shots, keep only those passing post-selection</td>
+      <td>Magic state cultivation / distillation</td>
+    </tr>
+    <tr>
+      <td><code>sample_k(N, k)</code></td>
+      <td>Importance sampling &mdash; force exactly k noise faults</td>
+      <td>Rare event analysis (logical error hunting)</td>
+    </tr>
+    <tr>
+      <td><code>basis_probabilities()</code></td>
+      <td>Exact Born-rule probabilities (no sampling)</td>
+      <td>Verification, small circuits</td>
+    </tr>
+    <tr>
+      <td><code>record_probabilities(records)</code></td>
+      <td>Exact log-probabilities for given measurement records</td>
+      <td>Likelihood evaluation, decoding</td>
+    </tr>
+    <tr>
+      <td><code>get_statevector()</code></td>
+      <td>Expand to full 2<sup>n</sup> dense statevector (n &le; ~10)</td>
+      <td>Debugging, small-circuit validation</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>The Sampling Loop</h2>
+  <div class="flow-col">
+    <div class="flow-row">
+      <span class="diagram-box box-dim">.stim file</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">Compile Once</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">CompiledModule</span>
+    </div>
+    <div class="arrow-down" style="font-size:2em;">&#x2193;</div>
+    <div style="border:2px dashed var(--accent);border-radius:12px;padding:0.5em 1em;text-align:center;">
+      <div style="font-size:0.65em;color:var(--accent);font-weight:700;margin-bottom:0.3em;">REPEAT N SHOTS</div>
+      <div class="flow-row">
+        <span class="diagram-box box-primary">Reset State</span>
+        <span class="arrow">&rarr;</span>
+        <span class="diagram-box box-warn">Execute Bytecode</span>
+        <span class="arrow">&rarr;</span>
+        <span class="diagram-box box-success">Collect Record</span>
+      </div>
+      <div style="font-size:0.6em;color:var(--dim);margin-top:0.2em;">
+        v[] = |0&rang;, p_x = p_z = 0 &nbsp;&nbsp;|&nbsp;&nbsp; iterate opcodes &nbsp;&nbsp;|&nbsp;&nbsp; meas + detectors + observables
+      </div>
+    </div>
+    <div class="arrow-down" style="font-size:2em;">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-primary">Aggregate Results</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-dim">Error rates, detection events, observable flips</span>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.4em;">
+    <p style="font-size:0.75em;"><strong>Key optimization:</strong> Compilation cost is amortized. State <code>reset()</code> reuses allocation &mdash; only zeroes the arrays. PRNG streams forward naturally between shots (no reseed).</p>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 7: GPU BACKENDS                                        -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">7</div>
+  <h1>GPU Backends</h1>
+  <div style="font-size:0.5em;color:var(--dim);">CUDA &amp; AMD HIP</div>
+</section>
+
+<section>
+  <h2>Why GPU? Embarrassingly Parallel</h2>
+  <div class="grid-2">
+    <div>
+      <h4>The Parallelism Opportunity</h4>
+      <ul>
+        <li>Each shot is <strong>completely independent</strong></li>
+        <li>Same bytecode, different PRNG stream</li>
+        <li>No inter-shot communication needed</li>
+        <li>Per-shot state is <strong>tiny</strong> (k &le; 4 &rArr; fits in registers)</li>
+        <li>Perfect for GPU: thousands of threads, each running full SVM</li>
+      </ul>
+      <div class="card card-accent" style="margin-top:0.4em;">
+        <h4>One GPU Thread = One Shot</h4>
+        <p>Each CUDA/HIP thread independently:</p>
+        <ol style="font-size:0.9em;">
+          <li>Initializes local state (v[], p_x, p_z, PRNG)</li>
+          <li>Interprets full bytecode program</li>
+          <li>Writes results to global memory</li>
+        </ol>
+      </div>
+    </div>
+    <div>
+      <!-- GPU Thread Grid Diagram -->
+      <div style="text-align:center;margin-bottom:0.3em;">
+        <h4>GPU Work Distribution</h4>
+      </div>
+      <div style="border:2px solid #a855f7;border-radius:10px;padding:0.5em;">
+        <div style="text-align:center;font-size:0.6em;color:#a855f7;font-weight:700;margin-bottom:0.3em;">Grid: blocks &times; threadsPerBlock</div>
+        <div class="gpu-grid" style="grid-template-columns:repeat(8,1fr);max-width:280px;">
+          <div class="gpu-cell gpu-cell-active">S0</div>
+          <div class="gpu-cell gpu-cell-active">S1</div>
+          <div class="gpu-cell gpu-cell-active">S2</div>
+          <div class="gpu-cell gpu-cell-active">S3</div>
+          <div class="gpu-cell gpu-cell-active">S4</div>
+          <div class="gpu-cell gpu-cell-active">S5</div>
+          <div class="gpu-cell gpu-cell-active">S6</div>
+          <div class="gpu-cell gpu-cell-active">S7</div>
+          <div class="gpu-cell gpu-cell-active">S8</div>
+          <div class="gpu-cell gpu-cell-active">S9</div>
+          <div class="gpu-cell gpu-cell-active">S10</div>
+          <div class="gpu-cell gpu-cell-active">S11</div>
+          <div class="gpu-cell gpu-cell-active">S12</div>
+          <div class="gpu-cell gpu-cell-active">S13</div>
+          <div class="gpu-cell gpu-cell-active">S14</div>
+          <div class="gpu-cell gpu-cell-active">S15</div>
+          <div class="gpu-cell gpu-cell-active">S16</div>
+          <div class="gpu-cell gpu-cell-active">S17</div>
+          <div class="gpu-cell gpu-cell-active">S18</div>
+          <div class="gpu-cell gpu-cell-active">S19</div>
+          <div class="gpu-cell gpu-cell-active">S20</div>
+          <div class="gpu-cell gpu-cell-active">S21</div>
+          <div class="gpu-cell gpu-cell-active">S22</div>
+          <div class="gpu-cell gpu-cell-active">S23</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">...</div>
+          <div class="gpu-cell gpu-cell-active">SN</div>
+        </div>
+        <div style="font-size:0.55em;color:var(--dim);text-align:center;margin-top:0.3em;">
+          Each cell = 1 GPU thread = 1 independent shot<br>
+          Batch size up to 100M shots per launch
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>GPU Kernel Architecture</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Per-Thread State</h4>
+      <div class="card">
+        <table>
+          <tr><th>Data</th><th>Location</th><th>Size (k=3)</th></tr>
+          <tr><td><code>v[]</code> amplitudes</td><td>Registers / local mem</td><td>8 &times; GpuComplex = 64B</td></tr>
+          <tr><td><code>p_x, p_z</code></td><td>Registers</td><td>2 &times; 2 &times; uint64 = 32B</td></tr>
+          <tr><td>PRNG state</td><td>Registers</td><td>4 &times; uint64 = 32B</td></tr>
+          <tr><td>Meas record</td><td>Local memory</td><td>up to 1024 bits</td></tr>
+        </table>
+      </div>
+      <div class="card card-accent" style="margin-top:0.3em;">
+        <h4>Memory Tiers by Peak Rank</h4>
+        <ul>
+          <li><strong>k &le; 4</strong>: amplitudes in <strong>registers</strong> (16 GpuComplex)</li>
+          <li><strong>k &le; 10</strong>: amplitudes in <strong>shared memory</strong> (1024 GpuComplex)</li>
+          <li><strong>k &le; 19</strong>: amplitudes in <strong>global memory</strong> (512K GpuComplex)</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <h4>GPU Kernel Structure</h4>
+      <pre><code style="font-size:0.65em;">__global__ void sample_kernel(
+    GpuProgram prog,
+    uint64_t base_seed,
+    uint64_t num_shots,
+    BlockCounts* block_counts)
+{
+    // 1. Thread ID -> shot index
+    uint64_t shot = blockIdx.x * blockDim.x
+                  + threadIdx.x;
+    if (shot >= num_shots) return;
+
+    // 2. Init per-thread state
+    Xoshiro256PP rng(base_seed ^ shot);
+    GpuComplex v[kMaxAmplitudes] = {{1,0}};
+    uint64_t px[2]={}, pz[2]={};
+    uint8_t meas[kMaxMeas]={};
+
+    // 3. Interpret bytecode
+    for (uint32_t ip = 0;
+         ip < prog.num_instrs; ip++) {
+        auto& ins = prog.instrs[ip];
+        switch (ins.opcode) {
+            // ... same opcodes as CPU SVM
+        }
+    }
+
+    // 4. Reduce results (atomics)
+    atomicAdd(&block_counts->passed, 1);
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>GPU Data Flow</h2>
+  <div class="flow-col">
+    <div style="text-align:center;font-size:0.65em;color:var(--dim);font-weight:700;">HOST (CPU)</div>
+    <div class="flow-row">
+      <span class="diagram-box box-primary">CompiledModule</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-warn">Flatten to<br>GpuProgram</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">cudaMemcpy<br>H&rarr;D</span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div style="border:2px solid #a855f7;border-radius:12px;padding:0.5em 0.8em;">
+      <div style="text-align:center;font-size:0.65em;color:#a855f7;font-weight:700;margin-bottom:0.2em;">DEVICE (GPU)</div>
+      <div class="flow-row">
+        <span class="diagram-box box-gpu">GpuInstr[]</span>
+        <span class="diagram-box box-gpu">GpuMask[]</span>
+        <span class="diagram-box box-gpu">GpuNoiseSite[]</span>
+        <span class="diagram-box box-gpu">GpuChannel[]</span>
+      </div>
+      <div class="arrow-down">&#x2193;</div>
+      <div class="flow-row">
+        <span class="diagram-box box-gpu" style="font-size:0.8em;padding:0.5em 1.5em;">
+          sample_kernel&lt;&lt;&lt;blocks, threads&gt;&gt;&gt;<br>
+          <span style="font-size:0.8em;">N threads &times; full bytecode interpreter</span>
+        </span>
+      </div>
+      <div class="arrow-down">&#x2193;</div>
+      <div class="flow-row">
+        <span class="diagram-box box-gpu">BlockCounts[]</span>
+        <span style="font-size:0.6em;color:var(--dim);margin:0 0.3em;">per-block atomic accumulators</span>
+      </div>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-accent">cudaMemcpy<br>D&rarr;H</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">Host Reduction</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-dim">Final counts:<br>passed, logical_errors, obs_ones[]</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>CUDA vs HIP: The Port</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card" style="border-color:#a855f7;">
+        <h4 style="color:#a855f7;">CUDA Kernel (cuda_sampler.cu)</h4>
+        <pre><code style="font-size:0.65em;">// NVIDIA CUDA
+#include &lt;cuda_runtime.h&gt;
+__global__ void sample_kernel(...) { }
+cudaMalloc(&ptr, size);
+cudaMemcpy(dst, src, size,
+           cudaMemcpyHostToDevice);
+cudaFree(ptr);
+atomicAdd(&counter, 1ULL);
+
+// Launch
+sample_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);</code></pre>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:#ef4444;">
+        <h4 style="color:#ef4444;">HIP Kernel (hip_sampler.hip)</h4>
+        <pre><code style="font-size:0.65em;">// AMD HIP
+#include &lt;hip/hip_runtime.h&gt;
+__global__ void sample_kernel(...) { }
+hipMalloc(&ptr, size);
+hipMemcpy(dst, src, size,
+          hipMemcpyHostToDevice);
+hipFree(ptr);
+atomicAdd(&counter, 1ULL);
+
+// Launch
+sample_kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;(...);</code></pre>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.3em;">
+    <h4>Mechanical Port Summary</h4>
+    <div class="grid-3" style="font-size:0.85em;">
+      <div>
+        <p><strong>What Changed</strong></p>
+        <ul>
+          <li><code>cuda*</code> &rarr; <code>hip*</code> API calls</li>
+          <li><code>#include &lt;cuda_runtime.h&gt;</code> &rarr; <code>&lt;hip/hip_runtime.h&gt;</code></li>
+          <li>File extension: <code>.cu</code> &rarr; <code>.hip</code></li>
+        </ul>
+      </div>
+      <div>
+        <p><strong>What Stayed the Same</strong></p>
+        <ul>
+          <li>Kernel logic: 100% identical</li>
+          <li>Data structures (GpuComplex, etc.)</li>
+          <li>Launch configuration</li>
+          <li>Atomic reduction pattern</li>
+        </ul>
+      </div>
+      <div>
+        <p><strong>Both: 1960 lines</strong></p>
+        <ul>
+          <li>Same opcode interpreter</li>
+          <li>Same memory tier logic</li>
+          <li>Same PRNG (Xoshiro256++)</li>
+          <li>Same precision (FP32 amplitudes on GPU)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 8: THE QEC WORKFLOW                                    -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">8</div>
+  <h1>The QEC Workflow</h1>
+</section>
+
+<section>
+  <h2>End-to-End QEC Simulation Pipeline</h2>
+  <div class="flow-col" style="gap:0.15em;">
+    <div class="flow-row">
+      <span class="diagram-box box-dim" style="padding:0.3em 0.7em;font-size:0.65em;">
+        Surface Code<br>d=5, p=0.001
+      </span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary" style="padding:0.3em 0.7em;font-size:0.65em;">
+        Stim Circuit<br>Generator
+      </span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-dim" style="padding:0.3em 0.7em;font-size:0.65em;">
+        .stim file<br>~hundreds of qubits
+      </span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-accent" style="padding:0.3em 0.7em;font-size:0.65em;">
+        Clifft Compiler<br>(parse &rarr; trace &rarr; optimize &rarr; compile)
+      </span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success" style="padding:0.3em 0.7em;font-size:0.65em;">
+        CompiledModule<br>peak_rank k=1&ndash;3
+      </span>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div style="border:2px solid var(--accent);border-radius:12px;padding:0.4em 0.8em;">
+      <div style="text-align:center;font-size:0.6em;color:var(--accent);font-weight:700;">GPU SAMPLING (billions of shots)</div>
+      <div class="flow-row" style="margin-top:0.2em;">
+        <span class="diagram-box box-gpu" style="padding:0.3em 0.7em;font-size:0.65em;">
+          CUDA / HIP kernel<br>~1.2M shots/s
+        </span>
+        <span class="arrow">&rarr;</span>
+        <span class="diagram-box box-warn" style="padding:0.3em 0.7em;font-size:0.65em;">
+          Post-selection<br>discard failed cultivation
+        </span>
+        <span class="arrow">&rarr;</span>
+        <span class="diagram-box box-success" style="padding:0.3em 0.7em;font-size:0.65em;">
+          Surviving shots<br>check observables
+        </span>
+      </div>
+    </div>
+    <div class="arrow-down">&#x2193;</div>
+    <div class="flow-row">
+      <span class="diagram-box box-success" style="padding:0.3em 0.7em;font-size:0.65em;">
+        Count observable flips<br>across all surviving shots
+      </span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent" style="padding:0.4em 1em;font-size:0.75em;">
+        Logical Error Rate<br><strong style="font-size:1.3em;">p_L = errors / survivors</strong>
+      </span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Typical QEC Numbers</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-accent">
+        <h4>Magic State Cultivation (d=5, p=0.001)</h4>
+        <table>
+          <tr><td>Qubits (n)</td><td>~100&ndash;300</td></tr>
+          <tr><td>Active rank (k)</td><td style="color:var(--accent);">1&ndash;3</td></tr>
+          <tr><td>Circuit depth</td><td>~1000s of gates</td></tr>
+          <tr><td>Post-selection rate</td><td>~50%</td></tr>
+          <tr><td>Logical error rate</td><td>~10<sup>-9</sup></td></tr>
+          <tr><td>Shots needed</td><td style="color:var(--accent);">~100 billion</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h4>Why Billions of Shots?</h4>
+        <p>To measure a logical error rate of 10<sup>-9</sup> with reasonable statistics, you need at least <strong>~10&times;</strong> more trials than 1/p<sub>L</sub>.</p>
+        <p style="margin-top:0.3em;">At <em>1.2M shots/s</em> on GPU:</p>
+        <ul>
+          <li>10<sup>11</sup> shots &asymp; <strong>~24 hours</strong></li>
+          <li>Expect ~100 logical errors &rarr; meaningful statistics</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:0.3em;border-color:var(--warn);">
+        <h4 style="color:var(--warn);">Importance Sampling</h4>
+        <p><code>sample_k(N, k)</code>: Force exactly k noise faults per shot to find rare failure modes faster. Trades unbiased sampling for targeted exploration of the error space.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 9: PERFORMANCE CHARACTERISTICS                         -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">9</div>
+  <h1>Performance</h1>
+</section>
+
+<section>
+  <h2>Throughput Comparison</h2>
+  <div style="max-width:85%;margin:0 auto;">
+    <div class="perf-bar-container">
+      <div class="perf-bar-label">CPU &mdash; Xeon Gold 5218R &nbsp;<span class="dim">(baseline)</span></div>
+      <div class="perf-bar-track">
+        <div class="perf-bar-fill" style="width:5%;background:var(--highlight);">~60K shots/s</div>
+      </div>
+    </div>
+    <div class="perf-bar-container">
+      <div class="perf-bar-label">CUDA &mdash; RTX PRO 5000 &nbsp;<span class="accent">(20x)</span></div>
+      <div class="perf-bar-track">
+        <div class="perf-bar-fill" style="width:98%;background:linear-gradient(90deg,#a855f7,#7c3aed);">~1.18M shots/s</div>
+      </div>
+    </div>
+    <div class="perf-bar-container">
+      <div class="perf-bar-label">AMD HIP &mdash; MI300X &nbsp;<span class="accent">(20x)</span></div>
+      <div class="perf-bar-track">
+        <div class="perf-bar-fill" style="width:100%;background:linear-gradient(90deg,#ef4444,#dc2626);">~1.2M shots/s</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-3" style="margin-top:0.6em;">
+    <div style="text-align:center;">
+      <div class="big-num" style="font-size:2em;">20x</div>
+      <div class="big-label">GPU speedup over CPU</div>
+    </div>
+    <div style="text-align:center;">
+      <div class="big-num" style="font-size:2em;">10<sup>11</sup></div>
+      <div class="big-label">shots in ~24 hours (GPU)</div>
+    </div>
+    <div style="text-align:center;">
+      <div class="big-num" style="font-size:2em;">3.54e-9</div>
+      <div class="big-label">logical error rate measured<br><span style="font-size:0.85em;">(51 errors in 100B shots)</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Scaling Model</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-hl">
+        <h4>Runtime Complexity</h4>
+        <div style="text-align:center;font-size:1.1em;margin:0.4em 0;">
+          <code>T &prop; 2<sup>k</sup> &times; L &times; N</code>
+        </div>
+        <table>
+          <tr><td><code>k</code></td><td>Peak active rank (non-Clifford dimension)</td></tr>
+          <tr><td><code>L</code></td><td>Bytecode length (circuit complexity)</td></tr>
+          <tr><td><code>N</code></td><td>Number of shots</td></tr>
+        </table>
+        <p style="margin-top:0.3em;font-size:0.85em;">The 2<sup>k</sup> factor dominates. For QEC circuits with k &le; 3, the inner loop touches only 8 amplitudes &mdash; trivially fits in registers.</p>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h4>What Makes Clifft Fast?</h4>
+        <ol>
+          <li><strong>Separation of concerns:</strong> Clifford ops are O(1) frame updates, not O(2<sup>k</sup>) array ops</li>
+          <li><strong>StatevectorSqueezePass:</strong> Minimizes peak k by reordering ops</li>
+          <li><strong>Peephole fusion:</strong> Merges consecutive array ops into fused U2/U4</li>
+          <li><strong>32-byte instructions:</strong> 2 per L1 cache line</li>
+          <li><strong>SIMD kernels:</strong> AVX-512 processes 8 amplitudes/cycle</li>
+          <li><strong>GPU parallelism:</strong> Thousands of independent shots</li>
+          <li><strong>Compact PRNG:</strong> 32-byte Xoshiro256++ state per shot</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Performance Profile by k</h2>
+  <table>
+    <tr>
+      <th>Peak Rank k</th>
+      <th>Amplitudes</th>
+      <th>GPU Memory Tier</th>
+      <th>Relative Cost</th>
+      <th>Typical Workload</th>
+    </tr>
+    <tr>
+      <td>0</td>
+      <td>1</td>
+      <td>Register</td>
+      <td style="color:var(--success);">1x (Clifford-only)</td>
+      <td>Stabilizer circuits</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>2</td>
+      <td>Register</td>
+      <td style="color:var(--success);">~1x</td>
+      <td>Single T gate</td>
+    </tr>
+    <tr>
+      <td>2&ndash;3</td>
+      <td>4&ndash;8</td>
+      <td>Register</td>
+      <td style="color:var(--highlight);">~2&ndash;4x</td>
+      <td>QEC magic state cultivation</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>16</td>
+      <td>Register (max for GPU)</td>
+      <td style="color:var(--warn);">~8x</td>
+      <td>Multi-T circuits</td>
+    </tr>
+    <tr>
+      <td>5&ndash;10</td>
+      <td>32&ndash;1024</td>
+      <td>Shared memory</td>
+      <td style="color:var(--warn);">~16&ndash;500x</td>
+      <td>Moderate non-Clifford</td>
+    </tr>
+    <tr>
+      <td>11&ndash;19</td>
+      <td>2K&ndash;512K</td>
+      <td>Global memory</td>
+      <td style="color:var(--accent);">~1K&ndash;250Kx</td>
+      <td>Heavy non-Clifford</td>
+    </tr>
+    <tr>
+      <td>&gt;19</td>
+      <td>&gt;512K</td>
+      <td colspan="2" style="color:var(--dim);">Exceeds GPU kernel limits</td>
+      <td>CPU only</td>
+    </tr>
+  </table>
+  <div class="card" style="margin-top:0.3em;">
+    <p style="font-size:0.75em;">The GPU kernels define three tiers: <code>kThreadMaxPeakRank=4</code> (registers), <code>kSharedMaxPeakRank=10</code> (shared memory), <code>kGlobalMaxPeakRank=19</code> (global memory). Most QEC workloads stay in the register tier.</p>
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- CLOSING SLIDE                                                  -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <h1>Summary</h1>
+  <div style="max-width:80%;margin:0.5em auto;text-align:left;">
+    <div class="flow-col" style="gap:0.4em;">
+      <div class="card" style="border-color:var(--highlight);">
+        <div class="grid-2" style="font-size:0.85em;">
+          <div>
+            <h4 style="color:var(--highlight);">Architecture</h4>
+            <ul>
+              <li>5-stage pipeline: parse &rarr; trace &rarr; optimize &rarr; compile &rarr; execute</li>
+              <li>Factored state: Pauli frame + small statevector (2<sup>k</sup>)</li>
+              <li>11 optimization passes, 32-byte bytecode, ISA-tuned kernels</li>
+            </ul>
+          </div>
+          <div>
+            <h4 style="color:var(--accent);">Performance</h4>
+            <ul>
+              <li>GPU: 20x speedup (both CUDA and HIP)</li>
+              <li>~1.2M shots/s on MI300X / RTX PRO 5000</li>
+              <li>100B shots in 24h &rarr; p<sub>L</sub> = 3.54&times;10<sup>-9</sup></li>
+              <li>Scaling: O(2<sup>k</sup> &times; L &times; N)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="flow-row" style="gap:1em;margin-top:0.3em;">
+        <span class="diagram-box box-primary">CPU: upstream</span>
+        <span class="diagram-box box-gpu">CUDA: cuda_sampler.cu</span>
+        <span class="diagram-box box-amd">HIP: hip_sampler.hip</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- .slides -->
+</div><!-- .reveal -->
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  width: 1280,
+  height: 720,
+  margin: 0.04,
+  transition: 'slide',
+  backgroundTransition: 'fade',
+  plugins: [RevealHighlight],
+  pdfSeparateFragments: false
+});
+</script>
+</body>
+</html>

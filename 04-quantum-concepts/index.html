@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Computing Concepts for Clifft</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/black.css">
+<style>
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --accent: #e94560;
+  --highlight: #53d8fb;
+  --text: #e0e0e0;
+  --text-dim: #8892b0;
+  --green: #64ffda;
+  --yellow: #ffd700;
+  --orange: #ff8c00;
+  --purple: #bd93f9;
+}
+.reveal { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--text); }
+.reveal .slides { text-align: left; }
+.reveal .slides section { background: var(--bg-primary); }
+.reveal h1 { color: var(--accent); font-size: 2.2em; text-align: center; font-weight: 700; text-transform: none; }
+.reveal h2 { color: var(--highlight); font-size: 1.6em; font-weight: 600; text-transform: none; margin-bottom: 0.5em; }
+.reveal h3 { color: var(--green); font-size: 1.2em; font-weight: 500; text-transform: none; }
+.reveal p, .reveal li { font-size: 0.75em; line-height: 1.5; }
+.reveal ul { list-style: none; padding-left: 0; }
+.reveal ul li::before { content: "▸ "; color: var(--accent); font-weight: bold; }
+.reveal code { background: rgba(83,216,251,0.1); color: var(--highlight); padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }
+.reveal pre { background: var(--bg-secondary); border: 1px solid var(--bg-tertiary); border-radius: 8px; padding: 15px; }
+.reveal pre code { background: none; padding: 0; font-size: 0.7em; line-height: 1.6; }
+.reveal .slides section .fragment.visible { opacity: 1; }
+
+/* Section title slides */
+.section-title { text-align: center !important; display: flex !important; flex-direction: column; justify-content: center; align-items: center; }
+.section-title h1 { font-size: 2.5em; margin-bottom: 0.3em; }
+.section-title .section-num { font-size: 1.2em; color: var(--text-dim); margin-bottom: 0.5em; }
+.section-title .section-line { width: 200px; height: 3px; background: linear-gradient(90deg, var(--accent), var(--highlight)); margin: 0 auto 1em; border-radius: 2px; }
+
+/* Diagram containers */
+.diagram { background: var(--bg-secondary); border: 1px solid var(--bg-tertiary); border-radius: 12px; padding: 20px; margin: 15px 0; text-align: center; }
+.diagram-label { font-size: 0.65em; color: var(--text-dim); margin-top: 8px; }
+
+/* Comparison boxes */
+.compare-row { display: flex; gap: 20px; margin: 15px 0; }
+.compare-box { flex: 1; background: var(--bg-secondary); border-radius: 10px; padding: 15px; border-top: 3px solid var(--accent); }
+.compare-box.alt { border-top-color: var(--highlight); }
+.compare-box.green { border-top-color: var(--green); }
+.compare-box h3 { margin: 0 0 10px 0; font-size: 1em; }
+.compare-box p, .compare-box li { font-size: 0.65em; }
+
+/* Matrix display */
+.matrix { display: inline-grid; grid-template-columns: auto auto; gap: 2px; background: var(--bg-tertiary); padding: 8px 12px; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 0.8em; border-left: 3px solid var(--highlight); border-right: 3px solid var(--highlight); }
+.matrix.m3 { grid-template-columns: auto auto auto; }
+.matrix.m4 { grid-template-columns: auto auto auto auto; }
+.matrix span { padding: 4px 8px; text-align: center; }
+
+/* Bloch sphere CSS */
+.bloch-sphere { width: 180px; height: 180px; border-radius: 50%; border: 2px solid var(--highlight); position: relative; margin: 0 auto; background: radial-gradient(circle at 30% 30%, rgba(83,216,251,0.1), transparent); }
+.bloch-sphere .axis { position: absolute; color: var(--text-dim); font-size: 0.6em; }
+.bloch-sphere .axis-z-top { top: -18px; left: 50%; transform: translateX(-50%); }
+.bloch-sphere .axis-z-bot { bottom: -18px; left: 50%; transform: translateX(-50%); }
+.bloch-sphere .axis-x-right { right: -20px; top: 50%; transform: translateY(-50%); }
+.bloch-sphere .axis-x-left { left: -20px; top: 50%; transform: translateY(-50%); }
+.bloch-sphere .state-arrow { position: absolute; width: 2px; height: 80px; background: var(--accent); left: 50%; bottom: 50%; transform-origin: bottom center; transform: translateX(-50%); }
+.bloch-sphere .state-arrow::after { content: ''; position: absolute; top: -6px; left: -4px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--accent); }
+.bloch-sphere .equator { position: absolute; width: 100%; height: 60%; top: 20%; border: 1px dashed rgba(83,216,251,0.3); border-radius: 50%; }
+
+/* Gate box in circuit */
+.circuit { display: flex; align-items: center; gap: 0; margin: 10px 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; }
+.wire { height: 2px; background: var(--text-dim); flex: 1; min-width: 30px; }
+.gate-box { background: var(--bg-tertiary); border: 2px solid var(--highlight); border-radius: 6px; padding: 8px 14px; font-weight: bold; color: var(--highlight); font-size: 0.9em; cursor: default; }
+.gate-box.accent { border-color: var(--accent); color: var(--accent); }
+.measure-box { background: var(--bg-tertiary); border: 2px solid var(--yellow); border-radius: 6px; padding: 8px 10px; color: var(--yellow); font-size: 0.8em; }
+
+/* Ket notation */
+.ket { color: var(--green); font-family: 'Courier New', monospace; font-weight: bold; }
+.ket::before { content: '|'; }
+.ket::after { content: '⟩'; }
+
+/* Info callout */
+.callout { background: rgba(233,69,96,0.1); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 10px 0; }
+.callout.info { background: rgba(83,216,251,0.1); border-left-color: var(--highlight); }
+.callout.success { background: rgba(100,255,218,0.1); border-left-color: var(--green); }
+.callout p { margin: 0; font-size: 0.7em; }
+
+/* Grid layouts */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 15px 0; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 15px 0; }
+.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin: 15px 0; }
+
+/* Card style */
+.card { background: var(--bg-secondary); border-radius: 10px; padding: 15px; border: 1px solid var(--bg-tertiary); }
+.card h3 { margin-top: 0; }
+
+/* Scaling visualization */
+.scale-bar { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.scale-bar .label { min-width: 80px; font-size: 0.7em; color: var(--text-dim); text-align: right; }
+.scale-bar .bar { height: 24px; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.6em; font-weight: bold; transition: width 0.5s; }
+
+/* Arrows */
+.arrow-down { text-align: center; font-size: 1.5em; color: var(--accent); margin: 5px 0; }
+.arrow-right { color: var(--accent); font-size: 1.2em; }
+
+/* Surface code grid */
+.sc-grid { display: inline-grid; gap: 2px; margin: 10px auto; }
+.sc-cell { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 0.6em; font-weight: bold; border-radius: 4px; }
+.sc-data { background: var(--bg-tertiary); border: 2px solid var(--highlight); color: var(--highlight); }
+.sc-x-stab { background: rgba(233,69,96,0.3); border: 2px solid var(--accent); color: var(--accent); }
+.sc-z-stab { background: rgba(83,216,251,0.2); border: 2px solid var(--highlight); color: var(--highlight); }
+.sc-empty { background: transparent; }
+
+/* Noise pipe diagram */
+.noise-pipe { display: flex; align-items: center; gap: 0; margin: 15px 0; }
+.pipe-section { height: 40px; display: flex; align-items: center; justify-content: center; font-size: 0.7em; font-weight: bold; }
+.pipe-gate { background: var(--bg-tertiary); border: 2px solid var(--highlight); border-radius: 6px; padding: 0 20px; color: var(--highlight); }
+.pipe-noise { background: rgba(233,69,96,0.2); border: 2px dashed var(--accent); border-radius: 6px; padding: 0 15px; color: var(--accent); }
+.pipe-wire { width: 40px; height: 2px; background: var(--text-dim); }
+
+/* Tableau */
+.tableau { font-family: 'Courier New', monospace; font-size: 0.65em; border-collapse: collapse; margin: 10px auto; }
+.tableau td, .tableau th { padding: 4px 10px; border: 1px solid var(--bg-tertiary); text-align: center; }
+.tableau th { background: var(--bg-tertiary); color: var(--highlight); }
+.tableau .sep { border-right: 3px solid var(--accent); }
+
+/* Factored state diagram */
+.factored { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 15px 0; flex-wrap: wrap; }
+.factored-part { border-radius: 10px; padding: 15px; text-align: center; }
+.factored-part.clifford { background: rgba(100,255,218,0.1); border: 2px solid var(--green); }
+.factored-part.dense { background: rgba(233,69,96,0.1); border: 2px solid var(--accent); }
+.factored-part h3 { margin: 0 0 5px 0; font-size: 0.9em; }
+.factored-part p { margin: 0; font-size: 0.65em; }
+.factored-plus { font-size: 1.5em; color: var(--yellow); font-weight: bold; }
+
+/* Stim code */
+.stim-code { text-align: left; }
+.stim-code .keyword { color: var(--accent); }
+.stim-code .target { color: var(--highlight); }
+.stim-code .number { color: var(--green); }
+.stim-code .comment { color: var(--text-dim); }
+.stim-code .noise { color: var(--orange); }
+.stim-code .meta { color: var(--purple); }
+/* font-size-override-applied */
+      .reveal { font-size: 24px !important; }
+      .reveal h1 { font-size: 1.8em !important; }
+      .reveal h2 { font-size: 1.4em !important; }
+      .reveal h3 { font-size: 1.1em !important; }
+      .reveal h4 { font-size: 0.9em !important; }
+      .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+      .reveal pre { font-size: 0.75em !important; }
+      .reveal code { font-size: 0.85em !important; }
+      .reveal .small { font-size: 0.7em !important; }
+      .reveal table { font-size: 0.8em !important; }
+      </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- TITLE SLIDE                                                   -->
+<!-- ============================================================ -->
+<section class="section-title">
+  <div class="section-num">Clifft Training Series &mdash; Module 4</div>
+  <h1>Quantum Computing Concepts</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.8em;">From Zero to Near-Clifford Simulation</p>
+  <p style="color: var(--text-dim); font-size: 0.6em; margin-top: 2em;">For GPU/HPC developers new to quantum computing</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: QUANTUM FUNDAMENTALS                               -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 1</div>
+  <h1>Quantum Fundamentals</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">Qubits, superposition, entanglement, and measurement</p>
+</section>
+
+<!-- 1.1 Classical Bit vs Qubit -->
+<section>
+  <h2>What is a Qubit?</h2>
+  <div class="compare-row">
+    <div class="compare-box">
+      <h3 style="color: var(--accent);">Classical Bit</h3>
+      <div class="diagram" style="font-size: 2em; padding: 25px;">
+        <span style="color: var(--accent);">0</span> &nbsp; or &nbsp; <span style="color: var(--green);">1</span>
+      </div>
+      <ul>
+        <li>Definitely 0 or definitely 1</li>
+        <li>A switch: on or off</li>
+        <li>1 bit of information</li>
+      </ul>
+    </div>
+    <div class="compare-box alt">
+      <h3 style="color: var(--highlight);">Quantum Bit (Qubit)</h3>
+      <div class="diagram" style="font-size: 1em; padding: 15px;">
+        <span style="color: var(--highlight);">&alpha;</span><span class="ket">0</span> + <span style="color: var(--highlight);">&beta;</span><span class="ket">1</span>
+        <div class="diagram-label">where |&alpha;|&sup2; + |&beta;|&sup2; = 1</div>
+      </div>
+      <ul>
+        <li>Can be in a <em>superposition</em> of 0 and 1</li>
+        <li>&alpha;, &beta; are <strong>complex numbers</strong></li>
+        <li>When measured &rarr; collapses to 0 or 1</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 1.2 The Bloch Sphere -->
+<section>
+  <h2>The Bloch Sphere</h2>
+  <p>Every single-qubit state maps to a point on a sphere:</p>
+  <div class="diagram" style="padding: 20px;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 40px;">
+      <div class="bloch-sphere">
+        <div class="equator"></div>
+        <div class="state-arrow" style="transform: translateX(-50%) rotate(-30deg);"></div>
+        <div class="axis axis-z-top"><span class="ket">0</span></div>
+        <div class="axis axis-z-bot"><span class="ket">1</span></div>
+        <div class="axis axis-x-right" style="font-size: 0.55em;"><span class="ket">+</span></div>
+        <div class="axis axis-x-left" style="font-size: 0.55em;"><span class="ket">-</span></div>
+      </div>
+      <div style="text-align: left; font-size: 0.7em;">
+        <p><span class="ket" style="color: var(--green);">0</span> = North pole (spin up)</p>
+        <p><span class="ket" style="color: var(--green);">1</span> = South pole (spin down)</p>
+        <p><span class="ket" style="color: var(--green);">+</span> = Equator right (superposition)</p>
+        <p><span class="ket" style="color: var(--green);">-</span> = Equator left (superposition)</p>
+        <p style="color: var(--accent); margin-top: 15px;"><strong>Every gate = rotation on this sphere!</strong></p>
+      </div>
+    </div>
+    <div class="diagram-label">
+      <span class="ket">&#936;</span> = cos(&theta;/2)<span class="ket">0</span> + e<sup>i&phi;</sup>sin(&theta;/2)<span class="ket">1</span> &mdash; &theta; = polar angle, &phi; = azimuthal angle
+    </div>
+  </div>
+</section>
+
+<!-- 1.3 Superposition: Coin Analogy -->
+<section>
+  <h2>Superposition Explained</h2>
+  <div class="grid-2">
+    <div>
+      <h3>The Coin Analogy</h3>
+      <div class="diagram" style="font-size: 2.5em; padding: 20px;">
+        &#x1FA99;
+      </div>
+      <ul>
+        <li>A spinning coin is neither heads nor tails</li>
+        <li>It has a <em>probability</em> of each outcome</li>
+        <li>Slap it down (measure) &rarr; definite result</li>
+      </ul>
+      <div class="callout">
+        <p><strong>But qubits are weirder!</strong> The "spin" carries <em>phase</em> information (complex amplitudes) that affects how qubits interact.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Probability Amplitudes</h3>
+      <div class="diagram" style="text-align: left; font-size: 0.75em;">
+        <p>State: <span style="color: var(--highlight);">0.6</span><span class="ket">0</span> + <span style="color: var(--highlight);">0.8i</span><span class="ket">1</span></p>
+        <div style="margin: 15px 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
+            <span style="min-width: 30px;">P(0):</span>
+            <div style="background: var(--accent); height: 20px; width: 36%; border-radius: 4px;"></div>
+            <span style="color: var(--text-dim); font-size: 0.8em;">|0.6|&sup2; = 0.36</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin: 5px 0;">
+            <span style="min-width: 30px;">P(1):</span>
+            <div style="background: var(--highlight); height: 20px; width: 64%; border-radius: 4px;"></div>
+            <span style="color: var(--text-dim); font-size: 0.8em;">|0.8i|&sup2; = 0.64</span>
+          </div>
+        </div>
+        <p style="color: var(--green);">0.36 + 0.64 = 1.0 &check;</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 1.4 Complex Numbers in QM -->
+<section>
+  <h2>Why Complex Numbers?</h2>
+  <h3>Phase matters &mdash; it creates interference</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--highlight);">Amplitudes are complex: a + bi</h3>
+      <div class="diagram" style="font-size: 0.75em;">
+        <p>Two paths to the same outcome:</p>
+        <p style="color: var(--green);">Path A amplitude: +0.5</p>
+        <p style="color: var(--accent);">Path B amplitude: -0.5</p>
+        <div style="font-size: 1.3em; margin: 10px 0; color: var(--yellow);">
+          +0.5 + (-0.5) = <strong>0</strong>
+        </div>
+        <p style="color: var(--text-dim);">Destructive interference! Probability = 0</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--accent);">Contrast: Classical Probabilities</h3>
+      <div class="diagram" style="font-size: 0.75em;">
+        <p>Two paths to the same outcome:</p>
+        <p style="color: var(--green);">Path A probability: 0.25</p>
+        <p style="color: var(--green);">Path B probability: 0.25</p>
+        <div style="font-size: 1.3em; margin: 10px 0; color: var(--yellow);">
+          0.25 + 0.25 = <strong>0.50</strong>
+        </div>
+        <p style="color: var(--text-dim);">Always adds up! No cancellation.</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>GPU analogy:</strong> Think of amplitudes like wave amplitudes in a physics sim &mdash; they can add constructively or destructively. This is the source of quantum computational power.</p>
+  </div>
+</section>
+
+<!-- 1.5 Tensor Products -->
+<section>
+  <h2>Multiple Qubits &mdash; Tensor Products</h2>
+  <p>Each qubit doubles the state space. The state is a vector of <em>all possible combinations</em>:</p>
+  <div class="grid-2">
+    <div>
+      <div class="scale-bar">
+        <div class="label">1 qubit</div>
+        <div class="bar" style="width: 30px; background: var(--highlight);">2</div>
+      </div>
+      <div class="scale-bar">
+        <div class="label">2 qubits</div>
+        <div class="bar" style="width: 60px; background: var(--highlight);">4</div>
+      </div>
+      <div class="scale-bar">
+        <div class="label">3 qubits</div>
+        <div class="bar" style="width: 120px; background: var(--highlight);">8</div>
+      </div>
+      <div class="scale-bar">
+        <div class="label">10 qubits</div>
+        <div class="bar" style="width: 200px; background: var(--green);">1,024</div>
+      </div>
+      <div class="scale-bar">
+        <div class="label">30 qubits</div>
+        <div class="bar" style="width: 300px; background: var(--yellow);">~1 billion</div>
+      </div>
+      <div class="scale-bar">
+        <div class="label">50 qubits</div>
+        <div class="bar" style="width: 400px; background: var(--accent);">~10<sup>15</sup></div>
+      </div>
+    </div>
+    <div>
+      <h3>2-Qubit Example</h3>
+      <div class="diagram" style="font-size: 0.75em; text-align: left;">
+        <p>&alpha;<sub>00</sub><span class="ket">00</span> + &alpha;<sub>01</sub><span class="ket">01</span> + &alpha;<sub>10</sub><span class="ket">10</span> + &alpha;<sub>11</sub><span class="ket">11</span></p>
+        <p style="margin-top: 10px; color: var(--text-dim);">State vector = [&alpha;<sub>00</sub>, &alpha;<sub>01</sub>, &alpha;<sub>10</sub>, &alpha;<sub>11</sub>]</p>
+        <p style="margin-top: 10px; color: var(--accent);">4 complex amplitudes to track!</p>
+      </div>
+      <div class="callout" style="margin-top: 10px;">
+        <p><strong>n qubits = 2<sup>n</sup> complex amplitudes</strong><br>This is why quantum simulation eats GPUs for breakfast.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 1.6 Entanglement -->
+<section>
+  <h2>Entanglement</h2>
+  <h3>Correlations with no classical explanation</h3>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--green);">Separable (NOT entangled)</h3>
+      <div class="diagram" style="font-size: 0.75em;">
+        <p>State = <span class="ket">+</span> &otimes; <span class="ket">0</span></p>
+        <p>= &frac12;(<span class="ket">00</span> + <span class="ket">10</span>)</p>
+        <p style="color: var(--text-dim); margin-top: 10px;">Each qubit has its own independent state.<br>Measuring one tells you nothing about the other.</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--accent);">Entangled (Bell State)</h3>
+      <div class="diagram" style="font-size: 0.75em;">
+        <p>State = &frac12;(<span class="ket">00</span> + <span class="ket">11</span>)</p>
+        <p style="color: var(--yellow);">CANNOT be written as A &otimes; B</p>
+        <p style="color: var(--text-dim); margin-top: 10px;">Measure qubit 1 &rarr; get 0?<br>Qubit 2 is <strong>instantly</strong> also 0.<br>100% correlated.</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>For simulation:</strong> Entanglement is why you can't just simulate each qubit separately. Entangled qubits share a joint state &mdash; you need the full 2<sup>n</sup> vector.</p>
+  </div>
+</section>
+
+<!-- 1.7 Measurement -->
+<section>
+  <h2>Measurement &mdash; The Born Rule</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Before measurement</h3>
+      <div class="diagram" style="font-size: 0.8em;">
+        <p><span class="ket">&Psi;</span> = &alpha;<span class="ket">0</span> + &beta;<span class="ket">1</span></p>
+        <p style="margin-top: 15px;">Qubit is in superposition</p>
+        <p style="color: var(--text-dim);">(both possibilities coexist)</p>
+      </div>
+      <div class="arrow-down">&darr; MEASURE &darr;</div>
+      <h3>After measurement</h3>
+      <div class="diagram" style="font-size: 0.8em;">
+        <div style="display: flex; justify-content: space-around;">
+          <div>
+            <div style="color: var(--green); font-size: 1.3em;">0</div>
+            <div style="color: var(--text-dim);">prob = |&alpha;|&sup2;</div>
+          </div>
+          <div style="color: var(--text-dim);">OR</div>
+          <div>
+            <div style="color: var(--accent); font-size: 1.3em;">1</div>
+            <div style="color: var(--text-dim);">prob = |&beta;|&sup2;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Key Rules</h3>
+      <ul>
+        <li><strong>Born Rule:</strong> P(outcome) = |amplitude|&sup2;</li>
+        <li><strong>Collapse:</strong> After measurement, the state IS the result</li>
+        <li><strong>Irreversible:</strong> The superposition is destroyed</li>
+        <li><strong>Random:</strong> Outcome is fundamentally probabilistic</li>
+      </ul>
+      <div class="callout success" style="margin-top: 15px;">
+        <p><strong>For Clifft:</strong> Measurements can <em>reduce</em> the active dimension k, because measuring a qubit projects it out of the superposition &mdash; one less qubit to track in the dense state.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 1.8 Exponential Scaling -->
+<section>
+  <h2>The Exponential Scaling Problem</h2>
+  <h3>Why quantum simulation is computationally brutal</h3>
+  <div class="diagram">
+    <div style="display: flex; align-items: flex-end; justify-content: center; gap: 12px; height: 200px; padding-bottom: 10px;">
+      <div style="text-align: center;">
+        <div style="background: var(--highlight); width: 35px; height: 5px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">10</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--highlight); width: 35px; height: 10px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">15</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--green); width: 35px; height: 25px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">20</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--green); width: 35px; height: 50px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">25</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--yellow); width: 35px; height: 90px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">30</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--orange); width: 35px; height: 140px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">35</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="background: var(--accent); width: 35px; height: 190px; border-radius: 3px 3px 0 0;"></div>
+        <div style="font-size: 0.5em; color: var(--text-dim); margin-top: 4px;">40</div>
+      </div>
+    </div>
+    <div class="diagram-label">Number of qubits &rarr; Memory for state vector (log scale)</div>
+  </div>
+  <div class="grid-3" style="font-size: 0.75em;">
+    <div class="card" style="text-align: center;">
+      <div style="color: var(--highlight);">30 qubits</div>
+      <div style="font-size: 1.3em; color: var(--green);">8 GB</div>
+      <div style="color: var(--text-dim); font-size: 0.8em;">Your laptop</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="color: var(--yellow);">40 qubits</div>
+      <div style="font-size: 1.3em; color: var(--yellow);">8 TB</div>
+      <div style="color: var(--text-dim); font-size: 0.8em;">HPC node</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="color: var(--accent);">50 qubits</div>
+      <div style="font-size: 1.3em; color: var(--accent);">8 PB</div>
+      <div style="color: var(--text-dim); font-size: 0.8em;">Impossible</div>
+    </div>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: QUANTUM GATES                                      -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 2</div>
+  <h1>Quantum Gates</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">Matrices that transform qubits</p>
+</section>
+
+<!-- 2.1 Gates = Unitary Matrices -->
+<section>
+  <h2>Gates = Unitary Matrices</h2>
+  <div class="grid-2">
+    <div>
+      <h3>What is a quantum gate?</h3>
+      <ul>
+        <li>A <strong>unitary matrix</strong> applied to qubit state</li>
+        <li>Single-qubit gate = 2&times;2 matrix</li>
+        <li>Two-qubit gate = 4&times;4 matrix</li>
+        <li>Unitary means: U&dagger;U = I (reversible, preserves probabilities)</li>
+      </ul>
+      <div class="callout info" style="margin-top: 10px;">
+        <p><strong>GPU analogy:</strong> A gate is like a matrix-vector multiply. The state vector has 2<sup>n</sup> entries, and the gate transforms it. This is why GPUs are great at quantum simulation!</p>
+      </div>
+    </div>
+    <div>
+      <h3>Applying a gate</h3>
+      <div class="diagram" style="font-size: 0.8em;">
+        <p><span class="ket">&Psi;'</span> = U <span class="ket">&Psi;</span></p>
+        <div style="margin: 15px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+          <div class="matrix">
+            <span>a</span><span>b</span>
+            <span>c</span><span>d</span>
+          </div>
+          <span>&times;</span>
+          <div class="matrix">
+            <span>&alpha;</span>
+            <span>&beta;</span>
+          </div>
+          <span>=</span>
+          <div class="matrix">
+            <span>a&alpha;+b&beta;</span>
+            <span>c&alpha;+d&beta;</span>
+          </div>
+        </div>
+        <div class="diagram-label">Gate matrix &times; state vector = new state</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2.2 Pauli X Gate -->
+<section>
+  <h2>Pauli Gates: X (NOT Gate)</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Matrix</h3>
+      <div class="diagram">
+        <div style="font-size: 1.2em; margin-bottom: 10px; color: var(--accent);">X</div>
+        <div class="matrix" style="font-size: 1.1em;">
+          <span>0</span><span>1</span>
+          <span>1</span><span>0</span>
+        </div>
+      </div>
+      <h3 style="margin-top: 15px;">Effect</h3>
+      <div style="font-size: 0.75em;">
+        <p>X<span class="ket">0</span> = <span class="ket">1</span></p>
+        <p>X<span class="ket">1</span> = <span class="ket">0</span></p>
+        <p style="color: var(--text-dim);">Flips the qubit. Like classical NOT.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Bloch Sphere: 180&deg; rotation around X axis</h3>
+      <div class="diagram">
+        <div class="bloch-sphere">
+          <div class="equator"></div>
+          <div class="axis axis-z-top" style="color: var(--text-dim);"><span class="ket" style="color: var(--text-dim);">0</span></div>
+          <div class="axis axis-z-bot" style="color: var(--text-dim);"><span class="ket" style="color: var(--text-dim);">1</span></div>
+          <div class="state-arrow" style="transform: translateX(-50%) rotate(0deg); background: var(--text-dim);"></div>
+          <div class="state-arrow" style="transform: translateX(-50%) rotate(180deg); background: var(--accent);"></div>
+        </div>
+        <div class="diagram-label" style="margin-top: 20px;">
+          <span style="color: var(--text-dim);">&#9679; Before</span> &nbsp;
+          <span style="color: var(--accent);">&#9679; After</span> &nbsp;
+          North &harr; South
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2.3 Pauli Y and Z -->
+<section>
+  <h2>Pauli Gates: Y and Z</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--accent);">Y Gate</h3>
+      <div class="diagram">
+        <div class="matrix" style="font-size: 1em;">
+          <span>0</span><span>-i</span>
+          <span>i</span><span>0</span>
+        </div>
+      </div>
+      <div style="font-size: 0.7em; margin-top: 10px;">
+        <p>Y<span class="ket">0</span> = i<span class="ket">1</span></p>
+        <p>Y<span class="ket">1</span> = -i<span class="ket">0</span></p>
+        <p style="color: var(--text-dim);">180&deg; rotation around Y axis</p>
+        <p style="color: var(--text-dim);">Bit flip + phase flip</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--highlight);">Z Gate</h3>
+      <div class="diagram">
+        <div class="matrix" style="font-size: 1em;">
+          <span>1</span><span>0</span>
+          <span>0</span><span>-1</span>
+        </div>
+      </div>
+      <div style="font-size: 0.7em; margin-top: 10px;">
+        <p>Z<span class="ket">0</span> = <span class="ket">0</span></p>
+        <p>Z<span class="ket">1</span> = -<span class="ket">1</span></p>
+        <p style="color: var(--text-dim);">180&deg; rotation around Z axis</p>
+        <p style="color: var(--text-dim);">Phase flip only (no bit flip)</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>Key identity:</strong> XZ = iY &mdash; the Pauli matrices form a group (with phases &plusmn;1, &plusmn;i)</p>
+  </div>
+</section>
+
+<!-- 2.4 Hadamard Gate -->
+<section>
+  <h2>Hadamard Gate (H)</h2>
+  <h3>The superposition creator &mdash; the most important gate</h3>
+  <div class="grid-2">
+    <div>
+      <div class="diagram">
+        <div style="font-size: 1.2em; margin-bottom: 10px; color: var(--highlight);">H = &frac1;&radic;2</div>
+        <div class="matrix" style="font-size: 1.1em;">
+          <span>1</span><span>1</span>
+          <span>1</span><span>-1</span>
+        </div>
+      </div>
+      <div style="font-size: 0.75em; margin-top: 15px;">
+        <p>H<span class="ket">0</span> = &frac1;&radic;2 (<span class="ket">0</span> + <span class="ket">1</span>) = <span class="ket">+</span></p>
+        <p>H<span class="ket">1</span> = &frac1;&radic;2 (<span class="ket">0</span> - <span class="ket">1</span>) = <span class="ket">-</span></p>
+      </div>
+    </div>
+    <div>
+      <h3>Bloch Sphere: 180&deg; around X+Z axis</h3>
+      <div class="diagram">
+        <div class="bloch-sphere">
+          <div class="equator"></div>
+          <div class="axis axis-z-top"><span class="ket" style="color: var(--text-dim);">0</span></div>
+          <div class="axis axis-z-bot"><span class="ket" style="color: var(--text-dim);">1</span></div>
+          <div class="axis axis-x-right"><span class="ket" style="color: var(--text-dim);">+</span></div>
+          <div class="state-arrow" style="transform: translateX(-50%) rotate(0deg); background: var(--text-dim);"></div>
+          <div class="state-arrow" style="transform: translateX(-50%) rotate(-90deg); background: var(--highlight);"></div>
+        </div>
+        <div class="diagram-label" style="margin-top: 20px;">
+          <span class="ket" style="color: var(--text-dim);">0</span> &rarr; <span class="ket" style="color: var(--highlight);">+</span> (north pole to equator)
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2.5 S and T gates -->
+<section>
+  <h2>Phase Gates: S and T</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--green);">S Gate (Phase Gate, &radic;Z)</h3>
+      <div class="diagram">
+        <div class="matrix" style="font-size: 1em;">
+          <span>1</span><span>0</span>
+          <span>0</span><span>i</span>
+        </div>
+      </div>
+      <div style="font-size: 0.7em; margin-top: 10px;">
+        <p>S<span class="ket">0</span> = <span class="ket">0</span></p>
+        <p>S<span class="ket">1</span> = i<span class="ket">1</span></p>
+        <p style="color: var(--text-dim);">90&deg; rotation around Z axis</p>
+        <p style="color: var(--green); font-weight: bold;">Clifford gate &check;</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--accent);">T Gate (&pi;/8 Gate, &radic;S)</h3>
+      <div class="diagram">
+        <div class="matrix" style="font-size: 1em;">
+          <span>1</span><span>0</span>
+          <span>0</span><span>e<sup>i&pi;/4</sup></span>
+        </div>
+      </div>
+      <div style="font-size: 0.7em; margin-top: 10px;">
+        <p>T<span class="ket">0</span> = <span class="ket">0</span></p>
+        <p>T<span class="ket">1</span> = e<sup>i&pi;/4</sup><span class="ket">1</span></p>
+        <p style="color: var(--text-dim);">45&deg; rotation around Z axis</p>
+        <p style="color: var(--accent); font-weight: bold;">NOT a Clifford gate &cross;</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>This distinction is everything for Clifft!</strong> S is "free" (Clifford), T is "expensive" (non-Clifford). Each T gate can increase the simulation cost by 2&times;.</p>
+  </div>
+</section>
+
+<!-- 2.6 CNOT and CZ -->
+<section>
+  <h2>Two-Qubit Gates: CNOT and CZ</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--highlight);">CNOT (Controlled-NOT)</h3>
+      <div class="diagram">
+        <div class="matrix m4" style="font-size: 0.8em;">
+          <span>1</span><span>0</span><span>0</span><span>0</span>
+          <span>0</span><span>1</span><span>0</span><span>0</span>
+          <span>0</span><span>0</span><span>0</span><span>1</span>
+          <span>0</span><span>0</span><span>1</span><span>0</span>
+        </div>
+      </div>
+      <div style="font-size: 0.65em; margin-top: 10px;">
+        <p><span class="ket">00</span> &rarr; <span class="ket">00</span> &nbsp; <span class="ket">01</span> &rarr; <span class="ket">01</span></p>
+        <p><span class="ket">10</span> &rarr; <span class="ket">11</span> &nbsp; <span class="ket">11</span> &rarr; <span class="ket">10</span></p>
+        <p style="color: var(--text-dim);">If control=1, flip target</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--green);">CZ (Controlled-Z)</h3>
+      <div class="diagram">
+        <div class="matrix m4" style="font-size: 0.8em;">
+          <span>1</span><span>0</span><span>0</span><span>0</span>
+          <span>0</span><span>1</span><span>0</span><span>0</span>
+          <span>0</span><span>0</span><span>1</span><span>0</span>
+          <span>0</span><span>0</span><span>0</span><span style="color: var(--accent);">-1</span>
+        </div>
+      </div>
+      <div style="font-size: 0.65em; margin-top: 10px;">
+        <p><span class="ket">00</span> &rarr; <span class="ket">00</span> &nbsp; <span class="ket">01</span> &rarr; <span class="ket">01</span></p>
+        <p><span class="ket">10</span> &rarr; <span class="ket">10</span> &nbsp; <span class="ket">11</span> &rarr; -<span class="ket">11</span></p>
+        <p style="color: var(--text-dim);">If both=1, apply phase flip</p>
+      </div>
+    </div>
+  </div>
+  <div style="font-size: 0.7em; color: var(--green); text-align: center; margin-top: 10px;">Both CNOT and CZ are Clifford gates &check;</div>
+</section>
+
+<!-- 2.7 Circuit Diagram Notation -->
+<section>
+  <h2>Reading Quantum Circuit Diagrams</h2>
+  <div class="diagram" style="text-align: left; padding: 20px;">
+    <div style="font-size: 0.7em; color: var(--text-dim); margin-bottom: 10px;">Time flows left &rarr; right. Each horizontal line is a qubit.</div>
+    <div style="font-family: 'Courier New', monospace; font-size: 0.8em; line-height: 2.2;">
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <span style="color: var(--text-dim); min-width: 30px;">q0:</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;</span>
+        <span class="gate-box" style="font-size: 0.7em; padding: 4px 8px;">H</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;</span>
+        <span style="color: var(--highlight); font-size: 1.2em;">&bull;</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;</span>
+        <span class="gate-box" style="font-size: 0.7em; padding: 4px 8px;">T</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;</span>
+        <span class="measure-box" style="font-size: 0.6em; padding: 4px 6px;">M</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px; margin-top: -5px;">
+        <span style="color: var(--text-dim); min-width: 30px;">q1:</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</span>
+        <span class="gate-box accent" style="font-size: 0.7em; padding: 4px 6px;">&oplus;</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</span>
+      </div>
+    </div>
+    <div style="margin-top: 15px; font-size: 0.65em;">
+      <span class="gate-box" style="font-size: 0.7em; padding: 2px 6px;">H</span> = Hadamard gate &nbsp;&nbsp;
+      <span style="color: var(--highlight);">&bull;</span>&mdash;<span class="gate-box accent" style="font-size: 0.7em; padding: 2px 4px;">&oplus;</span> = CNOT &nbsp;&nbsp;
+      <span class="gate-box" style="font-size: 0.7em; padding: 2px 6px;">T</span> = T gate &nbsp;&nbsp;
+      <span class="measure-box" style="font-size: 0.6em; padding: 2px 4px;">M</span> = Measurement
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p>This circuit creates a Bell state (H+CNOT), applies a T gate, and measures. In Stim format, this would be: <code class="nohighlight">H 0; CNOT 0 1; T 0; M 0</code></p>
+  </div>
+</section>
+
+<!-- 2.8 Clifford vs Non-Clifford -->
+<section>
+  <h2>The Gate Zoo: Clifford vs Non-Clifford</h2>
+  <div class="grid-2">
+    <div class="card" style="border-top: 3px solid var(--green);">
+      <h3 style="color: var(--green);">Clifford Gates</h3>
+      <p style="font-size: 0.7em; color: var(--text-dim);">Simulatable in polynomial time!</p>
+      <div class="grid-3" style="font-size: 0.8em; margin-top: 10px;">
+        <div class="diagram" style="padding: 8px;"><strong>H</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>S</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>CNOT</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>X</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>Y</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>Z</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>CZ</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>SWAP</strong></div>
+        <div class="diagram" style="padding: 8px;"><strong>S&dagger;</strong></div>
+      </div>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--accent);">
+      <h3 style="color: var(--accent);">Non-Clifford Gates</h3>
+      <p style="font-size: 0.7em; color: var(--text-dim);">Break efficient simulation!</p>
+      <div class="grid-3" style="font-size: 0.8em; margin-top: 10px;">
+        <div class="diagram" style="padding: 8px; border-color: var(--accent);"><strong>T</strong></div>
+        <div class="diagram" style="padding: 8px; border-color: var(--accent);"><strong>T&dagger;</strong></div>
+        <div class="diagram" style="padding: 8px; border-color: var(--accent);"><strong>Toffoli</strong></div>
+      </div>
+      <div style="font-size: 0.7em; margin-top: 10px;">
+        <p>Any rotation that isn't a multiple of 90&deg; around a Pauli axis</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>Gottesman-Knill Theorem:</strong> Any circuit using only Clifford gates + computational basis measurements + classical control can be simulated in O(n&sup2;) time on a classical computer. Stim exploits this. Clifft extends it to handle a few non-Clifford gates.</p>
+  </div>
+</section>
+</section>
+<!-- ============================================================ -->
+<!-- SECTION 3: CLIFFORD GROUP & STABILIZER FORMALISM              -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 3</div>
+  <h1>The Clifford Group &amp;<br>Stabilizer Formalism</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">How to simulate quantum circuits in polynomial time</p>
+</section>
+
+<!-- 3.1 What is the Clifford Group? -->
+<section>
+  <h2>What is the Clifford Group?</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Definition</h3>
+      <p>The set of all unitary operations that map Pauli operators to Pauli operators under conjugation:</p>
+      <div class="diagram" style="font-size: 1em; padding: 15px;">
+        <span style="color: var(--highlight);">C P C&dagger;</span> = <span style="color: var(--green);">P'</span>
+        <div class="diagram-label">where P, P' are Pauli operators</div>
+      </div>
+      <p style="font-size: 0.7em; color: var(--text-dim);">In other words: Clifford gates "shuffle" Pauli matrices around but keep them as Pauli matrices.</p>
+    </div>
+    <div>
+      <h3>Generated by just 3 gates</h3>
+      <div class="grid-3" style="margin-top: 15px;">
+        <div class="diagram" style="padding: 15px;">
+          <div style="font-size: 1.5em; color: var(--highlight);">H</div>
+          <div class="diagram-label">Hadamard</div>
+        </div>
+        <div class="diagram" style="padding: 15px;">
+          <div style="font-size: 1.5em; color: var(--green);">S</div>
+          <div class="diagram-label">Phase</div>
+        </div>
+        <div class="diagram" style="padding: 15px;">
+          <div style="font-size: 1.5em; color: var(--purple);">CNOT</div>
+          <div class="diagram-label">Controlled-NOT</div>
+        </div>
+      </div>
+      <div class="callout success" style="margin-top: 15px;">
+        <p><strong>Every</strong> Clifford gate can be decomposed into a sequence of H, S, and CNOT gates. That's the entire infinite group from just 3 generators!</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3.2 How Cliffords Transform Paulis -->
+<section>
+  <h2>How Cliffords Transform Paulis</h2>
+  <h3>Each Clifford gate has simple rules for transforming X, Y, Z</h3>
+  <div class="grid-3">
+    <div class="card">
+      <h3 style="color: var(--highlight);">Hadamard (H)</h3>
+      <div style="font-size: 0.7em; font-family: monospace;">
+        <p>X &rarr; <span style="color: var(--green);">Z</span></p>
+        <p>Y &rarr; <span style="color: var(--accent);">-Y</span></p>
+        <p>Z &rarr; <span style="color: var(--green);">X</span></p>
+      </div>
+      <div style="font-size: 0.6em; color: var(--text-dim);">Swaps X and Z</div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--green);">Phase (S)</h3>
+      <div style="font-size: 0.7em; font-family: monospace;">
+        <p>X &rarr; <span style="color: var(--green);">Y</span></p>
+        <p>Y &rarr; <span style="color: var(--accent);">-X</span></p>
+        <p>Z &rarr; <span style="color: var(--green);">Z</span></p>
+      </div>
+      <div style="font-size: 0.6em; color: var(--text-dim);">Rotates X into Y</div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--purple);">CNOT<sub>ij</sub></h3>
+      <div style="font-size: 0.7em; font-family: monospace;">
+        <p>X<sub>i</sub> &rarr; <span style="color: var(--green);">X<sub>i</sub>X<sub>j</sub></span></p>
+        <p>Z<sub>i</sub> &rarr; <span style="color: var(--green);">Z<sub>i</sub></span></p>
+        <p>X<sub>j</sub> &rarr; <span style="color: var(--green);">X<sub>j</sub></span></p>
+        <p>Z<sub>j</sub> &rarr; <span style="color: var(--green);">Z<sub>i</sub>Z<sub>j</sub></span></p>
+      </div>
+      <div style="font-size: 0.6em; color: var(--text-dim);">Spreads X forward, Z backward</div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>Key insight:</strong> Instead of tracking 2<sup>n</sup> amplitudes, we just track how X and Z on each qubit get mapped. That's only 2n Pauli strings &mdash; <em>polynomial</em> information!</p>
+  </div>
+</section>
+
+<!-- 3.3 The Pauli Group -->
+<section>
+  <h2>The Pauli Group</h2>
+  <h3>The foundation everything is built on</h3>
+  <div class="grid-4">
+    <div class="diagram" style="padding: 10px;">
+      <div style="color: var(--highlight); font-size: 1.3em;">I</div>
+      <div class="matrix" style="font-size: 0.8em;">
+        <span>1</span><span>0</span>
+        <span>0</span><span>1</span>
+      </div>
+      <div class="diagram-label">Identity</div>
+    </div>
+    <div class="diagram" style="padding: 10px;">
+      <div style="color: var(--accent); font-size: 1.3em;">X</div>
+      <div class="matrix" style="font-size: 0.8em;">
+        <span>0</span><span>1</span>
+        <span>1</span><span>0</span>
+      </div>
+      <div class="diagram-label">Bit-flip</div>
+    </div>
+    <div class="diagram" style="padding: 10px;">
+      <div style="color: var(--yellow); font-size: 1.3em;">Y</div>
+      <div class="matrix" style="font-size: 0.8em;">
+        <span>0</span><span>-i</span>
+        <span>i</span><span>0</span>
+      </div>
+      <div class="diagram-label">Bit+Phase</div>
+    </div>
+    <div class="diagram" style="padding: 10px;">
+      <div style="color: var(--green); font-size: 1.3em;">Z</div>
+      <div class="matrix" style="font-size: 0.8em;">
+        <span>1</span><span>0</span>
+        <span>0</span><span>-1</span>
+      </div>
+      <div class="diagram-label">Phase-flip</div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top: 15px;">
+    <div class="card">
+      <h3>Multiplication Rules</h3>
+      <div style="font-size: 0.7em; font-family: monospace;">
+        <p>XY = <span style="color: var(--green);">iZ</span> &nbsp;&nbsp; YX = <span style="color: var(--accent);">-iZ</span></p>
+        <p>YZ = <span style="color: var(--green);">iX</span> &nbsp;&nbsp; ZY = <span style="color: var(--accent);">-iX</span></p>
+        <p>ZX = <span style="color: var(--green);">iY</span> &nbsp;&nbsp; XZ = <span style="color: var(--accent);">-iY</span></p>
+        <p style="color: var(--yellow);">XX = YY = ZZ = I</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Key Properties</h3>
+      <ul>
+        <li>All Paulis square to I (self-inverse)</li>
+        <li>They either commute or anti-commute</li>
+        <li>Full Pauli group includes phases: &plusmn;1, &plusmn;i</li>
+        <li>n-qubit Paulis: tensor products like X&otimes;Z&otimes;I</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3.4 Stabilizer States -->
+<section>
+  <h2>Stabilizer States</h2>
+  <h3>States uniquely determined by their stabilizers</h3>
+  <div class="grid-2">
+    <div>
+      <h3>What is a stabilizer?</h3>
+      <p style="font-size: 0.75em;">A Pauli operator P <strong>stabilizes</strong> state <span class="ket">&Psi;</span> if:</p>
+      <div class="diagram" style="font-size: 1.2em; padding: 15px;">
+        P<span class="ket">&Psi;</span> = +<span class="ket">&Psi;</span>
+      </div>
+      <p style="font-size: 0.7em; color: var(--text-dim);">The state is an eigenvector with eigenvalue +1</p>
+    </div>
+    <div>
+      <h3>Example: <span class="ket">0</span></h3>
+      <div class="diagram" style="font-size: 0.8em; text-align: left; padding: 15px;">
+        <p>Z<span class="ket">0</span> = +<span class="ket">0</span> &nbsp; <span style="color: var(--green);">&check; Z stabilizes <span class="ket">0</span></span></p>
+        <p>X<span class="ket">0</span> = <span class="ket">1</span> &nbsp; <span style="color: var(--accent);">&cross; X does NOT stabilize <span class="ket">0</span></span></p>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top: 15px;">
+    <h3>n-qubit stabilizer state = n independent stabilizers</h3>
+    <div class="grid-3" style="font-size: 0.75em;">
+      <div class="card" style="text-align: center;">
+        <div style="color: var(--highlight);"><span class="ket">00</span></div>
+        <div style="color: var(--text-dim); margin-top: 5px;">Stabilizers:<br><code class="nohighlight">ZI</code>, <code class="nohighlight">IZ</code></div>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="color: var(--highlight);">&frac1;&radic;2 (<span class="ket">00</span>+<span class="ket">11</span>)</div>
+        <div style="color: var(--text-dim); margin-top: 5px;">Stabilizers:<br><code class="nohighlight">XX</code>, <code class="nohighlight">ZZ</code></div>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="color: var(--highlight);"><span class="ket">+++</span></div>
+        <div style="color: var(--text-dim); margin-top: 5px;">Stabilizers:<br><code class="nohighlight">XII</code>, <code class="nohighlight">IXI</code>, <code class="nohighlight">IIX</code></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3.5 The Stabilizer Tableau -->
+<section>
+  <h2>The Stabilizer Tableau</h2>
+  <h3>Representing n qubits in O(n&sup2;) space instead of O(2<sup>n</sup>)</h3>
+  <div class="grid-2">
+    <div>
+      <p style="font-size: 0.7em;">Track n stabilizer generators, each being an n-qubit Pauli string:</p>
+      <table class="tableau">
+        <tr><th></th><th class="sep" colspan="3" style="color: var(--accent);">X part</th><th colspan="3" style="color: var(--green);">Z part</th><th>phase</th></tr>
+        <tr><th>S1</th><td>1</td><td>0</td><td class="sep">0</td><td>0</td><td>1</td><td>0</td><td>+</td></tr>
+        <tr><th>S2</th><td>0</td><td>1</td><td class="sep">0</td><td>0</td><td>0</td><td>1</td><td>+</td></tr>
+        <tr><th>S3</th><td>0</td><td>0</td><td class="sep">1</td><td>1</td><td>0</td><td>0</td><td>+</td></tr>
+      </table>
+      <div style="font-size: 0.6em; color: var(--text-dim); text-align: center; margin-top: 5px;">
+        Each row = one stabilizer<br>
+        X=1,Z=0 &rarr; X &nbsp; X=0,Z=1 &rarr; Z &nbsp; X=1,Z=1 &rarr; Y
+      </div>
+    </div>
+    <div>
+      <h3>This reads as:</h3>
+      <div class="diagram" style="font-size: 0.75em; text-align: left; padding: 15px;">
+        <p>S1 = <span style="color: var(--accent);">X</span><span style="color: var(--text-dim);">I</span><span style="color: var(--text-dim);">I</span> &middot; <span style="color: var(--text-dim);">I</span><span style="color: var(--green);">Z</span><span style="color: var(--text-dim);">I</span> = <code class="nohighlight">XZI</code></p>
+        <p>Wait &mdash; X=1,Z=1 on same qubit &rarr; Y:</p>
+        <p style="color: var(--yellow);">Actually, the encoding is per-qubit:</p>
+        <p>S1: q0=(x=1,z=0)=X, q1=(x=0,z=1)=Z, q2=(x=0,z=0)=I</p>
+        <p style="color: var(--green);">S1 = <strong>XZI</strong>, phase = +1</p>
+      </div>
+      <div class="callout success" style="margin-top: 10px;">
+        <p><strong>Memory:</strong> Only 2n&sup2; + n bits for the full tableau. For 1000 qubits: ~250 KB instead of 2<sup>1000</sup> complex numbers!</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3.6 Tableau Through a Circuit -->
+<section>
+  <h2>Tableau Evolution Through a Circuit</h2>
+  <h3>Applying gates = updating rows of the tableau</h3>
+  <div class="diagram" style="padding: 15px;">
+    <div style="font-size: 0.7em;">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+        <!-- Step 0 -->
+        <div style="text-align: center;">
+          <div style="color: var(--text-dim); margin-bottom: 5px;">Initial: <span class="ket">00</span></div>
+          <table class="tableau" style="font-size: 0.9em;">
+            <tr><td>ZI</td></tr>
+            <tr><td>IZ</td></tr>
+          </table>
+        </div>
+        <div class="arrow-right">&rarr; <span style="font-size: 0.6em;">H on q0</span> &rarr;</div>
+        <!-- Step 1 -->
+        <div style="text-align: center;">
+          <div style="color: var(--text-dim); margin-bottom: 5px;">After H</div>
+          <table class="tableau" style="font-size: 0.9em;">
+            <tr><td style="color: var(--highlight);">XI</td></tr>
+            <tr><td>IZ</td></tr>
+          </table>
+        </div>
+        <div class="arrow-right">&rarr; <span style="font-size: 0.6em;">CNOT 0,1</span> &rarr;</div>
+        <!-- Step 2 -->
+        <div style="text-align: center;">
+          <div style="color: var(--text-dim); margin-bottom: 5px;">After CNOT</div>
+          <table class="tableau" style="font-size: 0.9em;">
+            <tr><td style="color: var(--green);">XX</td></tr>
+            <tr><td style="color: var(--green);">ZZ</td></tr>
+          </table>
+        </div>
+      </div>
+      <div style="margin-top: 15px; color: var(--yellow); text-align: center;">
+        Result: stabilizers XX and ZZ &rarr; this is the Bell state &frac1;&radic;2(<span class="ket">00</span>+<span class="ket">11</span>)
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>H transforms Z&rarr;X</strong> (row 1 changes). <strong>CNOT spreads X forward</strong> (XI &rarr; XX) and <strong>Z backward</strong> (IZ &rarr; ZZ). All just simple row operations on a binary table!</p>
+  </div>
+</section>
+
+<!-- 3.7 Why Clifford = Classically Simulatable -->
+<section>
+  <h2>Why Clifford Circuits are Classically Simulatable</h2>
+  <div class="compare-row">
+    <div class="compare-box alt" style="flex: 2;">
+      <h3 style="color: var(--highlight);">The Gottesman-Knill Theorem</h3>
+      <div style="font-size: 0.75em;">
+        <p>A quantum circuit can be simulated classically in polynomial time if it uses only:</p>
+        <ol style="padding-left: 20px; list-style: decimal;">
+          <li style="margin: 5px 0;">Clifford gates (H, S, CNOT, and compositions)</li>
+          <li style="margin: 5px 0;">Computational basis measurements</li>
+          <li style="margin: 5px 0;">Classical feed-forward (conditional gates)</li>
+          <li style="margin: 5px 0;">Starting from a computational basis state</li>
+        </ol>
+      </div>
+    </div>
+    <div class="compare-box" style="flex: 1;">
+      <h3 style="color: var(--accent);">Complexity</h3>
+      <div style="font-size: 0.7em;">
+        <p><strong>Per gate:</strong> O(n) row ops</p>
+        <p><strong>Total for L gates:</strong> O(n&middot;L)</p>
+        <p><strong>Memory:</strong> O(n&sup2;)</p>
+        <p style="color: var(--green); margin-top: 10px;">Compare: full state vector needs O(2<sup>n</sup>) memory and O(2<sup>n</sup>) per gate!</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>Stim</strong> (by Google) implements exactly this. It can simulate millions of Clifford qubits in seconds. But it <strong>cannot handle T gates</strong> at all &mdash; that's where Clifft comes in.</p>
+  </div>
+</section>
+
+<!-- 3.8 What Breaks Clifford Simulability -->
+<section>
+  <h2>What Breaks Clifford Simulability?</h2>
+  <h3>T gates and "magic"</h3>
+  <div class="grid-2">
+    <div>
+      <div class="diagram" style="padding: 15px;">
+        <div style="font-size: 1.5em; color: var(--accent); margin-bottom: 10px;">T Gate</div>
+        <div class="matrix" style="font-size: 1em;">
+          <span>1</span><span>0</span>
+          <span>0</span><span>e<sup>i&pi;/4</sup></span>
+        </div>
+        <div class="diagram-label" style="margin-top: 10px;">
+          T does NOT map Paulis to Paulis!<br>
+          T X T&dagger; = &frac1;&radic;2 (X + Y) &mdash; not a Pauli!
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>The T gate adds "magic"</h3>
+      <ul>
+        <li>A state produced by T gates is called a <strong>"magic state"</strong></li>
+        <li>Magic states cannot be described by stabilizers alone</li>
+        <li>Each T gate can double the simulation cost</li>
+        <li>k T gates &rarr; up to 2<sup>k</sup> stabilizer terms needed</li>
+      </ul>
+      <div class="callout" style="margin-top: 15px;">
+        <p><strong>Clifford + T = universal quantum computing.</strong><br>You need non-Clifford gates for quantum advantage, but they're exactly what makes simulation hard!</p>
+      </div>
+    </div>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: NEAR-CLIFFORD SIMULATION                           -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 4</div>
+  <h1>Near-Clifford Simulation</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">Clifft's key insight: factored form simulation</p>
+</section>
+
+<!-- 4.1 The Problem -->
+<section>
+  <h2>The Problem</h2>
+  <h3>A few T gates ruin everything</h3>
+  <div class="diagram" style="padding: 20px;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 5px; font-family: monospace; font-size: 0.8em; flex-wrap: wrap;">
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">H</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">S</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">CNOT</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">H</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box accent" style="padding: 5px 8px; font-size: 0.8em; border-color: var(--accent); color: var(--accent);">T</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">CNOT</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">S</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box accent" style="padding: 5px 8px; font-size: 0.8em; border-color: var(--accent); color: var(--accent);">T</span>
+      <span style="color: var(--text-dim);">&mdash;</span>
+      <span class="gate-box" style="padding: 5px 8px; font-size: 0.8em;">H</span>
+    </div>
+    <div style="margin-top: 15px; display: flex; justify-content: center; gap: 20px; font-size: 0.7em;">
+      <span style="color: var(--green);">&#9632; Clifford gates: FREE (O(n&sup2;))</span>
+      <span style="color: var(--accent);">&#9632; T gates: EXPENSIVE (2&times; each)</span>
+    </div>
+  </div>
+  <div class="compare-row" style="margin-top: 15px;">
+    <div class="compare-box green">
+      <h3 style="color: var(--green);">0 T gates</h3>
+      <p>Pure Clifford &rarr; O(n&sup2;)</p>
+      <p style="color: var(--text-dim); font-size: 0.65em;">Stim handles this</p>
+    </div>
+    <div class="compare-box alt">
+      <h3 style="color: var(--highlight);">~30 T gates</h3>
+      <p>O(n&sup2; + 2<sup>30</sup>) &approx; 1 billion</p>
+      <p style="color: var(--text-dim); font-size: 0.65em;">Hard but feasible on GPU</p>
+    </div>
+    <div class="compare-box">
+      <h3 style="color: var(--accent);">100+ T gates</h3>
+      <p>O(n&sup2; + 2<sup>100</sup>)</p>
+      <p style="color: var(--text-dim); font-size: 0.65em;">Impossible</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4.2 Clifft's Approach: Factored Form -->
+<section>
+  <h2>Clifft's Approach: Factored Form</h2>
+  <h3>Separate what's cheap from what's expensive</h3>
+  <div class="factored">
+    <div class="factored-part clifford">
+      <h3 style="color: var(--green);">Pauli Frame</h3>
+      <p>(Clifford part)</p>
+      <p style="color: var(--green);">O(n&sup2;) &mdash; cheap!</p>
+      <p>Tracks all n qubits</p>
+      <p>Updated by Clifford gates</p>
+    </div>
+    <div class="factored-plus">&otimes;</div>
+    <div class="factored-part dense">
+      <h3 style="color: var(--accent);">Dense State Vector</h3>
+      <p>(non-Clifford part)</p>
+      <p style="color: var(--accent);">O(2<sup>k</sup>) &mdash; expensive!</p>
+      <p>Tracks only k "active" qubits</p>
+      <p>Updated by T gates</p>
+    </div>
+  </div>
+  <div class="callout success" style="margin-top: 15px;">
+    <p><strong>Total cost: O(n&sup2; + 2<sup>k</sup>)</strong> where k &laquo; n. If your 1000-qubit circuit only has 20 "active" qubits, you pay for 20 &mdash; not 1000!</p>
+  </div>
+</section>
+
+<!-- 4.3 Active Dimension k -->
+<section>
+  <h2>Active Dimension k</h2>
+  <h3>Only the "contaminated" qubits need expensive tracking</h3>
+  <div class="diagram" style="padding: 20px;">
+    <div style="font-size: 0.7em; margin-bottom: 10px; color: var(--text-dim);">Example: 10 qubits, k=3 active</div>
+    <div style="display: flex; gap: 4px; justify-content: center; align-items: center; flex-wrap: wrap;">
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q0</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q1</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(233,69,96,0.15); border: 2px solid var(--accent); font-size: 0.6em;">
+        <div style="color: var(--accent);">q2</div>
+        <div style="color: var(--accent); font-size: 0.8em;">Dense</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q3</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(233,69,96,0.15); border: 2px solid var(--accent); font-size: 0.6em;">
+        <div style="color: var(--accent);">q4</div>
+        <div style="color: var(--accent); font-size: 0.8em;">Dense</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q5</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q6</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(233,69,96,0.15); border: 2px solid var(--accent); font-size: 0.6em;">
+        <div style="color: var(--accent);">q7</div>
+        <div style="color: var(--accent); font-size: 0.8em;">Dense</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q8</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+      <div style="width: 55px; height: 55px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(100,255,218,0.1); border: 2px solid var(--green); font-size: 0.6em;">
+        <div style="color: var(--green);">q9</div>
+        <div style="color: var(--text-dim); font-size: 0.8em;">Pauli</div>
+      </div>
+    </div>
+    <div style="margin-top: 15px; display: flex; justify-content: center; gap: 30px; font-size: 0.7em;">
+      <span style="color: var(--green);">&#9632; 7 qubits tracked by Pauli frame (cheap)</span>
+      <span style="color: var(--accent);">&#9632; 3 qubits tracked by dense vector (2&sup3; = 8 amplitudes)</span>
+    </div>
+  </div>
+</section>
+
+<!-- 4.4 How k Changes -->
+<section>
+  <h2>How k Changes During Simulation</h2>
+  <h3>T gates increase k, measurements can decrease k</h3>
+  <div class="diagram" style="padding: 15px;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 0.8em;">
+      <div style="text-align: center;">
+        <div style="background: var(--bg-tertiary); padding: 5px 10px; border-radius: 5px; color: var(--text-dim);">k=0</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: rgba(233,69,96,0.2); padding: 3px 8px; border-radius: 4px; color: var(--accent); font-size: 0.7em;">T gate</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: var(--bg-tertiary); padding: 5px 10px; border-radius: 5px; color: var(--accent);">k=1</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: rgba(233,69,96,0.2); padding: 3px 8px; border-radius: 4px; color: var(--accent); font-size: 0.7em;">T gate</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: var(--bg-tertiary); padding: 5px 10px; border-radius: 5px; color: var(--accent);">k=2</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: rgba(100,255,218,0.2); padding: 3px 8px; border-radius: 4px; color: var(--green); font-size: 0.7em;">Measure</div>
+      </div>
+      <div class="arrow-right">&rarr;</div>
+      <div style="text-align: center;">
+        <div style="background: var(--bg-tertiary); padding: 5px 10px; border-radius: 5px; color: var(--green);">k=1</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top: 15px;">
+    <div class="card" style="border-top: 3px solid var(--accent);">
+      <h3 style="color: var(--accent);">T gate: k &rarr; k+1</h3>
+      <ul style="font-size: 0.7em;">
+        <li>Promotes a Pauli-frame qubit to dense tracking</li>
+        <li>Dense vector doubles: 2<sup>k</sup> &rarr; 2<sup>k+1</sup></li>
+        <li>This is the cost of non-Clifford gates</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--green);">
+      <h3 style="color: var(--green);">Measurement: k &rarr; k-1 (sometimes)</h3>
+      <ul style="font-size: 0.7em;">
+        <li>Measuring an active qubit can project it out</li>
+        <li>Dense vector halves: 2<sup>k</sup> &rarr; 2<sup>k-1</sup></li>
+        <li>This is why QEC circuits stay tractable!</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4.5 The Rank Equation -->
+<section>
+  <h2>Why QEC Circuits Stay Tractable</h2>
+  <h3>Measurements keep k bounded</h3>
+  <div class="diagram" style="padding: 20px;">
+    <div style="font-size: 0.75em; color: var(--text-dim);">Typical QEC round with magic state injection:</div>
+    <div style="margin: 15px 0; font-size: 0.8em;">
+      <svg width="600" height="120" viewBox="0 0 600 120" style="max-width: 100%;">
+        <!-- Axes -->
+        <line x1="50" y1="100" x2="580" y2="100" stroke="#8892b0" stroke-width="1"/>
+        <line x1="50" y1="100" x2="50" y2="10" stroke="#8892b0" stroke-width="1"/>
+        <text x="25" y="60" fill="#8892b0" font-size="11" text-anchor="middle" transform="rotate(-90,25,60)">k</text>
+        <text x="300" y="118" fill="#8892b0" font-size="11" text-anchor="middle">Time (circuit depth)</text>
+        <!-- The sawtooth pattern -->
+        <polyline points="50,95 100,80 150,65 200,50 220,85 270,70 320,55 340,90 390,75 440,60 460,88 510,73 560,58"
+          fill="none" stroke="#e94560" stroke-width="2.5"/>
+        <!-- Labels for T gates (going up) -->
+        <text x="100" y="75" fill="#e94560" font-size="9">T</text>
+        <text x="150" y="60" fill="#e94560" font-size="9">T</text>
+        <text x="200" y="45" fill="#e94560" font-size="9">T</text>
+        <!-- Labels for measurements (going down) -->
+        <text x="220" y="80" fill="#64ffda" font-size="9">M</text>
+        <text x="340" y="85" fill="#64ffda" font-size="9">M</text>
+        <text x="460" y="83" fill="#64ffda" font-size="9">M</text>
+        <!-- Bounded region -->
+        <line x1="50" y1="40" x2="580" y2="40" stroke="#ffd700" stroke-width="1" stroke-dasharray="5,5"/>
+        <text x="585" y="43" fill="#ffd700" font-size="10">k_max</text>
+      </svg>
+    </div>
+    <div class="diagram-label">k rises with T gates, drops with measurements &mdash; stays bounded!</div>
+  </div>
+  <div class="callout success" style="margin-top: 10px;">
+    <p><strong>In magic state distillation circuits:</strong> You inject a magic state (T), do some Clifford operations, then measure. The measurement resets k. So k stays small even over many rounds &mdash; exactly what Clifft exploits.</p>
+  </div>
+</section>
+
+<!-- 4.6 Simulator Comparison -->
+<section>
+  <h2>Simulator Comparison</h2>
+  <div class="grid-3">
+    <div class="card" style="border-top: 3px solid var(--green);">
+      <h3 style="color: var(--green); text-align: center;">Stim</h3>
+      <div style="font-size: 0.65em; text-align: center;">
+        <div style="font-size: 1.5em; margin: 10px 0;">O(n&sup2;)</div>
+        <p>Pure Clifford only</p>
+        <p>Stabilizer tableau</p>
+        <p style="color: var(--green);">&check; Millions of qubits</p>
+        <p style="color: var(--accent);">&cross; No T gates at all</p>
+        <div style="margin-top: 10px; padding: 5px; background: rgba(100,255,218,0.1); border-radius: 5px;">
+          Google Research
+        </div>
+      </div>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--highlight);">
+      <h3 style="color: var(--highlight); text-align: center;">Clifft</h3>
+      <div style="font-size: 0.65em; text-align: center;">
+        <div style="font-size: 1.5em; margin: 10px 0;">O(n&sup2; + 2<sup>k</sup>)</div>
+        <p>Near-Clifford</p>
+        <p>Pauli frame + dense vector</p>
+        <p style="color: var(--green);">&check; Thousands of qubits</p>
+        <p style="color: var(--green);">&check; T gates (when k small)</p>
+        <div style="margin-top: 10px; padding: 5px; background: rgba(83,216,251,0.1); border-radius: 5px;">
+          Riverlane
+        </div>
+      </div>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--accent);">
+      <h3 style="color: var(--accent); text-align: center;">Full Statevector</h3>
+      <div style="font-size: 0.65em; text-align: center;">
+        <div style="font-size: 1.5em; margin: 10px 0;">O(2<sup>n</sup>)</div>
+        <p>Any quantum circuit</p>
+        <p>Full state vector</p>
+        <p style="color: var(--accent);">&cross; ~30-40 qubits max</p>
+        <p style="color: var(--green);">&check; Any gates</p>
+        <div style="margin-top: 10px; padding: 5px; background: rgba(233,69,96,0.1); border-radius: 5px;">
+          cuStateVec, etc.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</section>
+<!-- ============================================================ -->
+<!-- SECTION 5: QUANTUM ERROR CORRECTION                           -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 5</div>
+  <h1>Quantum Error Correction</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">Protecting quantum information from noise</p>
+</section>
+
+<!-- 5.1 Why QEC -->
+<section>
+  <h2>Why We Need Quantum Error Correction</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Physical qubits are noisy</h3>
+      <ul>
+        <li>Decoherence: qubits lose their quantum state over time</li>
+        <li>Gate errors: ~0.1-1% error per operation</li>
+        <li>Measurement errors: ~0.5-5% chance of wrong readout</li>
+        <li>Crosstalk: operations on one qubit affect neighbors</li>
+      </ul>
+      <div class="callout" style="margin-top: 10px;">
+        <p>A useful quantum computation needs <strong>millions</strong> of gates. With 0.1% error per gate, after 1000 gates you've lost all information!</p>
+      </div>
+    </div>
+    <div>
+      <h3>The solution: encode and protect</h3>
+      <div class="diagram" style="padding: 15px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 0.8em;">
+          <div style="text-align: center;">
+            <div style="width: 50px; height: 50px; border: 2px solid var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: bold;">1</div>
+            <div style="font-size: 0.7em; color: var(--text-dim); margin-top: 3px;">logical<br>qubit</div>
+          </div>
+          <div class="arrow-right">&rarr;</div>
+          <div style="display: grid; grid-template-columns: repeat(3,1fr); gap: 3px;">
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+            <div style="width: 30px; height: 30px; border: 2px solid var(--green); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--green); font-size: 0.7em;">p</div>
+          </div>
+          <div style="font-size: 0.7em; color: var(--text-dim); text-align: center;">many<br>physical<br>qubits</div>
+        </div>
+      </div>
+      <p style="font-size: 0.7em; color: var(--text-dim);">Spread information across many physical qubits so no single error destroys it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5.2 Classical Analogy -->
+<section>
+  <h2>Classical Error Correction Analogy</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color: var(--highlight);">Repetition Code</h3>
+      <div class="diagram" style="font-size: 0.8em;">
+        <p>Encode: <code class="nohighlight">0 &rarr; 000</code> &nbsp; <code class="nohighlight">1 &rarr; 111</code></p>
+        <p style="margin-top: 10px;">If one bit flips:</p>
+        <p><span style="font-family:monospace; background:#0a0a1a; padding:2px 6px; border-radius:3px;">0<span style="color: var(--accent); font-weight:700;">1</span>0</span> &rarr; majority vote &rarr; <code class="nohighlight">000</code> &check;</p>
+        <p style="margin-top: 10px; color: var(--text-dim);">Can correct any single-bit error</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="color: var(--accent);">Parity Checks</h3>
+      <div class="diagram" style="font-size: 0.8em; text-align: left;">
+        <p>Check 1: bit1 &oplus; bit2 = <span style="color: var(--green);">0</span> (should match)</p>
+        <p>Check 2: bit2 &oplus; bit3 = <span style="color: var(--green);">0</span> (should match)</p>
+        <p style="margin-top: 10px;">If bit 2 flips:</p>
+        <p>Check 1: 0 &oplus; <span style="color: var(--accent);">1</span> = <span style="color: var(--accent);">1</span> &larr; error detected!</p>
+        <p>Check 2: <span style="color: var(--accent);">1</span> &oplus; 0 = <span style="color: var(--accent);">1</span> &larr; error detected!</p>
+        <p style="color: var(--yellow); margin-top: 5px;">Both checks fire &rarr; error is on bit 2</p>
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>Quantum version:</strong> Same idea, but we use <em>stabilizer measurements</em> instead of parity checks, and we can detect both bit-flip (X) AND phase-flip (Z) errors.</p>
+  </div>
+</section>
+
+<!-- 5.3 The Surface Code -->
+<section>
+  <h2>The Surface Code</h2>
+  <h3>The dominant quantum error correction code</h3>
+  <div class="grid-2">
+    <div>
+      <h3>d=3 Surface Code Layout</h3>
+      <div class="diagram" style="padding: 15px;">
+        <div style="display: inline-grid; grid-template-columns: repeat(5, 38px); gap: 3px;">
+          <!-- Row 0 -->
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+          <!-- Row 1 -->
+          <div class="sc-cell sc-x-stab">X</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-x-stab">X</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-empty"></div>
+          <!-- Row 2 -->
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+          <!-- Row 3 -->
+          <div class="sc-cell sc-empty"></div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-x-stab">X</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-x-stab">X</div>
+          <!-- Row 4 -->
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+          <div class="sc-cell sc-z-stab">Z</div>
+          <div class="sc-cell sc-data">D</div>
+        </div>
+        <div class="diagram-label" style="margin-top: 10px;">
+          <span style="color: var(--highlight);">D</span> = data qubit &nbsp;
+          <span style="color: var(--accent);">X</span> = X-stabilizer &nbsp;
+          <span style="color: var(--highlight);">Z</span> = Z-stabilizer
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Key Concepts</h3>
+      <ul>
+        <li><strong>Data qubits</strong> hold the encoded quantum information</li>
+        <li><strong>Ancilla qubits</strong> (X and Z stabilizers) are measured to detect errors</li>
+        <li><strong>X stabilizers</strong> detect Z (phase-flip) errors</li>
+        <li><strong>Z stabilizers</strong> detect X (bit-flip) errors</li>
+      </ul>
+      <div class="callout success" style="margin-top: 10px;">
+        <p><strong>Code distance d:</strong> The code can correct up to &lfloor;(d-1)/2&rfloor; errors. d=3 &rarr; correct 1 error. d=5 &rarr; correct 2 errors. Larger d = more physical qubits but better protection.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5.4 Syndrome Extraction -->
+<section>
+  <h2>Syndrome Extraction</h2>
+  <h3>Measuring stabilizers to detect errors without disturbing data</h3>
+  <div class="diagram" style="padding: 15px;">
+    <div style="font-size: 0.7em; text-align: left; max-width: 500px; margin: 0 auto;">
+      <p style="color: var(--text-dim); margin-bottom: 10px;">Each stabilizer measurement cycle:</p>
+      <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <span style="min-width: 20px; color: var(--text-dim);">1.</span>
+        <span>Prepare ancilla in <span class="ket">0</span> (for Z-type) or <span class="ket">+</span> (for X-type)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <span style="min-width: 20px; color: var(--text-dim);">2.</span>
+        <span>Apply CNOT gates between ancilla and neighboring data qubits</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <span style="min-width: 20px; color: var(--text-dim);">3.</span>
+        <span>Measure ancilla &rarr; get syndrome bit (0 = no error, 1 = error detected)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <span style="min-width: 20px; color: var(--text-dim);">4.</span>
+        <span>Repeat for all stabilizers &rarr; syndrome = pattern of detection events</span>
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 15px;">
+    <p><strong>Critical property:</strong> The stabilizer measurements are all Clifford operations (CNOT + measurement). This is why Stim can simulate QEC so efficiently! The entire syndrome extraction circuit is Clifford.</p>
+  </div>
+</section>
+
+<!-- 5.5 Detectors and Observables -->
+<section>
+  <h2>Detectors and Observables</h2>
+  <h3>How Stim/Clifft track error detection</h3>
+  <div class="grid-2">
+    <div class="card" style="border-top: 3px solid var(--yellow);">
+      <h3 style="color: var(--yellow);">DETECTOR</h3>
+      <p style="font-size: 0.7em;">A parity check: XOR of measurement results that <strong>should be deterministic</strong> (always 0 in the absence of errors).</p>
+      <div class="diagram" style="font-size: 0.7em; padding: 10px;">
+        <p><code class="nohighlight">DETECTOR rec[-1] rec[-5]</code></p>
+        <p style="color: var(--text-dim); margin-top: 5px;">"XOR of the last measurement and the one from 5 ago should be 0"</p>
+      </div>
+      <ul style="font-size: 0.65em;">
+        <li>If detector fires (result = 1) &rarr; an error happened nearby</li>
+        <li>Pattern of detector firings = error syndrome</li>
+        <li>Feed to a decoder to identify the error</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top: 3px solid var(--purple);">
+      <h3 style="color: var(--purple);">OBSERVABLE</h3>
+      <p style="font-size: 0.7em;">Tracks the <strong>logical qubit value</strong> through the circuit. A parity of measurements that reveals the encoded information.</p>
+      <div class="diagram" style="font-size: 0.7em; padding: 10px;">
+        <p><code class="nohighlight">OBSERVABLE_INCLUDE(0) rec[-1]</code></p>
+        <p style="color: var(--text-dim); margin-top: 5px;">"This measurement contributes to logical observable 0"</p>
+      </div>
+      <ul style="font-size: 0.65em;">
+        <li>Logical error = observable flipped by undetected errors</li>
+        <li>The decoder's job: prevent observable flips</li>
+        <li>Logical error rate is the key metric</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5.6 Detectors in Surface Code Diagram -->
+<section>
+  <h2>Detectors in a Surface Code</h2>
+  <div class="diagram" style="padding: 15px;">
+    <div style="font-size: 0.7em; color: var(--text-dim); margin-bottom: 10px;">d=3 surface code: each stabilizer measurement produces a detector</div>
+    <div style="display: inline-grid; grid-template-columns: repeat(5, 42px); gap: 3px;">
+      <!-- Row 0 -->
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D0</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D1</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D1</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D2</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D2</div>
+      <!-- Row 1 -->
+      <div class="sc-cell sc-x-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D3</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D3</div>
+      <div class="sc-cell sc-x-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D4</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D4</div>
+      <div class="sc-cell sc-empty"></div>
+      <!-- Row 2 -->
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D5</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D5</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D6</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D6</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D7</div>
+      <!-- Row 3 -->
+      <div class="sc-cell sc-empty"></div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D8</div>
+      <div class="sc-cell sc-x-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D7</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D9</div>
+      <div class="sc-cell sc-x-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D8</div>
+      <!-- Row 4 -->
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D10</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D9</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D11</div>
+      <div class="sc-cell sc-z-stab" style="background: rgba(255,215,0,0.3); border-color: var(--yellow); color: var(--yellow);">D10</div>
+      <div class="sc-cell sc-data" style="font-size: 0.55em;">D12</div>
+    </div>
+    <div class="diagram-label" style="margin-top: 10px;">
+      <span style="color: var(--yellow);">D<em>n</em></span> = Detector number n (stabilizer measurement comparison across rounds)
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p>In each QEC round, each stabilizer is measured. A <strong>detector</strong> compares this round's measurement to the previous round's. If they differ &rarr; an error was detected. The <em>decoder</em> maps the detection pattern to the most likely error.</p>
+  </div>
+</section>
+
+<!-- 5.7 Magic State Distillation -->
+<section>
+  <h2>Magic State Distillation</h2>
+  <h3>The key use case for Clifft</h3>
+  <div class="grid-2">
+    <div>
+      <h3>The Problem</h3>
+      <ul>
+        <li>QEC only "natively" supports Clifford gates</li>
+        <li>T gates are needed for universal computation</li>
+        <li>Noisy T gates produce noisy "magic states"</li>
+        <li>We need high-fidelity magic states</li>
+      </ul>
+      <div class="arrow-down">&darr;</div>
+      <h3>The Solution: Distillation</h3>
+      <ul>
+        <li>Take many noisy magic states</li>
+        <li>Apply Clifford circuits + measurements</li>
+        <li>Produce fewer but <em>much cleaner</em> magic states</li>
+        <li>Repeat to reach desired fidelity</li>
+      </ul>
+    </div>
+    <div>
+      <div class="diagram" style="padding: 15px;">
+        <div style="font-size: 0.7em;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="display: flex; gap: 4px;">
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+              <div style="width: 22px; height: 22px; background: rgba(233,69,96,0.3); border: 1px solid var(--accent); border-radius: 3px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: var(--accent);">T</div>
+            </div>
+            <div style="color: var(--text-dim);">7 noisy magic states (error rate p)</div>
+            <div class="arrow-down">&darr;</div>
+            <div style="background: var(--bg-tertiary); padding: 8px 20px; border-radius: 8px; border: 1px solid var(--green); color: var(--green);">
+              Clifford Circuit + Measurements
+            </div>
+            <div class="arrow-down">&darr;</div>
+            <div style="display: flex; gap: 4px;">
+              <div style="width: 30px; height: 30px; background: rgba(100,255,218,0.3); border: 2px solid var(--green); border-radius: 5px; font-size: 0.7em; display: flex; align-items: center; justify-content: center; color: var(--green);">T</div>
+            </div>
+            <div style="color: var(--green);">1 clean magic state (error rate ~p&sup3;)</div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" style="margin-top: 10px;">
+        <p><strong>For Clifft:</strong> The distillation circuit is mostly Clifford (simulatable!) with a few T-gate injections. This keeps k small &mdash; perfect for near-Clifford simulation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: NOISE MODELS                                       -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 6</div>
+  <h1>Noise Models</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">How real quantum hardware fails</p>
+</section>
+
+<!-- 6.1 Depolarizing Noise -->
+<section>
+  <h2>Depolarizing Noise</h2>
+  <h3>The most common noise model</h3>
+  <div class="grid-2">
+    <div>
+      <h3>Single-qubit depolarizing (probability p)</h3>
+      <div class="diagram" style="font-size: 0.75em; text-align: left; padding: 15px;">
+        <p>With probability <span style="color: var(--green);">1-p</span>: nothing happens</p>
+        <p>With probability <span style="color: var(--accent);">p/3</span>: apply X (bit flip)</p>
+        <p>With probability <span style="color: var(--accent);">p/3</span>: apply Y (bit+phase flip)</p>
+        <p>With probability <span style="color: var(--accent);">p/3</span>: apply Z (phase flip)</p>
+      </div>
+    </div>
+    <div>
+      <h3>The "leaky pipe" model</h3>
+      <div class="noise-pipe" style="justify-content: center;">
+        <div class="pipe-wire"></div>
+        <div class="pipe-section pipe-gate">Perfect Gate</div>
+        <div class="pipe-wire" style="width: 10px;"></div>
+        <div class="pipe-section pipe-noise">Random Pauli</div>
+        <div class="pipe-wire"></div>
+      </div>
+      <div style="font-size: 0.7em; color: var(--text-dim); text-align: center; margin-top: 10px;">
+        Every noisy gate = ideal gate + random Pauli error
+      </div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top: 10px;">
+    <p><strong>Why Paulis?</strong> Any single-qubit error can be decomposed into a probabilistic mixture of I, X, Y, Z. Since Clifford circuits map Paulis to Paulis, Pauli noise plays nicely with the stabilizer formalism.</p>
+  </div>
+</section>
+
+<!-- 6.2 Noise Types -->
+<section>
+  <h2>Types of Noise Channels</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card" style="margin-bottom: 10px;">
+        <h3 style="color: var(--accent);">Bit-flip (X error)</h3>
+        <div style="font-size: 0.7em;">
+          <p><span class="ket">0</span> &rarr; <span class="ket">1</span> with probability p</p>
+          <p style="color: var(--text-dim);">Like classical bit corruption</p>
+          <p>Stim: <code class="nohighlight">X_ERROR(p) target</code></p>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom: 10px;">
+        <h3 style="color: var(--highlight);">Phase-flip (Z error)</h3>
+        <div style="font-size: 0.7em;">
+          <p><span class="ket">+</span> &rarr; <span class="ket">-</span> with probability p</p>
+          <p style="color: var(--text-dim);">No classical analogue!</p>
+          <p>Stim: <code class="nohighlight">Z_ERROR(p) target</code></p>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom: 10px;">
+        <h3 style="color: var(--yellow);">Two-qubit depolarizing</h3>
+        <div style="font-size: 0.7em;">
+          <p>15 possible Pauli pairs: IX, IY, IZ, XI, XX, ... ZZ</p>
+          <p>Each with probability p/15</p>
+          <p>Stim: <code class="nohighlight">DEPOLARIZE2(p) q1 q2</code></p>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--orange);">Measurement noise</h3>
+        <div style="font-size: 0.7em;">
+          <p>Readout result flips with probability p</p>
+          <p>The qubit state is unchanged!</p>
+          <p>Stim: <code class="nohighlight">MR(p) target</code> or <code class="nohighlight">M(p) target</code></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6.3 Noise in Circuit Diagram -->
+<section>
+  <h2>Noise in a Circuit: The Full Picture</h2>
+  <div class="diagram" style="padding: 15px;">
+    <div style="font-size: 0.65em; font-family: monospace; text-align: left; max-width: 550px; margin: 0 auto; line-height: 2.5;">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="color: var(--text-dim); min-width: 25px;">q0:</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+        <span class="gate-box" style="padding: 3px 6px; font-size: 0.8em;">H</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+        <span style="padding: 3px 5px; border: 1px dashed var(--orange); border-radius: 4px; color: var(--orange); font-size: 0.7em;">noise</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+        <span style="color: var(--highlight);">&bull;</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+        <span style="padding: 3px 5px; border: 1px dashed var(--orange); border-radius: 4px; color: var(--orange); font-size: 0.7em;">noise</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+        <span class="measure-box" style="padding: 3px 5px; font-size: 0.7em;">M</span>
+        <span style="color: var(--text-dim);">&mdash;</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="color: var(--text-dim); min-width: 25px;">q1:</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</span>
+        <span class="gate-box accent" style="padding: 3px 5px; font-size: 0.8em;">&oplus;</span>
+        <span style="color: var(--text-dim);">&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</span>
+      </div>
+    </div>
+    <div style="margin-top: 10px; font-size: 0.65em; color: var(--text-dim);">
+      After each gate layer: insert noise. Measurement also has its own noise.
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>In Stim/Clifft:</strong> Noise is just Pauli errors inserted after gates. Since Pauli errors commute nicely through Clifford circuits, the simulator can track them efficiently in the Pauli frame &mdash; noise doesn't increase k!</p>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: STIM                                               -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <div class="section-num">Section 7</div>
+  <h1>Stim &mdash; The Foundation</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.7em;">Google's fast Clifford simulator that Clifft builds on</p>
+</section>
+
+<!-- 7.1 What is Stim -->
+<section>
+  <h2>What is Stim?</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Google Research's Clifford simulator</h3>
+      <ul>
+        <li>Written in C++ with Python bindings</li>
+        <li>Simulates Clifford circuits <em>insanely fast</em></li>
+        <li>Core of Google's QEC research pipeline</li>
+        <li>Can sample from circuits with millions of qubits</li>
+      </ul>
+      <div class="callout success" style="margin-top: 10px;">
+        <p><strong>Key capability:</strong> Stim can do ~1 billion Clifford gates per second on a single core. It uses SIMD-optimized tableau operations.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Stim's two simulation modes</h3>
+      <div class="card" style="margin-bottom: 10px;">
+        <h3 style="color: var(--highlight);">Tableau Simulation</h3>
+        <p style="font-size: 0.7em;">Full state tracking via stabilizer tableau. Exact amplitudes. Useful for small circuits and verification.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--green);">Frame Simulation</h3>
+        <p style="font-size: 0.7em;">Track Pauli frames (error propagation). Blazing fast. Only gives measurement results, not full state. Used for sampling in QEC.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7.2 Stim Circuit Format -->
+<section>
+  <h2>The .stim Circuit Format</h2>
+  <h3>One instruction per line, simple and readable</h3>
+  <div class="diagram" style="padding: 15px;">
+    <pre style="background: var(--bg-primary); border-color: var(--bg-tertiary);; font-family: monospace; font-size: 0.8em; line-height: 1.5;"><span class="comment"># Bell state creation + measurement</span>
+<span class="keyword">H</span> <span class="target">0</span>                   <span class="comment"># Hadamard on qubit 0</span>
+<span class="keyword">CNOT</span> <span class="target">0 1</span>              <span class="comment"># CNOT with control=0, target=1</span>
+<span class="noise">DEPOLARIZE2</span>(<span class="number">0.001</span>) <span class="target">0 1</span> <span class="comment"># 0.1% two-qubit noise</span>
+<span class="keyword">M</span> <span class="target">0 1</span>                 <span class="comment"># Measure qubits 0 and 1</span>
+<span class="meta">DETECTOR</span> <span class="target">rec[-1] rec[-2]</span> <span class="comment"># Parity check</span>
+<span class="meta">OBSERVABLE_INCLUDE</span>(<span class="number">0</span>) <span class="target">rec[-1]</span></pre>
+  </div>
+  <div class="grid-2" style="margin-top: 10px;">
+    <div style="font-size: 0.7em;">
+      <h3>Instruction types</h3>
+      <ul>
+        <li><code class="nohighlight" style="color: var(--highlight);">GATE target</code> &mdash; apply gate</li>
+        <li><code class="nohighlight" style="color: var(--orange);">NOISE(p) target</code> &mdash; apply noise</li>
+        <li><code class="nohighlight" style="color: var(--highlight);">M target</code> &mdash; measure (destructive)</li>
+        <li><code class="nohighlight" style="color: var(--highlight);">MR target</code> &mdash; measure + reset</li>
+      </ul>
+    </div>
+    <div style="font-size: 0.7em;">
+      <h3>Meta instructions</h3>
+      <ul>
+        <li><code class="nohighlight" style="color: var(--purple);">DETECTOR rec[...]</code> &mdash; parity check</li>
+        <li><code class="nohighlight" style="color: var(--purple);">OBSERVABLE_INCLUDE</code> &mdash; logical qubit</li>
+        <li><code class="nohighlight" style="color: var(--purple);">REPEAT n { ... }</code> &mdash; loop</li>
+        <li><code class="nohighlight" style="color: var(--text-dim);"># comment</code> &mdash; comments</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 7.3 Stim QEC Circuit Example -->
+<section>
+  <h2>Stim QEC Circuit Example</h2>
+  <h3>Repetition code with 3 rounds</h3>
+  <div class="diagram" style="padding: 15px;">
+    <pre style="background: var(--bg-primary); border-color: var(--bg-tertiary); font-size: 0.65em;; font-family: monospace; font-size: 0.8em; line-height: 1.5;"><span class="comment"># d=3 repetition code</span>
+<span class="keyword">R</span> <span class="target">0 1 2 3 4</span>            <span class="comment"># Reset 3 data + 2 ancilla qubits</span>
+
+<span class="meta">REPEAT</span> <span class="number">3</span> {
+    <span class="keyword">CNOT</span> <span class="target">0 3</span>  <span class="target">1 4</span>       <span class="comment"># First round of CNOTs</span>
+    <span class="keyword">CNOT</span> <span class="target">1 3</span>  <span class="target">2 4</span>       <span class="comment"># Second round of CNOTs</span>
+    <span class="noise">DEPOLARIZE2</span>(<span class="number">0.001</span>) <span class="target">0 3 1 4 1 3 2 4</span>
+    <span class="keyword">MR</span> <span class="target">3 4</span>               <span class="comment"># Measure and reset ancillas</span>
+    <span class="meta">DETECTOR</span> <span class="target">rec[-2] rec[-4]</span>  <span class="comment"># Compare to prev round</span>
+    <span class="meta">DETECTOR</span> <span class="target">rec[-1] rec[-3]</span>
+}
+
+<span class="keyword">M</span> <span class="target">0 1 2</span>                <span class="comment"># Final data measurement</span>
+<span class="meta">DETECTOR</span> <span class="target">rec[-2] rec[-1] rec[-4]</span>
+<span class="meta">DETECTOR</span> <span class="target">rec[-3] rec[-2] rec[-5]</span>
+<span class="meta">OBSERVABLE_INCLUDE</span>(<span class="number">0</span>) <span class="target">rec[-1]</span></pre>
+  </div>
+</section>
+
+<!-- 7.4 Why Clifft Extends Stim -->
+<section>
+  <h2>Why Clifft Extends Stim</h2>
+  <h3>Stim's limitation = Clifft's opportunity</h3>
+  <div class="diagram" style="padding: 20px;">
+    <div style="display: flex; align-items: stretch; justify-content: center; gap: 20px; flex-wrap: wrap;">
+      <div style="background: var(--bg-secondary); border: 2px solid var(--green); border-radius: 10px; padding: 15px; width: 200px; text-align: center;">
+        <div style="color: var(--green); font-weight: bold; font-size: 1em;">Stim Handles</div>
+        <div style="margin: 10px 0; font-size: 0.7em;">
+          <div style="padding: 4px; margin: 3px 0; background: rgba(100,255,218,0.1); border-radius: 4px;">H, S, CNOT, CZ</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(100,255,218,0.1); border-radius: 4px;">X, Y, Z, SWAP</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(100,255,218,0.1); border-radius: 4px;">Measurements</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(100,255,218,0.1); border-radius: 4px;">Pauli noise</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(100,255,218,0.1); border-radius: 4px;">Detectors</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; justify-content: center;">
+        <div style="font-size: 2em; color: var(--accent);">+</div>
+      </div>
+      <div style="background: var(--bg-secondary); border: 2px solid var(--accent); border-radius: 10px; padding: 15px; width: 200px; text-align: center;">
+        <div style="color: var(--accent); font-weight: bold; font-size: 1em;">Clifft Adds</div>
+        <div style="margin: 10px 0; font-size: 0.7em;">
+          <div style="padding: 4px; margin: 3px 0; background: rgba(233,69,96,0.1); border-radius: 4px;">T, T&dagger; gates</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(233,69,96,0.1); border-radius: 4px;">Dense state tracking</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(233,69,96,0.1); border-radius: 4px;">GPU acceleration</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(233,69,96,0.1); border-radius: 4px;">Factored simulation</div>
+          <div style="padding: 4px; margin: 3px 0; background: rgba(233,69,96,0.1); border-radius: 4px;">Magic state sim</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 10px;">
+    <p><strong>Clifft reads Stim .stim files directly</strong> and handles the Clifford parts the same way. When it hits a T gate, it seamlessly switches to its near-Clifford engine for those qubits while keeping the rest in the efficient Pauli frame.</p>
+  </div>
+</section>
+
+<!-- 7.5 Summary Slide -->
+<section>
+  <h2>Putting It All Together</h2>
+  <div class="diagram" style="padding: 20px;">
+    <div style="font-size: 0.7em; max-width: 600px; margin: 0 auto;">
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold;">1</div>
+        <div><strong>Qubits</strong> live in superposition (Section 1)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold;">2</div>
+        <div><strong>Gates</strong> transform qubits; Clifford gates are special (Section 2)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold;">3</div>
+        <div><strong>Stabilizers</strong> let us track Clifford states efficiently (Section 3)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--highlight); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; color: var(--bg-primary);">4</div>
+        <div><strong>Clifft's factored form</strong> handles a few T gates cheaply (Section 4)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--highlight); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; color: var(--bg-primary);">5</div>
+        <div><strong>QEC</strong> uses Clifford circuits + measurements &rarr; keeps k small (Section 5)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; color: var(--bg-primary);">6</div>
+        <div><strong>Pauli noise</strong> integrates naturally into the Pauli frame (Section 6)</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+        <div style="min-width: 24px; height: 24px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; color: var(--bg-primary);">7</div>
+        <div><strong>Stim</strong> provides the Clifford engine; <strong>Clifft</strong> adds the non-Clifford layer (Section 7)</div>
+      </div>
+    </div>
+  </div>
+  <div class="callout success" style="margin-top: 15px; text-align: center;">
+    <p style="font-size: 0.85em;"><strong>Result:</strong> Clifft can simulate magic state distillation on thousands of qubits &mdash; circuits that are mostly Clifford with strategically placed T gates &mdash; by keeping the expensive part (2<sup>k</sup>) small while the cheap part (n&sup2;) handles the rest.</p>
+  </div>
+</section>
+</section>
+
+
+<!-- END OF SLIDES -->
+</div><!-- /.slides -->
+</div><!-- /.reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  showSlideNumber: 'all',
+  transition: 'slide',
+  transitionSpeed: 'default',
+  backgroundTransition: 'fade',
+  center: false,
+  width: 1200,
+  height: 700,
+  margin: 0.05,
+  minScale: 0.2,
+  maxScale: 2.0,
+  keyboard: true,
+  overview: true,
+  touch: true,
+});
+</script>
+</body>
+</html>

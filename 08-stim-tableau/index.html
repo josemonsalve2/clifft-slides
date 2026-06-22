@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft Deep Dive: Stim Stabilizer Tableau</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/black.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai.min.css">
+<style>
+    /* font-size-override-applied */
+    .reveal { font-size: 24px !important; }
+    .reveal h1 { font-size: 1.8em !important; }
+    .reveal h2 { font-size: 1.4em !important; }
+    .reveal h3 { font-size: 1.1em !important; }
+    .reveal h4 { font-size: 0.9em !important; }
+    .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+    .reveal pre { font-size: 0.75em !important; }
+    .reveal code { font-size: 0.85em !important; }
+    .reveal .small { font-size: 0.7em !important; }
+    .reveal table { font-size: 0.8em !important; }
+
+    :root {
+        --bg-primary: #1a1a2e;
+        --accent: #e94560;
+        --secondary: #0f3460;
+        --highlight: #53d8fb;
+    }
+    .reveal { background: var(--bg-primary); color: #e0e0e0; }
+    .reveal h1, .reveal h2, .reveal h3 { color: var(--accent); text-transform: none; }
+    .reveal h4 { color: var(--highlight); text-transform: none; }
+
+    .accent { color: var(--accent); }
+    .highlight { color: var(--highlight); }
+    .secondary { color: #6a9fd8; }
+    .green { color: #4ade80; }
+    .yellow { color: #fbbf24; }
+    .orange { color: #fb923c; }
+    .dim { color: #888; }
+
+    .reveal pre { background: #0d0d1a; border: 1px solid #333; border-radius: 6px; }
+    .reveal code { background: #0d0d1a; padding: 2px 6px; border-radius: 3px; }
+    .reveal pre code { background: transparent; padding: 0; }
+
+    .reveal table { border-collapse: collapse; margin: 0 auto; }
+    .reveal th { background: var(--secondary); color: var(--highlight); border: 1px solid #444; padding: 6px 10px; }
+    .reveal td { border: 1px solid #333; padding: 5px 10px; }
+    .reveal tr:nth-child(even) td { background: rgba(15, 52, 96, 0.15); }
+
+    .reveal .slide-number { color: var(--highlight); }
+    .reveal .progress span { background: var(--accent); }
+    .reveal .controls button { color: var(--accent); }
+
+    .box { background: rgba(15, 52, 96, 0.3); border: 1px solid var(--secondary); border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-accent { background: rgba(233, 69, 96, 0.1); border: 1px solid var(--accent); border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-green { background: rgba(74, 222, 128, 0.08); border: 1px solid #4ade80; border-radius: 8px; padding: 15px; margin: 10px 0; }
+
+    .cols { display: flex; gap: 20px; align-items: flex-start; }
+    .col { flex: 1; }
+
+    .diagram-box { background: #0d0d1a; border: 2px solid var(--secondary); border-radius: 8px; padding: 15px; margin: 10px auto; font-family: monospace; font-size: 0.75em !important; line-height: 1.5; }
+    .diagram-box .accent { color: var(--accent); }
+    .diagram-box .highlight { color: var(--highlight); }
+    .diagram-box .green { color: #4ade80; }
+    .diagram-box .dim { color: #666; }
+
+    .pipeline-arrow { color: var(--accent); font-size: 1.2em; }
+    .arrow-right { color: var(--accent); margin: 0 8px; }
+    .arrow-down { color: var(--accent); display: block; text-align: center; margin: 5px 0; }
+
+    .fragment.current-fragment { opacity: 1; }
+
+    .section-divider { text-align: center; }
+    .section-divider h2 { font-size: 2em !important; margin-bottom: 20px; }
+    .section-number { font-size: 3em !important; color: var(--highlight); opacity: 0.3; }
+
+    .matrix-table { border-collapse: collapse; margin: 0 auto; }
+    .matrix-table td { border: 1px solid #555; padding: 3px 8px; text-align: center; font-family: monospace; min-width: 28px; }
+    .matrix-table th { border: 1px solid #555; padding: 3px 8px; text-align: center; font-family: monospace; min-width: 28px; }
+    .matrix-table .label-cell { background: rgba(15, 52, 96, 0.4); color: var(--highlight); border: 1px solid #555; }
+    .matrix-table .x-section { background: rgba(233, 69, 96, 0.12); }
+    .matrix-table .z-section { background: rgba(83, 216, 251, 0.10); }
+    .matrix-table .sign-section { background: rgba(74, 222, 128, 0.12); }
+    .matrix-table .changed { color: var(--accent); font-weight: bold; }
+
+    .stim-keyword { color: var(--accent); font-weight: bold; }
+    .stim-target { color: var(--highlight); }
+    .stim-comment { color: #666; }
+    .stim-arg { color: #fbbf24; }
+
+    .timeline { position: relative; padding-left: 30px; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+    .timeline-step { position: relative; margin-bottom: 12px; padding: 8px 12px; background: rgba(15, 52, 96, 0.2); border-radius: 6px; border-left: 3px solid var(--highlight); }
+    .timeline-step::before { content: ''; position: absolute; left: -27px; top: 12px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--highlight); }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ================================================================== -->
+<!-- TITLE SLIDE                                                        -->
+<!-- ================================================================== -->
+<section>
+    <h1>The Stim Stabilizer Tableau</h1>
+    <h3 style="color: var(--highlight)">How Clifft Absorbs Clifford Gates at Compile Time</h3>
+    <p class="dim" style="margin-top: 30px;">Stabilizer Formalism &bull; Tableau Mechanics &bull; Heisenberg Picture<br>
+    Stim Integration &bull; Compilation vs Interpretation &bull; The Pauli Frame</p>
+    <p class="small dim" style="margin-top: 40px;">Built from actual source: <code>stim/stabilizers/tableau.h</code>,
+    <code>clifft/frontend/frontend.h</code>, <code>clifft/frontend/hir.h</code></p>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 1: WHAT IS STIM?                                           -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">1</div>
+        <h2>What is Stim?</h2>
+        <p>Google's fast stabilizer circuit simulator</p>
+    </section>
+
+    <!-- 1.1 Stim Overview -->
+    <section>
+        <h2>Stim: Fast Clifford Simulation</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Core Facts</h4>
+                    <ul>
+                        <li>Created by <span class="highlight">Craig Gidney</span> at Google</li>
+                        <li>Open source: <code>github.com/quantumlib/Stim</code></li>
+                        <li>Written in C++ with SIMD optimizations</li>
+                        <li>Python bindings for scripting</li>
+                        <li>Industry standard for QEC research</li>
+                    </ul>
+                </div>
+                <div class="box-accent">
+                    <h4>Gottesman-Knill Theorem</h4>
+                    <p>Any circuit composed <em>purely</em> of Clifford gates, preparations in |0&rang;, and computational-basis measurements can be simulated in <span class="accent">O(n&sup2;)</span> time per gate on a classical computer.</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Key Capabilities</h4>
+                    <ul>
+                        <li><span class="green">Tableau simulator</span> &mdash; full stabilizer state tracking</li>
+                        <li><span class="green">Frame simulator</span> &mdash; fast Pauli frame sampling</li>
+                        <li><span class="green">Circuit format</span> &mdash; <code>.stim</code> text files</li>
+                        <li><span class="green">Noise models</span> &mdash; depolarizing, Pauli channels, readout</li>
+                        <li><span class="green">QEC support</span> &mdash; detectors, observables, repeat blocks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 1.2 Stim's Limitation and Clifft's Extension -->
+    <section>
+        <h2>Stim's Limitation &rarr; Clifft's Extension</h2>
+        <div class="box" style="text-align: center; padding: 20px;">
+            <p>Stim can only simulate <span class="accent">purely Clifford</span> circuits</p>
+            <p class="arrow-down">&darr;</p>
+            <p>Real QEC circuits need <span class="highlight">non-Clifford gates</span> (T gates, rotations)</p>
+            <p class="arrow-down">&darr;</p>
+            <p>Clifft <span class="green">extends</span> Stim by adding non-Clifford support</p>
+        </div>
+        <div class="cols" style="margin-top: 15px;">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Stim (standalone)</h4>
+                    <ul>
+                        <li>Clifford gates only: H, S, CX, CZ, SWAP...</li>
+                        <li>Measurements and noise</li>
+                        <li><span class="dim">Cannot handle T, T&dagger;, R_Z(&theta;)</span></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Clifft (built on Stim)</h4>
+                    <ul>
+                        <li>All Clifford gates (via Stim)</li>
+                        <li>T, T&dagger;, R_X, R_Y, R_Z, U3</li>
+                        <li>Compilation to optimized bytecode</li>
+                        <li>GPU backends (CUDA, AMD)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 1.3 What Clifft Uses from Stim -->
+    <section>
+        <h2>What Clifft Uses from Stim</h2>
+        <p>Stim is a <span class="highlight">library dependency</span>, not a runtime engine</p>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Used at Compile Time</h4>
+                    <table>
+                        <tr><td class="accent">stim::Tableau&lt;W&gt;</td><td>Clifford frame algebra</td></tr>
+                        <tr><td class="accent">stim::PauliString&lt;W&gt;</td><td>Pauli string extraction</td></tr>
+                        <tr><td class="accent">simd_bits / simd_bit_table</td><td>SIMD bit operations</td></tr>
+                        <tr><td class="accent">TableauTransposedRaii</td><td>Efficient row operations</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>NOT Used at Runtime</h4>
+                    <p>The hot SVM bytecode executor <span class="accent">never</span> includes tableau code or evaluates tableau mathematics.</p>
+                    <p class="small dim" style="margin-top: 8px;">From architecture.md: "Clifft uses Stim exclusively as an AOT mathematical tableau library, not as a circuit simulation engine."</p>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px;">
+            <p style="text-align: center;">Stim SIMD width in Clifft: <code class="highlight">kStimWidth = 64</code> &mdash; defined in <code>util/stim_mask.h</code></p>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: WHAT IS THE STABILIZER TABLEAU?                         -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">2</div>
+        <h2>What is the Stabilizer Tableau?</h2>
+        <p>The mathematical engine behind Clifford gate absorption</p>
+    </section>
+
+    <!-- 2.1 Mathematical Foundation -->
+    <section>
+        <h2>Stabilizer States</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Stabilizer Group</h4>
+                    <ul>
+                        <li>A quantum state |&psi;&rang; is <span class="accent">stabilized</span> by Pauli operator P if P|&psi;&rang; = |&psi;&rang;</li>
+                        <li>The set of all such P forms the <span class="highlight">stabilizer group</span></li>
+                        <li>For n qubits: the group has <span class="accent">n generators</span></li>
+                        <li>Each generator is an n-qubit Pauli string (tensor product of I, X, Y, Z)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Key Insight</h4>
+                    <p>A stabilizer state on n qubits is <span class="accent">uniquely defined</span> by its n stabilizer generators.</p>
+                    <p style="margin-top: 10px;">Instead of storing 2<sup>n</sup> complex amplitudes, we store <span class="highlight">n Pauli strings</span>.</p>
+                </div>
+                <div class="box-green" style="margin-top: 10px;">
+                    <h4>Example: |000&rang;</h4>
+                    <p>Stabilizers: <span class="green">+Z<sub>1</sub></span>, <span class="green">+Z<sub>2</sub></span>, <span class="green">+Z<sub>3</sub></span></p>
+                    <p class="small dim">Each Z stabilizes the corresponding |0&rang; eigenstate</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2.2 The Tableau as a Binary Matrix -->
+    <section>
+        <h2>The Tableau as a Binary Matrix</h2>
+        <p>Each Pauli string is encoded as <span class="accent">n X-bits</span> + <span class="highlight">n Z-bits</span> + <span class="green">1 sign bit</span></p>
+        <div class="box" style="text-align: center;">
+            <table style="margin: 0 auto; font-family: monospace;">
+                <tr><td style="border: none; text-align: right; padding: 2px 8px;"><span class="dim">Encoding:</span></td>
+                    <td style="border: none; padding: 2px 8px;">x=0, z=0 &rarr; <span class="dim">I</span></td>
+                    <td style="border: none; padding: 2px 8px;">x=1, z=0 &rarr; <span class="accent">X</span></td>
+                    <td style="border: none; padding: 2px 8px;">x=0, z=1 &rarr; <span class="highlight">Z</span></td>
+                    <td style="border: none; padding: 2px 8px;">x=1, z=1 &rarr; <span class="yellow">Y</span></td>
+                </tr>
+            </table>
+        </div>
+        <div class="cols" style="margin-top: 10px;">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Stim's Tableau Structure</h4>
+                    <pre><code class="language-cpp">template &lt;size_t W&gt;
+struct Tableau {
+    size_t num_qubits;
+    TableauHalf&lt;W&gt; xs;  // X-output half
+    TableauHalf&lt;W&gt; zs;  // Z-output half
+};
+
+struct TableauHalf&lt;W&gt; {
+    size_t num_qubits;
+    simd_bit_table&lt;W&gt; xt;    // X-bits
+    simd_bit_table&lt;W&gt; zt;    // Z-bits
+    simd_bits&lt;W&gt; signs;      // sign vector
+};</code></pre>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box">
+                    <h4>Two Halves</h4>
+                    <ul>
+                        <li><span class="accent">xs</span>: where each input X<sub>i</sub> maps to (n rows)</li>
+                        <li><span class="highlight">zs</span>: where each input Z<sub>i</sub> maps to (n rows)</li>
+                    </ul>
+                    <p style="margin-top: 8px;">The tableau tells us: <em>"what does X<sub>i</sub> (or Z<sub>i</sub>) conjugate to under the Clifford unitary?"</em></p>
+                    <p style="margin-top: 8px;"><code>T(P) = U P U&dagger;</code></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2.3 Concrete Example: |000⟩ Tableau -->
+    <section>
+        <h2>Concrete Example: 3-Qubit Identity Tableau</h2>
+        <p>State |000&rang; &mdash; the identity tableau maps each Pauli to itself</p>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>X-half (xs): X<sub>i</sub> &rarr; ?</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X-bits</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z-bits</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">X<sub>0</sub>&rarr;</td>
+                            <td class="x-section"><span class="accent">1</span></td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">X<sub>1</sub>&rarr;</td>
+                            <td class="x-section">0</td><td class="x-section"><span class="accent">1</span></td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">X<sub>2</sub>&rarr;</td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section"><span class="accent">1</span></td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                    </table>
+                    <p class="small dim" style="margin-top: 5px;">X<sub>i</sub> &rarr; +X<sub>i</sub> (identity)</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box">
+                    <h4>Z-half (zs): Z<sub>i</sub> &rarr; ?</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X-bits</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z-bits</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">Z<sub>0</sub>&rarr;</td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section"><span class="highlight">1</span></td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">Z<sub>1</sub>&rarr;</td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section"><span class="highlight">1</span></td><td class="z-section">0</td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                        <tr>
+                            <td class="label-cell">Z<sub>2</sub>&rarr;</td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section"><span class="highlight">1</span></td>
+                            <td class="sign-section"><span class="green">+</span></td>
+                        </tr>
+                    </table>
+                    <p class="small dim" style="margin-top: 5px;">Z<sub>i</sub> &rarr; +Z<sub>i</sub> (identity)</p>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px; text-align: center;">
+            <p>Memory: <span class="green">O(n&sup2;) bits</span> total &mdash; compare with <span class="accent">2<sup>n</sup> complex doubles</span> for statevector</p>
+            <p class="small dim">3 qubits: 2&times;(3&times;6 + 3) = 42 bits vs 8 complex doubles = 128 bytes</p>
+        </div>
+    </section>
+
+    <!-- 2.4 H gate transforms the tableau -->
+    <section>
+        <h2>Example: Hadamard on Qubit 0</h2>
+        <p>H swaps X and Z for that qubit: X<sub>0</sub> &harr; Z<sub>0</sub></p>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Before H(0)</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr><td class="label-cell">X<sub>0</sub></td>
+                            <td class="x-section">1</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>0</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">1</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                    </table>
+                    <p class="small dim" style="text-align: center;">X<sub>0</sub> &rarr; +X<sub>0</sub>, Z<sub>0</sub> &rarr; +Z<sub>0</sub></p>
+                </div>
+            </div>
+            <div class="col" style="display: flex; align-items: center; justify-content: center; flex: 0 0 60px;">
+                <span class="pipeline-arrow" style="font-size: 2em;">&rArr;</span>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>After H(0)</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr><td class="label-cell">X<sub>0</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section"><span class="changed">1</span></td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>0</sub></td>
+                            <td class="x-section"><span class="changed">1</span></td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                    </table>
+                    <p class="small dim" style="text-align: center;">X<sub>0</sub> &rarr; +<span class="changed">Z</span><sub>0</sub>, Z<sub>0</sub> &rarr; +<span class="changed">X</span><sub>0</sub></p>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 10px;">
+            <p><span class="highlight">Rule:</span> H on qubit i swaps column i of X-bits with column i of Z-bits in <em>every</em> row of <em>both</em> halves</p>
+            <p class="small dim">Stim implements this as <code>prepend_H_XZ(q)</code> in <code>tableau_specialized_prepend.inl</code></p>
+        </div>
+    </section>
+
+    <!-- 2.5 CNOT transforms the tableau -->
+    <section>
+        <h2>Example: CNOT(0, 1)</h2>
+        <p>After H(0), apply CNOT with control=0, target=1</p>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Before CNOT(0,1)</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr><td class="label-cell">X<sub>0</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">1</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">X<sub>1</sub></td>
+                            <td class="x-section">0</td><td class="x-section">1</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>0</sub></td>
+                            <td class="x-section">1</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>1</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">1</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col" style="display: flex; align-items: center; justify-content: center; flex: 0 0 60px;">
+                <span class="pipeline-arrow" style="font-size: 2em;">&rArr;</span>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>After CNOT(0,1)</h4>
+                    <table class="matrix-table">
+                        <tr>
+                            <th class="label-cell"></th>
+                            <th class="label-cell" colspan="3"><span class="accent">X</span></th>
+                            <th class="label-cell" colspan="3"><span class="highlight">Z</span></th>
+                            <th class="label-cell"><span class="green">&plusmn;</span></th>
+                        </tr>
+                        <tr><td class="label-cell">X<sub>0</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">1</td><td class="z-section"><span class="changed">1</span></td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">X<sub>1</sub></td>
+                            <td class="x-section"><span class="changed">1</span></td><td class="x-section">1</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>0</sub></td>
+                            <td class="x-section">1</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">0</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                        <tr><td class="label-cell">Z<sub>1</sub></td>
+                            <td class="x-section">0</td><td class="x-section">0</td><td class="x-section">0</td>
+                            <td class="z-section">0</td><td class="z-section">1</td><td class="z-section">0</td>
+                            <td class="sign-section">+</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 8px;">
+            <p><span class="highlight">CNOT(c,t) rules:</span>
+            X<sub>t</sub> ^= X<sub>c</sub> (X spreads forward) &nbsp;&bull;&nbsp;
+            Z<sub>c</sub> ^= Z<sub>t</sub> (Z spreads backward)</p>
+            <p class="small dim">After H(0) + CNOT(0,1): creates a Bell state &mdash; X<sub>0</sub> maps to Z<sub>0</sub>Z<sub>1</sub>, X<sub>1</sub> maps to X<sub>0</sub>X<sub>1</sub></p>
+        </div>
+    </section>
+
+    <!-- 2.6 Destabilizers and Memory -->
+    <section>
+        <h2>The Full Tableau: Stabilizers + Destabilizers</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Two Halves, 2n Rows Total</h4>
+                    <p>Stim's <code>Tableau</code> stores:</p>
+                    <ul>
+                        <li><span class="accent">xs</span> half &mdash; n rows for X-output generators</li>
+                        <li><span class="highlight">zs</span> half &mdash; n rows for Z-output generators</li>
+                    </ul>
+                    <p style="margin-top: 8px;">The xs half plays the role of <span class="accent">destabilizers</span> and the zs half plays the role of <span class="highlight">stabilizers</span> (for the |0&rang;<sup>&otimes;n</sup> convention).</p>
+                </div>
+                <div class="box-accent" style="margin-top: 10px;">
+                    <h4>Why Destabilizers?</h4>
+                    <p>Needed for <span class="accent">measurement simulation</span>. When measuring, we need to find generators that anti-commute with the measurement operator. Destabilizers complete the algebraic structure.</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Memory Complexity</h4>
+                    <table>
+                        <tr><th>Representation</th><th>Memory</th></tr>
+                        <tr><td>Statevector</td><td class="accent">O(2<sup>n</sup>) complex doubles</td></tr>
+                        <tr><td>Stabilizer Tableau</td><td class="green">O(n<sup>2</sup>) bits</td></tr>
+                    </table>
+                    <br>
+                    <table>
+                        <tr><th>n (qubits)</th><th>Statevector</th><th>Tableau</th></tr>
+                        <tr><td>10</td><td>16 KB</td><td class="green">~25 bytes</td></tr>
+                        <tr><td>100</td><td class="accent">10<sup>16</sup> TB</td><td class="green">~2.5 KB</td></tr>
+                        <tr><td>1000</td><td class="accent">impossible</td><td class="green">~250 KB</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: HOW THE TABLEAU SIMULATES GATES                         -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">3</div>
+        <h2>How the Tableau Simulates Gates</h2>
+        <p>Each Clifford gate is a row operation on the binary matrix</p>
+    </section>
+
+    <!-- 3.1 Gate update rules -->
+    <section>
+        <h2>Clifford Gate Update Rules</h2>
+        <p>Every Clifford gate is a <span class="accent">simple bitwise operation</span> on the tableau rows</p>
+        <table>
+            <tr>
+                <th>Gate</th>
+                <th>Rule (applied to ALL rows)</th>
+                <th>Stim method</th>
+            </tr>
+            <tr>
+                <td><span class="accent">H(i)</span></td>
+                <td>Swap X[i] &harr; Z[i], update sign: s ^= X[i] &amp; Z[i]</td>
+                <td><code>prepend_H_XZ(q)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">S(i)</span></td>
+                <td>Z[i] ^= X[i], update sign: s ^= X[i] &amp; Z[i]</td>
+                <td><code>prepend_SQRT_Z(q)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">CX(c,t)</span></td>
+                <td>X[t] ^= X[c]; Z[c] ^= Z[t]</td>
+                <td><code>prepend_ZCX(c,t)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">CZ(a,b)</span></td>
+                <td>Z[b] ^= X[a]; Z[a] ^= X[b]</td>
+                <td><code>prepend_ZCZ(a,b)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">SWAP(a,b)</span></td>
+                <td>Swap columns a &harr; b in both X and Z</td>
+                <td><code>prepend_SWAP(a,b)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">X(i)</span></td>
+                <td>s ^= Z[i] (flip sign where Z-bit is set)</td>
+                <td><code>prepend_X(q)</code></td>
+            </tr>
+            <tr>
+                <td><span class="accent">Z(i)</span></td>
+                <td>s ^= X[i] (flip sign where X-bit is set)</td>
+                <td><code>prepend_Z(q)</code></td>
+            </tr>
+        </table>
+        <div class="box-green" style="margin-top: 10px;">
+            <p style="text-align: center;">All operations are <span class="green">O(n)</span> per gate &mdash; iterate over n rows, apply bitwise XOR per row. With SIMD: <span class="green">O(n/W)</span> where W is SIMD width.</p>
+        </div>
+    </section>
+
+    <!-- 3.2 Step-through example -->
+    <section>
+        <h2>Step-Through: H(0) &rarr; CX(0,1) &rarr; M(0,1)</h2>
+        <div class="timeline">
+            <div class="timeline-step">
+                <h4>Step 0: Initial state |00&rang;</h4>
+                <p>Tableau = identity. X<sub>0</sub>&rarr;X<sub>0</sub>, X<sub>1</sub>&rarr;X<sub>1</sub>, Z<sub>0</sub>&rarr;Z<sub>0</sub>, Z<sub>1</sub>&rarr;Z<sub>1</sub></p>
+            </div>
+            <div class="timeline-step">
+                <h4>Step 1: Apply H(0)</h4>
+                <p>Swap X&harr;Z for qubit 0. Now: X<sub>0</sub>&rarr;<span class="changed">Z<sub>0</sub></span>, Z<sub>0</sub>&rarr;<span class="changed">X<sub>0</sub></span></p>
+                <p class="small dim">State is now |+0&rang; = (|00&rang; + |10&rang;)/&radic;2</p>
+            </div>
+            <div class="timeline-step">
+                <h4>Step 2: Apply CX(0,1)</h4>
+                <p>X[1] ^= X[0], Z[0] ^= Z[1]. Now: X<sub>0</sub>&rarr;Z<sub>0</sub><span class="changed">Z<sub>1</sub></span>, X<sub>1</sub>&rarr;<span class="changed">X<sub>0</sub></span>X<sub>1</sub></p>
+                <p class="small dim">State is now Bell state (|00&rang; + |11&rang;)/&radic;2</p>
+            </div>
+            <div class="timeline-step">
+                <h4>Step 3: Measure qubit 0 (Z basis)</h4>
+                <p>Check: does any stabilizer anti-commute with Z<sub>0</sub>? Yes &mdash; X<sub>0</sub>&rarr;Z<sub>0</sub>Z<sub>1</sub> anti-commutes. <span class="accent">Random outcome</span>, collapse the tableau.</p>
+            </div>
+            <div class="timeline-step">
+                <h4>Step 4: Measure qubit 1 (Z basis)</h4>
+                <p>After collapse, Z<sub>1</sub> is determined. <span class="green">Deterministic outcome</span> (same as qubit 0's result).</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3.3 Measurement algorithm -->
+    <section>
+        <h2>Measurement in the Tableau</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Algorithm</h4>
+                    <ol>
+                        <li>Given measurement observable P (e.g., Z<sub>i</sub>)</li>
+                        <li><span class="accent">Scan stabilizer rows</span>: does any row anti-commute with P?</li>
+                        <li><strong>If YES</strong> (random case):
+                            <ul>
+                                <li>Flip a coin for the outcome</li>
+                                <li>Collapse: replace the anti-commuting row</li>
+                                <li>Row-reduce to restore canonical form</li>
+                            </ul>
+                        </li>
+                        <li><strong>If NO</strong> (deterministic case):
+                            <ul>
+                                <li>The outcome is determined by the current state</li>
+                                <li>Compute from the sign of the stabilizer</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Anti-commutation Check</h4>
+                    <p>Two Pauli strings P, Q anti-commute iff their <span class="accent">symplectic inner product</span> is 1:</p>
+                    <pre><code class="language-text">P = (x_P, z_P)
+Q = (x_Q, z_Q)
+
+[P, Q] = x_P &middot; z_Q + z_P &middot; x_Q (mod 2)</code></pre>
+                    <p class="small dim" style="margin-top: 8px;">This is a single bitwise AND + popcount + XOR &mdash; extremely fast with SIMD</p>
+                </div>
+                <div class="box-green" style="margin-top: 10px;">
+                    <h4>Noise as Pauli Kick</h4>
+                    <p>Stochastic noise (e.g., X_ERROR(p)) is just a random XOR on the tableau sign bits or X/Z bits. Same complexity as a gate update.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3.4 SIMD acceleration -->
+    <section>
+        <h2>SIMD-Accelerated Tableau Operations</h2>
+        <div class="box" style="text-align: center;">
+            <p>Stim uses <span class="highlight">simd_bits</span> and <span class="highlight">simd_bit_table</span> for all tableau storage</p>
+        </div>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>How It Works</h4>
+                    <ul>
+                        <li>Each row (Pauli string) stored as SIMD-aligned bit arrays</li>
+                        <li>Gate updates = <span class="accent">vectorized XOR/AND</span> over entire rows</li>
+                        <li>A single H gate on qubit i touches ALL 2n rows</li>
+                        <li>With 256-bit AVX2: process 256 bits per instruction</li>
+                        <li>1000-qubit tableau row: ~16 SIMD XOR ops instead of 1000 scalar ops</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Column-Major Layout</h4>
+                    <p>Stim's memory layout is <span class="accent">column-major</span>:</p>
+                    <ul>
+                        <li>Iterating over output qubits is along the grain of memory</li>
+                        <li>Makes <span class="accent">prepending</span> operations cheap</li>
+                        <li>For appending, uses <code>TableauTransposedRaii</code> (temporary transpose)</li>
+                    </ul>
+                    <p class="small dim" style="margin-top: 8px;">Clifft's backend uses <code>TableauTransposedRaii</code> for lazy flush of pending gates in the VirtualFrame</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: STIM CIRCUIT FORMAT                                     -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">4</div>
+        <h2>Stim Circuit Format (.stim files)</h2>
+        <p>The text representation that Clifft parses</p>
+    </section>
+
+    <!-- 4.1 Format overview -->
+    <section>
+        <h2>The .stim File Format</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Syntax: One Instruction Per Line</h4>
+                    <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 0.8em; line-height: 1.5; color: #e0e0e0;"><span class="stim-keyword">H</span> <span class="stim-target">0</span>
+<span class="stim-keyword">CNOT</span> <span class="stim-target">0 1</span>
+<span class="stim-keyword">DEPOLARIZE1</span>(<span class="stim-arg">0.001</span>) <span class="stim-target">0 1</span>
+<span class="stim-keyword">M</span> <span class="stim-target">0 1</span>
+<span class="stim-keyword">DETECTOR</span> <span class="stim-target">rec[-1] rec[-2]</span></pre>
+                </div>
+                <div class="box" style="margin-top: 10px;">
+                    <h4>Gate Categories</h4>
+                    <table>
+                        <tr><th>Category</th><th>Examples</th></tr>
+                        <tr><td>Clifford</td><td><code>H, S, CX, CZ, SWAP</code></td></tr>
+                        <tr><td>Measurement</td><td><code>M, MX, MY, MR, MPP</code></td></tr>
+                        <tr><td>Noise</td><td><code>DEPOLARIZE1, X_ERROR, Z_ERROR</code></td></tr>
+                        <tr><td>QEC</td><td><code>DETECTOR, OBSERVABLE_INCLUDE</code></td></tr>
+                        <tr><td>Control</td><td><code>REPEAT N { ... }</code></td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Annotated QEC Example</h4>
+                    <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 0.8em; line-height: 1.5; color: #e0e0e0;"><span class="stim-comment"># Prepare Bell pair</span>
+<span class="stim-keyword">H</span> <span class="stim-target">0</span>
+<span class="stim-keyword">CNOT</span> <span class="stim-target">0 1</span>
+<span class="stim-keyword">TICK</span>
+
+<span class="stim-comment"># Add noise</span>
+<span class="stim-keyword">DEPOLARIZE2</span>(<span class="stim-arg">0.01</span>) <span class="stim-target">0 1</span>
+
+<span class="stim-comment"># Measure syndrome</span>
+<span class="stim-keyword">MR</span> <span class="stim-target">0 1</span>
+<span class="stim-keyword">DETECTOR</span> <span class="stim-target">rec[-1] rec[-2]</span>
+<span class="stim-keyword">OBSERVABLE_INCLUDE</span>(<span class="stim-arg">0</span>) <span class="stim-target">rec[-1]</span></pre>
+                    <p class="small dim" style="margin-top: 8px;">REPEAT blocks are unrolled at parse time in Clifft via text-level replay</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4.2 Clifft's extensions to Stim format -->
+    <section>
+        <h2>Clifft's Extensions to Stim Format</h2>
+        <p>Clifft parses a <span class="accent">superset</span> of the Stim format</p>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>Additional Gates (not in Stim)</h4>
+                    <table>
+                        <tr><th>Gate</th><th>Type</th><th>Clifft GateType</th></tr>
+                        <tr><td><code>T</code></td><td>Non-Clifford</td><td><code>GateType::T</code></td></tr>
+                        <tr><td><code>T_DAG</code></td><td>Non-Clifford</td><td><code>GateType::T_DAG</code></td></tr>
+                        <tr><td><code>R_X(a)</code></td><td>Rotation</td><td><code>GateType::R_X</code></td></tr>
+                        <tr><td><code>R_Y(a)</code></td><td>Rotation</td><td><code>GateType::R_Y</code></td></tr>
+                        <tr><td><code>R_Z(a)</code></td><td>Rotation</td><td><code>GateType::R_Z</code></td></tr>
+                        <tr><td><code>U3(a,b,c)</code></td><td>Universal</td><td><code>GateType::U3</code></td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Parser Decompositions</h4>
+                    <p>Complex gates are decomposed at parse time:</p>
+                    <ul>
+                        <li><span class="accent">CH(c,t)</span> &rarr; R_Y(0.25) t, CX c t, R_Y(-0.25) t</li>
+                        <li><span class="accent">CCZ(a,b,c)</span> &rarr; 7 T/T&dagger; + 6 CX</li>
+                        <li><span class="accent">CCX(a,b,t)</span> &rarr; H t, CCZ a b t, H t</li>
+                    </ul>
+                    <p class="small dim" style="margin-top: 8px;">The parser's gate table has ~80 gate types &mdash; see <code>gate_data.h</code></p>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px;">
+            <p style="text-align: center;"><code>is_clifford(gate)</code> is a constexpr O(1) lookup into <code>kGateTraitsData[]</code> &mdash; the frontend uses this to decide: absorb or emit?</p>
+        </div>
+    </section>
+
+    <!-- 4.3 Two simulation modes -->
+    <section>
+        <h2>Stim's Two Simulation Modes</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>1. Tableau Simulator</h4>
+                    <ul>
+                        <li>Tracks the <span class="accent">full stabilizer state</span></li>
+                        <li>Maintains complete 2n &times; 2n tableau</li>
+                        <li>Can answer: "what is the state?"</li>
+                        <li>Used for: debugging, state inspection</li>
+                        <li>Cost: O(n&sup2;) per gate</li>
+                    </ul>
+                    <p class="small dim" style="margin-top: 8px;">This is what Clifft's frontend uses!</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box">
+                    <h4>2. Frame Simulator</h4>
+                    <ul>
+                        <li>Tracks only the <span class="highlight">Pauli frame</span></li>
+                        <li>2 &times; n bits per sample (p_x, p_z)</li>
+                        <li>Cannot answer: "what is the state?"</li>
+                        <li>Used for: fast sampling of detection events</li>
+                        <li>Cost: O(n) per gate</li>
+                    </ul>
+                    <p class="small dim" style="margin-top: 8px;">Conceptually similar to Clifft's SVM Pauli frame at runtime</p>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px; text-align: center;">
+            <p>Clifft uses the <span class="green">tableau simulator at compile time</span> and a <span class="green">frame-like approach at runtime</span> &mdash; best of both worlds</p>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 5: HOW STIM CONNECTS TO CLIFFT                            -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">5</div>
+        <h2>How Stim Connects to Clifft</h2>
+        <p>The Frontend: where the tableau does its work</p>
+    </section>
+
+    <!-- 5.1 The full flow diagram -->
+    <section>
+        <h2>The Full Compilation Flow</h2>
+        <div class="diagram-box" style="text-align: center; font-size: 0.8em !important;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0; font-size: 1em;">
+  <span class="dim">.stim file</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="highlight">[Parser]</span>  <span class="dim">circuit/parser.h &mdash; parse(text)</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="accent">[Circuit AST]</span>  <span class="dim">circuit/circuit.h &mdash; flat vector&lt;AstNode&gt;</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="highlight">[Frontend trace()]</span>  <span class="dim">frontend/frontend.h &mdash; drives Stim Tableau</span>
+      <span class="accent">|</span>                  <span class="green">&larr;&larr;&larr; Stim Tableau lives HERE</span>
+      <span class="accent">v</span>
+ <span class="accent">[HirModule]</span>  <span class="dim">frontend/hir.h &mdash; HeisenbergOps + PauliMaskArena</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="highlight">[HIR Optimizer]</span>  <span class="dim">optimizer/hir_pass_manager.h</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="highlight">[Backend lower()]</span>  <span class="dim">backend/backend.h &mdash; virtual frame + localization</span>
+      <span class="accent">|</span>                    <span class="green">&larr;&larr;&larr; Another Stim Tableau (VirtualFrame)</span>
+      <span class="accent">v</span>
+ <span class="accent">[CompiledModule]</span>  <span class="dim">bytecode + ConstantPool</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+ <span class="highlight">[SVM execute()]</span>  <span class="dim">svm/svm.h &mdash; NO tableau, just Pauli frame</span>
+</pre>
+        </div>
+    </section>
+
+    <!-- 5.2 The Frontend trace() function -->
+    <section>
+        <h2>Frontend trace() &mdash; The Core Algorithm</h2>
+        <div class="box" style="padding: 10px 15px;">
+            <p class="small dim" style="margin-bottom: 5px;">From <code>frontend/frontend.h</code>:</p>
+            <pre><code class="language-cpp">// 1. Initialize TableauSimulator with identity tableau
+// 2. For each gate in the circuit:
+//    - Clifford: apply to simulator (absorbed into tableau)
+//    - T/T_DAG: extract rewound Z from inv_state.zs[q], emit HeisenbergOp
+//    - Measurement: extract rewound observable, emit MEASURE
+//    - Classical feedback: extract rewound Pauli, emit CONDITIONAL_PAULI
+// 3. Return HirModule with all emitted operations</code></pre>
+        </div>
+        <div class="cols" style="margin-top: 10px;">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Clifford Gates: Absorbed</h4>
+                    <ul>
+                        <li>Gate applied to the Stim Tableau</li>
+                        <li><span class="accent">No HIR op emitted</span></li>
+                        <li>Zero cost at runtime</li>
+                        <li>e.g., H, S, CX, CZ, SWAP, X, Y, Z</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Non-Clifford Gates: Emitted</h4>
+                    <ul>
+                        <li>Tableau used to <span class="green">extract rewound Pauli</span></li>
+                        <li>HeisenbergOp emitted with Pauli mask</li>
+                        <li>The mask encodes which qubits are affected</li>
+                        <li>e.g., T, T&dagger;, R_Z(&theta;)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 10px; text-align: center;">
+            <p>The gate classification is O(1): <code class="highlight">is_clifford(gate)</code> indexes into <code>kGateTraitsData[]</code></p>
+        </div>
+    </section>
+
+    <!-- 5.3 The Heisenberg picture -->
+    <section>
+        <h2>The Heisenberg Picture Transformation</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Schr&ouml;dinger Picture</h4>
+                    <p>Transform the <span class="accent">state</span> forward:</p>
+                    <p style="text-align: center; font-size: 1.1em;">|&psi;'&rang; = U |&psi;&rang;</p>
+                    <p class="small dim">Apply gate matrices to state vector. Cost: O(2<sup>n</sup>)</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Heisenberg Picture</h4>
+                    <p>Transform the <span class="green">observables</span> backward:</p>
+                    <p style="text-align: center; font-size: 1.1em;">P' = U&dagger; P U</p>
+                    <p class="small dim">Conjugate Pauli operators through the inverse. Cost: O(n) for Clifford</p>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 15px;">
+            <h4>How the Frontend Uses This</h4>
+            <div class="diagram-box">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+Gate sequence:  <span class="accent">H(0)</span>  <span class="accent">CX(0,1)</span>  <span class="highlight">T(0)</span>  <span class="accent">CZ(0,2)</span>  <span class="highlight">M(1)</span>
+
+Tableau:     <span class="accent">[absorb]</span> <span class="accent">[absorb]</span>  <span class="dim">|</span>    <span class="accent">[absorb]</span>   <span class="dim">|</span>
+                                  <span class="dim">|</span>                 <span class="dim">|</span>
+HIR ops:                     <span class="highlight">[T_GATE</span>         <span class="highlight">[MEASURE</span>
+                          <span class="highlight"> mask from</span>       <span class="highlight"> mask from</span>
+                          <span class="highlight"> tableau]</span>        <span class="highlight"> tableau]</span>
+
+Clifford gates update the tableau silently.
+Non-Clifford gates query the tableau for their Pauli mask, then emit.
+</pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5.4 What the "rewound Pauli" actually is -->
+    <section>
+        <h2>The Rewound Pauli: Concrete Example</h2>
+        <div class="box">
+            <h4>Circuit: H(0), CX(0,1), T(0)</h4>
+            <div class="cols">
+                <div class="col">
+                    <p>After absorbing H(0) and CX(0,1), the tableau says:</p>
+                    <ul>
+                        <li>Z<sub>0</sub> &rarr; X<sub>0</sub> (via the inverse)</li>
+                        <li>More precisely: <code>inv_state.zs[0]</code> = <span class="accent">X<sub>0</sub>X<sub>1</sub></span></li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <p>When T(0) is encountered:</p>
+                    <ul>
+                        <li>Frontend reads <code>inv_state.zs[0]</code></li>
+                        <li>Gets the multi-qubit Pauli string <span class="accent">X<sub>0</sub>X<sub>1</sub></span></li>
+                        <li>This becomes the <span class="highlight">mask</span> of the T_GATE HeisenbergOp</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="box-accent" style="margin-top: 10px;">
+            <h4>Why "Rewound"?</h4>
+            <p>The mask tells us: <em>"In the virtual (Heisenberg) basis, this T gate's Z observable has been spread by the preceding Cliffords into a multi-qubit Pauli string."</em></p>
+            <p style="margin-top: 8px;">The HIR op stores: <span class="highlight">PauliMaskHandle</span> &rarr; indexes into <code>HirModule::pauli_masks</code> (a PauliMaskArena)</p>
+        </div>
+        <div class="box-green" style="margin-top: 10px;">
+            <h4>Arena Storage (from hir.h)</h4>
+            <pre><code class="language-cpp">hir.append_tgate(/*dagger=*/false, [&](MutablePauliMaskView slot) {
+    stim_to_mask_view(rewound.xs, n, slot.x());  // X-bits of rewound Pauli
+    stim_to_mask_view(rewound.zs, n, slot.z());  // Z-bits of rewound Pauli
+    slot.set_sign(rewound.sign);                  // sign bit
+});</code></pre>
+        </div>
+    </section>
+
+    <!-- 5.5 What survives into bytecode -->
+    <section>
+        <h2>What Survives into the Compiled Bytecode</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>NOT in the Bytecode</h4>
+                    <ul>
+                        <li>The Stim Tableau itself</li>
+                        <li>Any Clifford gate operations</li>
+                        <li>Tableau algebra or conjugation</li>
+                    </ul>
+                    <p class="small dim" style="margin-top: 8px;">The tableau's effect is fully captured during compilation</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>IN the Bytecode</h4>
+                    <ul>
+                        <li><span class="green">OP_FRAME_*</span> ops: bit flips on p_x/p_z</li>
+                        <li><span class="green">OP_ARRAY_T/T_DAG</span>: with precomputed axis</li>
+                        <li><span class="green">OP_MEAS_*</span>: localized measurement</li>
+                        <li><span class="green">OP_APPLY_PAULI</span>: precomputed N-bit masks</li>
+                        <li><span class="green">ConstantPool</span>: masks, noise, fused unitaries</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 10px;">
+            <h4>The Journey of a Clifford Gate</h4>
+            <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="accent">CX(0,1)</span> in .stim
+    <span class="accent">&darr;</span>
+<span class="highlight">AstNode{GateType::CX, targets=[0,1]}</span> in Circuit AST
+    <span class="accent">&darr;</span>
+<span class="green">Absorbed into Stim Tableau</span> in Frontend  <span class="dim">&larr; no HIR op emitted!</span>
+    <span class="accent">&darr;</span>
+<span class="green">Effect captured in Pauli masks</span> of neighboring T/M ops
+    <span class="accent">&darr;</span>
+<span class="green">OP_FRAME_CNOT or merged</span> into OP_ARRAY ops in bytecode
+</pre>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 6: COMPILED VS INTERPRETED                                 -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">6</div>
+        <h2>Compiled vs Interpreted</h2>
+        <p>Why Clifft compiles instead of interpreting like Stim</p>
+    </section>
+
+    <!-- 6.1 Interpretation vs Compilation -->
+    <section>
+        <h2>Stim: Interpreted &mdash; Clifft: Compiled</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Stim (Standalone)</h4>
+                    <p style="text-align: center; font-size: 1.2em;"><span class="accent">INTERPRETED</span></p>
+                    <ul>
+                        <li>Walks circuit instruction by instruction</li>
+                        <li>Each gate: dispatch + tableau update</li>
+                        <li>Compilation cost: <span class="green">zero</span></li>
+                        <li>Per-gate cost: <span class="accent">higher</span></li>
+                        <li>No optimization across gates</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Clifft</h4>
+                    <p style="text-align: center; font-size: 1.2em;"><span class="green">COMPILED</span></p>
+                    <ul>
+                        <li>Multi-stage pipeline: Parse &rarr; Trace &rarr; Optimize &rarr; Lower &rarr; Optimize</li>
+                        <li>Upfront cost: <span class="accent">compilation time</span></li>
+                        <li>Per-shot cost: <span class="green">much lower</span></li>
+                        <li>11 optimization passes</li>
+                        <li>Gate fusion, squeeze, skip-ahead</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6.2 Key differences -->
+    <section>
+        <h2>Key Differences</h2>
+        <table>
+            <tr>
+                <th>Aspect</th>
+                <th>Stim (Interpreted)</th>
+                <th>Clifft (Compiled)</th>
+            </tr>
+            <tr>
+                <td>Instruction level</td>
+                <td>High-level gates (H, CX...)</td>
+                <td>Low-level bytecode (OP_FRAME_H, OP_ARRAY_T...)</td>
+            </tr>
+            <tr>
+                <td>Clifford gate cost</td>
+                <td>O(n) per gate per shot</td>
+                <td class="green">O(1) bit flip per shot (frame ops)</td>
+            </tr>
+            <tr>
+                <td>Non-Clifford</td>
+                <td class="accent">Not supported</td>
+                <td class="green">T, rotations, fused U2/U4</td>
+            </tr>
+            <tr>
+                <td>Optimization</td>
+                <td>None across gates</td>
+                <td class="green">Peephole, squeeze, fusion, multi-gate</td>
+            </tr>
+            <tr>
+                <td>Noise sampling</td>
+                <td>Per-site RNG draw</td>
+                <td class="green">Skip-ahead exponential gap</td>
+            </tr>
+            <tr>
+                <td>Instruction size</td>
+                <td>Variable (gate + targets)</td>
+                <td class="green">Fixed 32 bytes (cache-aligned)</td>
+            </tr>
+            <tr>
+                <td>GPU backends</td>
+                <td class="accent">No</td>
+                <td class="green">CUDA + HIP</td>
+            </tr>
+        </table>
+    </section>
+
+    <!-- 6.3 When compilation wins -->
+    <section>
+        <h2>When Compilation Wins</h2>
+        <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="accent">Stim (interpret per shot):</span>
+Shot 1: [<span class="dim">parse</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">...</span>][<span class="accent">gate</span>]
+Shot 2: [<span class="dim">parse</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">...</span>][<span class="accent">gate</span>]
+Shot 3: [<span class="dim">parse</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">gate</span>][<span class="accent">...</span>][<span class="accent">gate</span>]
+  ...     ...   same work repeated every shot
+
+<span class="green">Clifft (compile once, execute many):</span>
+Compile: [<span class="highlight">parse</span>][<span class="highlight">trace</span>][<span class="highlight">optimize</span>][<span class="highlight">lower</span>][<span class="highlight">optimize</span>]  <span class="dim">(one-time cost)</span>
+Shot 1:  [<span class="green">exec bytecode</span>]  <span class="dim">(fast: no tableau, no dispatch overhead)</span>
+Shot 2:  [<span class="green">exec bytecode</span>]
+Shot 3:  [<span class="green">exec bytecode</span>]
+  ...      amortized over billions of shots
+</pre>
+        </div>
+        <div class="cols" style="margin-top: 15px;">
+            <div class="col">
+                <div class="box">
+                    <h4>Compilation Wins When:</h4>
+                    <ul>
+                        <li><span class="highlight">Many shots</span> of the same circuit (amortize compilation over 10<sup>6</sup>&ndash;10<sup>12</sup> shots)</li>
+                        <li><span class="highlight">Optimization passes</span> reduce per-shot work (StatevectorSqueeze, fusion passes)</li>
+                        <li><span class="highlight">GPU execution</span> needs flat bytecode (no pointer chasing)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>The Bytecode is Pre-Digested:</h4>
+                    <ul>
+                        <li>All Clifford gates <span class="accent">absorbed</span> (zero runtime cost)</li>
+                        <li>Non-Clifford ops have <span class="accent">precomputed Pauli masks</span></li>
+                        <li>Gate sequences <span class="accent">fused</span> into U2, U4</li>
+                        <li>Noise sites <span class="accent">indexed</span> for skip-ahead sampling</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 7: THE PAULI FRAME                                         -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">7</div>
+        <h2>The Pauli Frame</h2>
+        <p>Runtime successor of the compile-time tableau</p>
+    </section>
+
+    <!-- 7.1 Compile time vs runtime -->
+    <section>
+        <h2>Compile Time: Tableau &mdash; Runtime: Pauli Frame</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Compile Time: Full Tableau</h4>
+                    <ul>
+                        <li>2n &times; 2n binary matrix + sign vector</li>
+                        <li>Tracks the accumulated Clifford unitary U<sub>C</sub></li>
+                        <li>Used to extract Pauli masks for non-Clifford ops</li>
+                        <li>Memory: <span class="accent">O(n&sup2;) bits</span></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Runtime: Pauli Frame</h4>
+                    <ul>
+                        <li>Two n-bit arrays: <span class="green">p_x[]</span> and <span class="green">p_z[]</span></li>
+                        <li>Tracks stochastic bit-flips and phase-flips</li>
+                        <li>Updated by OP_FRAME_* ops via XOR</li>
+                        <li>Memory: <span class="green">O(n) bits</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="box" style="margin-top: 15px;">
+            <h4>Why the Frame is Enough</h4>
+            <p>After compilation, every operation in the bytecode is either:</p>
+            <ul>
+                <li><span class="highlight">Frame operation</span> &mdash; updates p_x/p_z bits directly (OP_FRAME_CNOT, OP_FRAME_H, ...)</li>
+                <li><span class="highlight">Array operation</span> &mdash; operates on the amplitude vector v[] with <em>precomputed</em> axis targets</li>
+            </ul>
+            <p style="margin-top: 8px;">The tableau did its job during compilation &mdash; it extracted all the masks and transformations. No tableau math needed at runtime.</p>
+        </div>
+    </section>
+
+    <!-- 7.2 Diagram: tableau to frame -->
+    <section>
+        <h2>From Tableau to Pauli Frame</h2>
+        <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="accent">COMPILE TIME: Full Tableau (O(n&sup2;) bits)</span>
+
+     X-half (xs)              Z-half (zs)
+  <span class="accent">q0 q1 q2 q3 ...</span>         <span class="highlight">q0 q1 q2 q3 ...</span>        <span class="green">sign</span>
+  [<span class="accent">1  0  1  0</span> ...]         [<span class="highlight">0  1  0  1</span> ...]        <span class="green">[+]</span>     row 0
+  [<span class="accent">0  1  0  0</span> ...]         [<span class="highlight">1  0  0  1</span> ...]        <span class="green">[-]</span>     row 1
+  [<span class="accent">1  1  1  0</span> ...]         [<span class="highlight">0  0  1  0</span> ...]        <span class="green">[+]</span>     row 2
+  [<span class="accent">0  0  0  1</span> ...]         [<span class="highlight">0  1  1  1</span> ...]        <span class="green">[+]</span>     row 3
+     ...                       ...                  ...    2n rows
+
+     <span class="accent">&darr;&darr;&darr;</span> compilation <span class="accent">&darr;&darr;&darr;</span>
+
+<span class="green">RUNTIME: Pauli Frame (O(n) bits)</span>
+
+  p_x: [<span class="green">0  1  0  0  ...</span>]     n bits total
+  p_z: [<span class="green">1  0  0  1  ...</span>]     n bits total
+
+  <span class="dim">Updated per-shot by OP_FRAME_* instructions via XOR</span>
+</pre>
+        </div>
+        <div class="box-green" style="margin-top: 10px;">
+            <p><span class="green">Compression ratio:</span> The compilation step compresses <span class="accent">O(n&sup2;)</span> bits of tableau into <span class="green">O(n)</span> bits of frame + precomputed bytecode masks</p>
+            <p class="small dim">For 1000 qubits: tableau ~125 KB, frame ~250 bytes (per shot)</p>
+        </div>
+    </section>
+
+    <!-- 7.3 Frame opcodes -->
+    <section>
+        <h2>Frame Opcodes in the Bytecode</h2>
+        <p>Descendants of tableau operations, but <span class="green">O(1)</span> per operation at runtime</p>
+        <div class="cols">
+            <div class="col">
+                <table>
+                    <tr><th>Opcode</th><th>Frame Effect</th></tr>
+                    <tr><td><code class="highlight">OP_FRAME_H</code></td><td>Swap p_x[v] &harr; p_z[v]</td></tr>
+                    <tr><td><code class="highlight">OP_FRAME_S</code></td><td>p_z[v] ^= p_x[v]</td></tr>
+                    <tr><td><code class="highlight">OP_FRAME_CNOT</code></td><td>p_x[t] ^= p_x[c]; p_z[c] ^= p_z[t]</td></tr>
+                    <tr><td><code class="highlight">OP_FRAME_CZ</code></td><td>p_z[a] ^= p_x[b]; p_z[b] ^= p_x[a]</td></tr>
+                    <tr><td><code class="highlight">OP_FRAME_SWAP</code></td><td>Swap p_x[a]&harr;p_x[b], p_z[a]&harr;p_z[b]</td></tr>
+                </table>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>Compare: Tableau vs Frame</h4>
+                    <table>
+                        <tr><th></th><th>Tableau</th><th>Frame</th></tr>
+                        <tr><td>H on qubit i</td><td class="accent">O(n) row ops</td><td class="green">1 bit swap</td></tr>
+                        <tr><td>CNOT(c,t)</td><td class="accent">O(n) row ops</td><td class="green">2 bit XORs</td></tr>
+                        <tr><td>CZ(a,b)</td><td class="accent">O(n) row ops</td><td class="green">2 bit XORs</td></tr>
+                    </table>
+                    <p class="small dim" style="margin-top: 8px;">Frame ops touch individual bits. Tableau ops touch entire rows of O(n) bits. That is the payoff of compilation.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 8: STIM'S DATA STRUCTURES IN CLIFFT                       -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">8</div>
+        <h2>Stim's Data Structures in Clifft</h2>
+        <p>How the C++ types connect across the codebase</p>
+    </section>
+
+    <!-- 8.1 Core types -->
+    <section>
+        <h2>Core Stim Types Used by Clifft</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>stim::Tableau&lt;W&gt;</h4>
+                    <pre><code class="language-cpp">struct Tableau {
+    size_t num_qubits;
+    TableauHalf&lt;W&gt; xs;  // X-output half
+    TableauHalf&lt;W&gt; zs;  // Z-output half
+};
+
+struct TableauHalf&lt;W&gt; {
+    simd_bit_table&lt;W&gt; xt;  // X bits
+    simd_bit_table&lt;W&gt; zt;  // Z bits
+    simd_bits&lt;W&gt; signs;    // sign vector
+};</code></pre>
+                    <p class="small dim">The main tableau type. Template W = SIMD width.</p>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>stim::PauliString&lt;W&gt;</h4>
+                    <pre><code class="language-cpp">struct PauliString {
+    size_t num_qubits;
+    bool sign;
+    simd_bits&lt;W&gt; xs, zs;
+    // XZ encoding:
+    //   00 = I, 10 = X,
+    //   01 = Z, 11 = Y
+};</code></pre>
+                    <p class="small dim">Represents a single n-qubit Pauli operator with SIMD-packed bits.</p>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px;">
+            <h4>Bridge: stim_to_mask_view() (util/stim_mask.h)</h4>
+            <pre><code class="language-cpp">inline void stim_to_mask_view(const stim::simd_bits_range_ref&lt;kStimWidth&gt;& bits,
+                              uint32_t n, MutableMaskView dst) {
+    const uint32_t words = (n + 63) / 64;
+    for (uint32_t w = 0; w < words; ++w)
+        dst.words[w] = bits.u64[w];  // Copy word-by-word from Stim to Clifft
+}</code></pre>
+            <p class="small dim">Copies Stim's SIMD-packed bits into Clifft's MaskView storage &mdash; the critical interop point</p>
+        </div>
+    </section>
+
+    <!-- 8.2 How Clifft creates the tableau -->
+    <section>
+        <h2>Tableau Lifecycle in Clifft</h2>
+        <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="highlight">stim::Circuit</span>          <span class="dim">(not used &mdash; Clifft has its own parser)</span>
+      <span class="dim">|</span>
+<span class="accent">clifft::Circuit</span>        <span class="dim">flat vector&lt;AstNode&gt; from circuit/circuit.h</span>
+      <span class="accent">|</span>
+      <span class="accent">v</span>
+<span class="highlight">stim::Tableau&lt;64&gt;</span>      <span class="dim">created inside frontend trace()</span>
+      <span class="accent">|</span>                    <span class="dim">initialized as identity</span>
+      <span class="accent">|</span>                    <span class="dim">updated by prepend_H_XZ, prepend_ZCX, ...</span>
+      <span class="accent">v</span>
+<span class="accent">clifft::HirModule</span>      <span class="dim">HeisenbergOps + PauliMaskArena</span>
+      <span class="accent">|</span>                    <span class="dim">optional: final_tableau stored for API queries</span>
+      <span class="accent">v</span>
+<span class="highlight">stim::Tableau&lt;64&gt;</span>      <span class="dim">VirtualFrame in backend/compiler_context.h</span>
+      <span class="accent">|</span>                    <span class="dim">tracks virtual Clifford frame during lowering</span>
+      <span class="accent">v</span>
+<span class="accent">clifft::CompiledModule</span> <span class="dim">ConstantPool may store final_tableau</span>
+      <span class="accent">|</span>                    <span class="dim">for statevector expansion / basis probs</span>
+      <span class="accent">v</span>
+<span class="green">SVM (no tableau)</span>       <span class="dim">only p_x[], p_z[], v[] at runtime</span>
+</pre>
+        </div>
+    </section>
+
+    <!-- 8.3 Class relationships -->
+    <section>
+        <h2>Class Relationship Map</h2>
+        <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="dim">                   STIM TYPES                        CLIFFT TYPES</span>
+<span class="dim">              ________________                   _________________</span>
+<span class="dim">             |                |                 |                 |</span>
+<span class="accent">  stim::Tableau&lt;W&gt;</span>          <span class="accent">stim::PauliString&lt;W&gt;</span>       <span class="highlight">clifft::PauliMaskArena</span>
+       <span class="dim">|</span>                         <span class="dim">|</span>                       <span class="dim">|</span>
+       <span class="dim">|</span> <span class="dim">contains</span>                 <span class="dim">|</span> <span class="dim">extracted</span>               <span class="dim">|</span> <span class="dim">stores</span>
+       <span class="dim">v</span>                         <span class="dim">v</span>                       <span class="dim">v</span>
+  <span class="accent">TableauHalf&lt;W&gt;</span>             <span class="dim">sign + xs + zs</span>     <span class="highlight">PauliMaskView</span> (x, z, sign)
+    <span class="dim">|  |  |</span>                        <span class="dim">|</span>                       <span class="dim">|</span>
+    <span class="dim">|  |  signs</span>                    <span class="dim">|</span>  <span class="green">stim_to_mask_view()</span>    <span class="dim">|</span>
+    <span class="dim">|  zt (Z-bits)</span>                  <span class="dim">|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&gt;</span> <span class="dim">|</span>
+    <span class="dim">xt (X-bits)</span>                                            <span class="dim">|</span>
+                                                            <span class="dim">v</span>
+                                                      <span class="highlight">HeisenbergOp</span>
+                                                       <span class="dim">(mask_handle_)</span>
+                                                            <span class="dim">|</span>
+                                                            <span class="dim">v</span>
+                                                      <span class="highlight">HirModule</span>
+                                                            <span class="dim">|</span>
+                                                            <span class="dim">v</span>
+                                                      <span class="highlight">CompiledModule</span>
+                                                       <span class="dim">(ConstantPool)</span>
+</pre>
+        </div>
+        <div class="box" style="margin-top: 10px;">
+            <p style="text-align: center;">
+                <span class="accent">HeisenbergOp</span>: 16 bytes (4 per cache line) &bull;
+                <span class="highlight">Instruction</span>: 32 bytes (2 per cache line) &bull;
+                Both use <span class="green">PauliMaskHandle</span> to reference arena slots
+            </p>
+        </div>
+    </section>
+
+    <!-- 8.4 The HirModule -->
+    <section>
+        <h2>HirModule: Where Tableau Output Lives</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>HirModule Structure</h4>
+                    <pre><code class="language-cpp">struct HirModule {
+  PauliMaskArena pauli_masks;
+  PauliMaskArena noise_channel_masks;
+  vector&lt;HeisenbergOp&gt; ops;
+  vector&lt;NoiseSite&gt; noise_sites;
+  vector&lt;ReadoutNoiseEntry&gt; readout_noise;
+  vector&lt;vector&lt;uint32_t&gt;&gt; detector_targets;
+  vector&lt;vector&lt;uint32_t&gt;&gt; observable_targets;
+
+  uint32_t num_qubits;
+  uint32_t num_measurements;
+  complex&lt;double&gt; global_weight;
+
+  optional&lt;stim::Tableau&lt;64&gt;&gt;
+      final_tableau;  // kept for API!
+};</code></pre>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-accent">
+                    <h4>OpType Enum</h4>
+                    <table>
+                        <tr><th>OpType</th><th>Has Mask?</th><th>Source</th></tr>
+                        <tr><td><code>T_GATE</code></td><td class="green">Yes</td><td>T/T&dagger; gate</td></tr>
+                        <tr><td><code>MEASURE</code></td><td class="green">Yes</td><td>M, MX, MPP...</td></tr>
+                        <tr><td><code>CONDITIONAL_PAULI</code></td><td class="green">Yes</td><td>CX/CZ + rec</td></tr>
+                        <tr><td><code>PHASE_ROTATION</code></td><td class="green">Yes</td><td>R_X, R_Y, R_Z</td></tr>
+                        <tr><td><code>NOISE</code></td><td>No</td><td>DEPOLARIZE, etc.</td></tr>
+                        <tr><td><code>DETECTOR</code></td><td>No</td><td>DETECTOR</td></tr>
+                        <tr><td><code>OBSERVABLE</code></td><td>No</td><td>OBSERVABLE</td></tr>
+                        <tr><td><code>EXP_VAL</code></td><td class="green">Yes</td><td>Expectation probe</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="box-green" style="margin-top: 10px; text-align: center;">
+            <p>Notice: <span class="accent">no Clifford gate OpType exists</span> &mdash; they are completely absorbed into the tableau!</p>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 9: SUMMARY                                                 -->
+<!-- ================================================================== -->
+<section>
+    <section class="section-divider">
+        <div class="section-number">9</div>
+        <h2>Summary</h2>
+        <p>The tableau is the mathematical engine of Clifft's compilation</p>
+    </section>
+
+    <!-- 9.1 Key takeaways -->
+    <section>
+        <h2>Key Takeaways</h2>
+        <div class="cols">
+            <div class="col">
+                <div class="box">
+                    <h4>The Tableau's Role</h4>
+                    <ol>
+                        <li>The tableau is the <span class="accent">mathematical engine</span> that makes Clifft's compilation work</li>
+                        <li>It <span class="accent">absorbs ALL Clifford gates</span> (which dominate QEC circuits: 99%+ are Clifford) into a compact binary matrix</li>
+                        <li>Non-Clifford gates are <span class="highlight">"extracted"</span> relative to the tableau as Pauli masks via the Heisenberg picture</li>
+                        <li>At runtime, the lightweight <span class="green">Pauli frame</span> replaces the tableau</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="col">
+                <div class="box-green">
+                    <h4>Performance Impact</h4>
+                    <table>
+                        <tr><th>Operation</th><th>Compile</th><th>Runtime</th></tr>
+                        <tr><td>Clifford gate</td><td>O(n) tableau</td><td class="green">O(1) bit flip</td></tr>
+                        <tr><td>T gate</td><td>Extract mask</td><td>O(2<sup>k</sup>) array</td></tr>
+                        <tr><td>Measurement</td><td>Extract mask</td><td>O(2<sup>k</sup>) or O(1)</td></tr>
+                        <tr><td>Noise</td><td>Map channels</td><td>O(1) XOR</td></tr>
+                    </table>
+                    <p style="margin-top: 10px;">Result: <span class="green">O(1) cost</span> for Clifford gates at runtime (just bit flips on p_x/p_z)</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 9.2 Stim + Clifft partnership -->
+    <section>
+        <h2>Stim + Clifft: A Partnership</h2>
+        <div class="diagram-box" style="text-align: center;">
+<pre style="background: transparent; border: none; margin: 0; padding: 0;">
+<span class="accent">STIM provides the FOUNDATION:</span>
+  <span class="dim">&bull;</span> .stim circuit format (de facto QEC standard)
+  <span class="dim">&bull;</span> Gate catalog and classification
+  <span class="dim">&bull;</span> Tableau algebra (SIMD-accelerated)
+  <span class="dim">&bull;</span> PauliString type and operations
+
+<span class="green">CLIFFT extends with:</span>
+  <span class="dim">&bull;</span> Non-Clifford gate support (T, rotations)
+  <span class="dim">&bull;</span> AOT compilation pipeline (5 stages)
+  <span class="dim">&bull;</span> 11 optimization passes (peephole, squeeze, fusion)
+  <span class="dim">&bull;</span> Bytecode VM with SIMD dispatch (AVX2, AVX-512)
+  <span class="dim">&bull;</span> GPU backends (CUDA, HIP/ROCm)
+  <span class="dim">&bull;</span> Factored state representation (|&psi;&rang; = &gamma; U_C P (|&phi;&rang; &otimes; |0&rang;))
+</pre>
+        </div>
+        <div class="box" style="margin-top: 15px; text-align: center;">
+            <p style="font-size: 1.1em;">The tableau converts an <span class="accent">n-qubit quantum problem</span> into a <span class="green">k-qubit quantum problem</span> (k &lt;&lt; n)</p>
+            <p class="small dim">Where k = peak active dimension = number of non-Clifford contaminated qubits</p>
+            <p style="margin-top: 10px; font-size: 1.1em;">
+                Cost: <span class="accent">O(2<sup>n</sup>)</span> &rarr; <span class="green">O(2<sup>k</sup>)</span>
+            </p>
+        </div>
+    </section>
+</section>
+
+<!-- ================================================================== -->
+<!-- END                                                                -->
+<!-- ================================================================== -->
+
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/plugin/highlight/highlight.min.js"></script>
+<script>
+Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    showSlideNumber: 'all',
+    transition: 'slide',
+    transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    width: 1200,
+    height: 700,
+    margin: 0.04,
+    plugins: [RevealHighlight],
+    pdfSeparateFragments: false
+});
+</script>
+</body>
+</html>

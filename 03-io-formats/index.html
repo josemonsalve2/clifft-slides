@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft I/O Formats &mdash; Input &amp; Output Deep Dive</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+<style>
+  :root {
+    --bg-dark: #1a1a2e;
+    --accent: #e94560;
+    --secondary: #0f3460;
+    --highlight: #53d8fb;
+    --text: #e0e0e0;
+    --dim: #8888aa;
+    --code-bg: #0d0d1a;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --yellow: #fbbf24;
+    --purple: #a78bfa;
+  }
+  .reveal { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: var(--text); }
+  .reveal .slides { text-align: left; }
+  .reveal .slides section { background: var(--bg-dark); }
+  .reveal h1, .reveal h2, .reveal h3 { color: var(--highlight); text-transform: none; font-weight: 700; letter-spacing: -0.02em; }
+  .reveal h1 { font-size: 2.2em; }
+  .reveal h2 { font-size: 1.5em; border-bottom: 3px solid var(--accent); padding-bottom: 0.2em; display: inline-block; }
+  .reveal h3 { font-size: 1.15em; color: var(--accent); }
+  .reveal code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 0.85em; }
+  .reveal pre { background: var(--code-bg); border: 1px solid #333; border-radius: 8px; padding: 0.8em 1em; box-shadow: 0 4px 20px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box; }
+  .reveal pre code { font-size: 0.72em; line-height: 1.45; max-height: 520px; }
+  .reveal .accent { color: var(--accent); font-weight: 700; }
+  .reveal .hl { color: var(--highlight); font-weight: 600; }
+  .reveal .green { color: var(--green); }
+  .reveal .orange { color: var(--orange); }
+  .reveal .yellow { color: var(--yellow); }
+  .reveal .purple { color: var(--purple); }
+  .reveal .dim { color: var(--dim); }
+  .reveal ul { margin-left: 0; }
+  .reveal li { margin-bottom: 0.35em; font-size: 0.88em; }
+  .reveal table { border-collapse: collapse; width: 100%; font-size: 0.72em; margin: 0.5em 0; }
+  .reveal th { background: var(--secondary); color: var(--highlight); padding: 0.5em 0.7em; text-align: left; font-weight: 600; border: 1px solid #335; }
+  .reveal td { padding: 0.4em 0.7em; border: 1px solid #2a2a4a; }
+  .reveal tr:nth-child(even) td { background: rgba(15,52,96,0.25); }
+  .reveal .slide-number { color: var(--dim); font-size: 0.7em; }
+
+  /* Diagram boxes */
+  .diagram { display: flex; flex-wrap: wrap; gap: 0.8em; justify-content: center; align-items: center; margin: 1em 0; }
+  .diagram .box {
+    background: linear-gradient(135deg, var(--secondary), #162447);
+    border: 2px solid var(--highlight);
+    border-radius: 10px; padding: 0.7em 1.1em;
+    text-align: center; font-size: 0.82em; font-weight: 600;
+    color: var(--highlight); min-width: 130px;
+    box-shadow: 0 2px 12px rgba(83,216,251,0.15);
+  }
+  .diagram .box.accent-box {
+    border-color: var(--accent); color: var(--accent);
+    background: linear-gradient(135deg, #2a0e1a, #1a1a2e);
+    box-shadow: 0 2px 12px rgba(233,69,96,0.2);
+  }
+  .diagram .box.green-box {
+    border-color: var(--green); color: var(--green);
+    background: linear-gradient(135deg, #0a2a1a, #1a1a2e);
+    box-shadow: 0 2px 12px rgba(74,222,128,0.15);
+  }
+  .diagram .box.orange-box {
+    border-color: var(--orange); color: var(--orange);
+    background: linear-gradient(135deg, #2a1a0a, #1a1a2e);
+    box-shadow: 0 2px 12px rgba(251,146,60,0.15);
+  }
+  .diagram .box.purple-box {
+    border-color: var(--purple); color: var(--purple);
+    background: linear-gradient(135deg, #1a0a2a, #1a1a2e);
+    box-shadow: 0 2px 12px rgba(167,139,250,0.15);
+  }
+  .diagram .arrow { font-size: 1.6em; color: var(--dim); line-height: 1; }
+  .diagram .arrow-down { font-size: 1.4em; color: var(--dim); width: 100%; text-align: center; }
+  .diagram .label { font-size: 0.7em; color: var(--dim); margin-top: 0.2em; }
+
+  /* Flow diagrams */
+  .flow-row { display: flex; align-items: center; gap: 0.5em; justify-content: center; margin: 0.5em 0; flex-wrap: wrap; }
+  .flow-box {
+    background: var(--secondary); border: 2px solid var(--highlight);
+    border-radius: 8px; padding: 0.5em 0.9em; font-size: 0.78em;
+    font-weight: 600; color: var(--highlight); text-align: center;
+    white-space: nowrap;
+  }
+  .flow-box.accent { border-color: var(--accent); color: var(--accent); background: #2a0e1a; }
+  .flow-box.green { border-color: var(--green); color: var(--green); background: #0a2a1a; }
+  .flow-box.output { border-color: var(--orange); color: var(--orange); background: #2a1a0a; }
+  .flow-arrow { color: var(--dim); font-size: 1.3em; }
+
+  /* Two-column layout */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; }
+  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1em; }
+  .col-wide { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 1.2em; }
+
+  /* Badge-like labels */
+  .badge {
+    display: inline-block; padding: 0.15em 0.5em; border-radius: 4px;
+    font-size: 0.75em; font-weight: 600; margin-right: 0.3em;
+  }
+  .badge.input { background: rgba(83,216,251,0.2); color: var(--highlight); border: 1px solid var(--highlight); }
+  .badge.output { background: rgba(233,69,96,0.2); color: var(--accent); border: 1px solid var(--accent); }
+  .badge.both { background: rgba(167,139,250,0.2); color: var(--purple); border: 1px solid var(--purple); }
+
+  /* Section title slides */
+  .section-title { text-align: center !important; }
+  .section-title h2 { border: none; font-size: 2em; display: block; }
+  .section-title .section-num {
+    font-size: 3em; font-weight: 900; color: var(--accent);
+    opacity: 0.3; margin-bottom: -0.3em; display: block;
+  }
+
+  /* Compact list */
+  .compact li { margin-bottom: 0.15em; font-size: 0.82em; }
+  .compact ul { margin-top: 0.3em; }
+
+  .reveal .small { font-size: 0.75em; }
+  .reveal .tiny { font-size: 0.65em; }
+/* font-size-override-applied */
+      .reveal { font-size: 24px !important; }
+      .reveal h1 { font-size: 1.8em !important; }
+      .reveal h2 { font-size: 1.4em !important; }
+      .reveal h3 { font-size: 1.1em !important; }
+      .reveal h4 { font-size: 0.9em !important; }
+      .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+      .reveal pre { font-size: 0.75em !important; }
+      .reveal code { font-size: 0.85em !important; }
+      .reveal .small { font-size: 0.7em !important; }
+      .reveal table { font-size: 0.8em !important; }
+      </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- TITLE SLIDE -->
+<!-- ============================================================ -->
+<section class="section-title">
+  <h1 style="color:var(--highlight); font-size:2.4em;">Clifft I/O Formats</h1>
+  <p style="color:var(--accent); font-size:1.1em; text-align:center; font-weight:600;">Input Formats, Output Formats &amp; API Reference</p>
+  <p style="color:var(--dim); text-align:center; font-size:0.8em; margin-top:1.5em;">
+    Developer Deep Dive &mdash; Stim Circuits, Python API, GPU CLI
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: Input Formats Overview -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">01</span>
+  <h2>Input Formats Overview</h2>
+  <p class="dim" style="text-align:center;">All the ways to get circuits into Clifft</p>
+</section>
+
+<section>
+  <h2>Three Input Paths</h2>
+  <div class="diagram" style="flex-direction: column; gap: 1.2em; margin-top:1em;">
+    <div class="flow-row">
+      <div class="box" style="min-width:180px;">
+        <div style="font-size:1.3em;">.stim File</div>
+        <div class="label">Primary input format</div>
+      </div>
+      <span class="arrow">&rarr;</span>
+      <div class="box" style="min-width:180px;">
+        <div style="font-size:1.3em;">Python String</div>
+        <div class="label">clifft.compile(str)</div>
+      </div>
+      <span class="arrow">&rarr;</span>
+      <div class="box orange-box" style="min-width:180px;">
+        <div style="font-size:1.3em;">GPU CLI</div>
+        <div class="label">--circuit file.stim</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="diagram" style="margin-top:1.5em;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:0.3em; width:100%;">
+      <div class="flow-row" style="gap:0.8em;">
+        <div class="flow-box">.stim file on disk</div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box accent" style="padding:0.5em 1.5em;">
+          <div>Clifft Compiler</div>
+          <div style="font-size:0.75em; color:var(--dim);">parse &rarr; trace &rarr; HIR &rarr; bytecode</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box green">Program (bytecode)</div>
+      </div>
+      <div class="flow-row" style="gap:0.8em;">
+        <div class="flow-box">Python string</div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box accent" style="padding:0.5em 1.5em;">
+          <div>clifft.compile()</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box green">Program (bytecode)</div>
+      </div>
+      <div class="flow-row" style="gap:0.8em;">
+        <div class="flow-box">.stim file path</div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box accent" style="padding:0.5em 1.5em;">
+          <div>run_msc_cuda / run_msc_hip</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box green">JSON to stdout</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Input Format: Stim Circuit Text</h2>
+  <p style="font-size:0.85em;">All three input paths consume the same underlying format: <span class="hl">Stim circuit text</span>.</p>
+
+  <div class="cols" style="margin-top:0.8em;">
+    <div>
+      <h3>From file</h3>
+      <pre><code class="language-python"># Python: read file, then compile
+circuit_text = open("surface_code.stim").read()
+program = clifft.compile(circuit_text)</code></pre>
+      <pre><code class="language-bash"># GPU CLI: pass file path directly
+./run_msc_hip --circuit surface_code.stim</code></pre>
+    </div>
+    <div>
+      <h3>Inline string</h3>
+      <pre><code class="language-python"># Python: inline circuit string
+program = clifft.compile("""
+H 0
+CNOT 0 1
+M 0 1
+""")</code></pre>
+    </div>
+  </div>
+  <p class="dim small" style="margin-top:0.8em;">The Stim format is line-oriented: one instruction per line, whitespace-separated targets.</p>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: Stim Circuit Format Deep Dive -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">02</span>
+  <h2>The Stim Circuit Format</h2>
+  <p class="dim" style="text-align:center;">Line-by-line syntax deep dive</p>
+</section>
+
+<section>
+  <h2>Basic Syntax</h2>
+  <pre><code class="language-plaintext">INSTRUCTION target1 target2 ...
+INSTRUCTION(parameter) target1 target2 ...
+
+# Lines starting with # are comments
+# Empty lines are ignored</code></pre>
+
+  <div style="margin-top:1em;">
+    <div class="flow-row" style="gap:1em;">
+      <div class="flow-box">INSTRUCTION</div>
+      <div style="font-size:0.8em; color:var(--dim);">+</div>
+      <div class="flow-box accent">targets (qubit indices)</div>
+      <div style="font-size:0.8em; color:var(--dim);">+</div>
+      <div class="flow-box green">optional (param)</div>
+    </div>
+  </div>
+
+  <div class="cols" style="margin-top:1em;">
+    <div>
+      <h3>Examples</h3>
+      <pre><code class="language-plaintext">H 0              # Hadamard on qubit 0
+CNOT 0 1         # CNOT: control=0, target=1
+M 0 1 2          # Measure qubits 0, 1, 2
+DEPOLARIZE1(0.001) 0 1 2</code></pre>
+    </div>
+    <div>
+      <h3>Multi-target shorthand</h3>
+      <pre><code class="language-plaintext"># Apply H to qubits 0, 1, 2, 3
+H 0 1 2 3
+
+# CNOT pairs: (0,1) and (2,3)
+CNOT 0 1 2 3</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Single-Qubit Gates</h2>
+  <table>
+    <thead>
+      <tr><th>Instruction</th><th>Gate</th><th>Matrix</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="hl">H</td><td>Hadamard</td><td class="dim">(X+Z)/&radic;2</td><td><code>H 0</code></td></tr>
+      <tr><td class="hl">X</td><td>Pauli-X (bit flip)</td><td class="dim">&sigma;<sub>x</sub></td><td><code>X 3</code></td></tr>
+      <tr><td class="hl">Y</td><td>Pauli-Y</td><td class="dim">&sigma;<sub>y</sub></td><td><code>Y 1</code></td></tr>
+      <tr><td class="hl">Z</td><td>Pauli-Z (phase flip)</td><td class="dim">&sigma;<sub>z</sub></td><td><code>Z 2</code></td></tr>
+      <tr><td class="hl">S</td><td>Phase gate</td><td class="dim">diag(1, i)</td><td><code>S 0</code></td></tr>
+      <tr><td class="hl">S_DAG</td><td>S-adjoint</td><td class="dim">diag(1, &minus;i)</td><td><code>S_DAG 0</code></td></tr>
+      <tr><td class="hl">SQRT_X</td><td>&radic;X</td><td class="dim">(I+iX)/&radic;2</td><td><code>SQRT_X 0</code></td></tr>
+      <tr><td class="hl">SQRT_X_DAG</td><td>&radic;X adjoint</td><td class="dim">(I&minus;iX)/&radic;2</td><td><code>SQRT_X_DAG 0</code></td></tr>
+      <tr><td class="hl">SQRT_Y</td><td>&radic;Y</td><td class="dim">(I+iY)/&radic;2</td><td><code>SQRT_Y 0</code></td></tr>
+      <tr><td class="hl">SQRT_Y_DAG</td><td>&radic;Y adjoint</td><td class="dim">(I&minus;iY)/&radic;2</td><td><code>SQRT_Y_DAG 0</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Two-Qubit Gates</h2>
+  <table>
+    <thead>
+      <tr><th>Instruction</th><th>Gate</th><th>Description</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="hl">CNOT / CX</td><td>Controlled-NOT</td><td>Flip target if control=|1&rang;</td><td><code>CNOT 0 1</code></td></tr>
+      <tr><td class="hl">CZ</td><td>Controlled-Z</td><td>Phase flip if both |1&rang;</td><td><code>CZ 0 1</code></td></tr>
+      <tr><td class="hl">SWAP</td><td>SWAP</td><td>Exchange two qubits</td><td><code>SWAP 0 1</code></td></tr>
+      <tr><td class="hl">ISWAP</td><td>iSWAP</td><td>SWAP with phase i</td><td><code>ISWAP 0 1</code></td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1em;">
+    <h3>Multi-pair syntax</h3>
+    <pre><code class="language-plaintext"># Two-qubit gates consume targets in pairs:
+CNOT 0 1 2 3 4 5
+# Equivalent to: CNOT 0 1; CNOT 2 3; CNOT 4 5
+
+CZ 0 1 2 3
+# Equivalent to: CZ 0 1; CZ 2 3</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>Measurement &amp; Reset Instructions</h2>
+  <div class="cols">
+    <div>
+      <h3>Measurement</h3>
+      <table>
+        <thead><tr><th>Instruction</th><th>Basis</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">M</td><td>Z-basis</td><td><code>M 0 1 2</code></td></tr>
+          <tr><td class="hl">MX</td><td>X-basis</td><td><code>MX 0</code></td></tr>
+          <tr><td class="hl">MY</td><td>Y-basis</td><td><code>MY 0</code></td></tr>
+          <tr><td class="hl">MZ</td><td>Z-basis (alias)</td><td><code>MZ 0</code></td></tr>
+          <tr><td class="hl">MR</td><td>Measure + Reset</td><td><code>MR 0</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Reset</h3>
+      <table>
+        <thead><tr><th>Instruction</th><th>Action</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">R</td><td>Reset to |0&rang;</td><td><code>R 0</code></td></tr>
+          <tr><td class="hl">RX</td><td>Reset to |+&rang;</td><td><code>RX 0</code></td></tr>
+          <tr><td class="hl">RY</td><td>Reset to |+i&rang;</td><td><code>RY 0</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:1em;">
+    <h3>Measurement Record References</h3>
+    <pre><code class="language-plaintext"># rec[-1] = most recent measurement result
+# rec[-2] = second most recent, etc.
+M 0 1 2
+DETECTOR rec[-1] rec[-2]   # parity of last two measurements</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>Noise Instructions</h2>
+  <table>
+    <thead>
+      <tr><th>Instruction</th><th>Channel</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="hl">DEPOLARIZE1(p)</td>
+        <td>Single-qubit depolarizing: each of X,Y,Z with prob p/3</td>
+        <td><code>DEPOLARIZE1(0.001) 0 1 2</code></td>
+      </tr>
+      <tr>
+        <td class="hl">DEPOLARIZE2(p)</td>
+        <td>Two-qubit depolarizing: 15 Pauli pairs with prob p/15</td>
+        <td><code>DEPOLARIZE2(0.01) 0 1</code></td>
+      </tr>
+      <tr>
+        <td class="hl">X_ERROR(p)</td>
+        <td>Bit-flip error with probability p</td>
+        <td><code>X_ERROR(0.001) 0</code></td>
+      </tr>
+      <tr>
+        <td class="hl">Z_ERROR(p)</td>
+        <td>Phase-flip error with probability p</td>
+        <td><code>Z_ERROR(0.001) 0</code></td>
+      </tr>
+      <tr>
+        <td class="hl">PAULI_CHANNEL_1(px,py,pz)</td>
+        <td>General 1-qubit Pauli channel</td>
+        <td><code>PAULI_CHANNEL_1(0.01,0.005,0.005) 0</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="dim small" style="margin-top:0.5em;">Noise channels are sampled stochastically during simulation. Use <code>clifft.compile(text, hir_passes=None)</code> to keep noise, or the <code>RemoveNoisePass</code> to strip it.</p>
+</section>
+
+<section>
+  <h2>Control Flow &amp; Layer Structure</h2>
+  <div class="cols">
+    <div>
+      <h3>REPEAT block</h3>
+      <pre><code class="language-plaintext"># Repeat a block N times
+REPEAT 100 {
+    H 0
+    CNOT 0 1
+    DEPOLARIZE1(0.001) 0 1
+    M 0 1
+    DETECTOR rec[-1] rec[-3]
+    DETECTOR rec[-2] rec[-4]
+    R 0 1
+    TICK
+}</code></pre>
+      <p class="dim small">Essential for QEC: encode N rounds of syndrome extraction in a compact loop.</p>
+    </div>
+    <div>
+      <h3>TICK &mdash; Layer separator</h3>
+      <pre><code class="language-plaintext"># TICK separates time layers
+H 0 1 2
+TICK
+CNOT 0 1 2 3
+TICK
+M 0 1 2 3</code></pre>
+      <p class="dim small">TICK does not affect simulation semantics. It marks circuit layer boundaries for visualization and analysis.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Detectors &amp; Observables</h2>
+  <div class="cols">
+    <div>
+      <h3>DETECTOR</h3>
+      <pre><code class="language-plaintext"># Parity check on measurement records
+# Should be deterministic in noiseless case
+DETECTOR rec[-1] rec[-5]
+DETECTOR rec[-2] rec[-6]
+
+# With coordinate annotations
+DETECTOR(1, 2, 0) rec[-1] rec[-5]</code></pre>
+      <p class="dim small">Detectors define syndrome bits. Under noise, a <span class="accent">detection event</span> (bit = 1) flags an error.</p>
+    </div>
+    <div>
+      <h3>OBSERVABLE_INCLUDE</h3>
+      <pre><code class="language-plaintext"># Track logical observable
+# Observable index in parens
+OBSERVABLE_INCLUDE(0) rec[-1]
+OBSERVABLE_INCLUDE(0) rec[-3]
+
+# Multiple observables
+OBSERVABLE_INCLUDE(1) rec[-2]</code></pre>
+      <p class="dim small">Observables track logical qubit values. A flip (bit = 1) means a <span class="accent">logical error</span>.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:0.8em;">
+    <div class="flow-row">
+      <div class="flow-box">Measurements</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">rec[-N] references</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box">DETECTOR (parity check)</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box green">Detection events (0/1)</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Complete Example: d=3 Surface Code Round</h2>
+  <pre><code class="language-plaintext" style="font-size:0.62em;"># Distance-3 surface code: 9 data qubits (0-8), 8 ancilla qubits (9-16)
+# Data qubit layout:        Ancilla layout:
+#   0 - 1 - 2               X9  Z10  X11
+#   |   |   |                |    |    |
+#   3 - 4 - 5              Z12  X13  Z14
+#   |   |   |                |    |    |
+#   6 - 7 - 8              X15  Z16
+
+# Reset all
+R 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+TICK
+
+# --- Syndrome extraction round ---
+# X-stabilizer ancillas: prepare in |+>
+RX 9 11 13 15
+TICK
+
+# CNOT pattern for X-stabilizers
+CNOT 0 9    1 11   3 13   6 15
+TICK
+CNOT 1 9    2 11   4 13   7 15
+TICK
+CNOT 3 9    4 11   6 13
+TICK
+CNOT 4 9    5 11   7 13   8 15
+TICK
+
+# Z-stabilizer ancillas: CNOT (ancilla controls data)
+CNOT 10 1   12 0   14 2   16 7
+TICK
+CNOT 10 4   12 3   14 5   16 8
+TICK
+CNOT 10 1   12 3   14 5   16 7
+TICK
+CNOT 10 2   12 4   14 8
+TICK
+
+# Measure ancillas
+MX 9 11 13 15
+MZ 10 12 14 16
+TICK
+
+# Noise model
+DEPOLARIZE1(0.001) 0 1 2 3 4 5 6 7 8
+DEPOLARIZE2(0.001) 0 9 1 11 3 13 6 15
+
+# Detectors: compare to expected noiseless outcome
+DETECTOR rec[-8]    # X-stabilizer ancilla 9
+DETECTOR rec[-7]    # X-stabilizer ancilla 11
+DETECTOR rec[-6]    # X-stabilizer ancilla 13
+DETECTOR rec[-5]    # X-stabilizer ancilla 15
+DETECTOR rec[-4]    # Z-stabilizer ancilla 10
+DETECTOR rec[-3]    # Z-stabilizer ancilla 12
+DETECTOR rec[-2]    # Z-stabilizer ancilla 14
+DETECTOR rec[-1]    # Z-stabilizer ancilla 16
+
+# Logical observable: Z_L along top row
+M 0 1 2
+OBSERVABLE_INCLUDE(0) rec[-1] rec[-2] rec[-3]</code></pre>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: Clifft Extensions to Stim -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">03</span>
+  <h2>Clifft Extensions to Stim</h2>
+  <p class="dim" style="text-align:center;">Non-Clifford gates that make Clifft special</p>
+</section>
+
+<section>
+  <h2>Non-Clifford Gate Extensions</h2>
+  <p style="font-size:0.88em;">Standard Stim only handles <span class="hl">Clifford</span> gates. Clifft extends the format with non-Clifford gates that increase the <span class="accent">active dimension k</span> (peak_rank).</p>
+
+  <table style="margin-top:1em;">
+    <thead>
+      <tr><th>Instruction</th><th>Gate</th><th>Matrix</th><th>Effect on k</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="accent" style="font-weight:700;">T</td>
+        <td>T gate (pi/8)</td>
+        <td class="dim">diag(1, e<sup>i&pi;/4</sup>)</td>
+        <td class="orange">+1 per T</td>
+        <td><code>T 0</code></td>
+      </tr>
+      <tr>
+        <td class="accent" style="font-weight:700;">T_DAG</td>
+        <td>T adjoint</td>
+        <td class="dim">diag(1, e<sup>&minus;i&pi;/4</sup>)</td>
+        <td class="orange">+1 per T_DAG</td>
+        <td><code>T_DAG 0</code></td>
+      </tr>
+      <tr>
+        <td class="accent" style="font-weight:700;">RZ(angle)</td>
+        <td>Arbitrary Z-rotation</td>
+        <td class="dim">diag(1, e<sup>i&theta;</sup>)</td>
+        <td class="orange">+1 per RZ</td>
+        <td><code>RZ(0.785) 0</code></td>
+      </tr>
+      <tr>
+        <td class="hl">S</td>
+        <td>Phase gate</td>
+        <td class="dim">diag(1, i)</td>
+        <td class="green">0 (Clifford)</td>
+        <td><code>S 0</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:1em; display:flex; gap:1.5em; align-items:flex-start;">
+    <div style="flex:1;">
+      <h3>Why this matters</h3>
+      <ul class="compact">
+        <li>SVM cost scales as <span class="accent">O(2<sup>k</sup>)</span> per shot</li>
+        <li>Clifford-only circuits: k = 0 (constant time)</li>
+        <li>Each non-Clifford gate may increase k by 1</li>
+        <li>Optimization passes can reduce k via gate fusion</li>
+      </ul>
+    </div>
+    <div style="flex:1;">
+      <h3>S gate: the exception</h3>
+      <ul class="compact">
+        <li>S is Clifford &mdash; absorbed into Pauli frame tracking</li>
+        <li>Does <strong>not</strong> increase active dimension</li>
+        <li>Handled by Heisenberg representation, not SVM</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Clifft vs Stim: Gate Support Comparison</h2>
+  <div class="cols">
+    <div>
+      <div class="diagram" style="flex-direction:column; gap:0.6em;">
+        <div class="box" style="width:90%;"><strong>Stim</strong> (Clifford only)<br><span class="dim" style="font-size:0.8em;">H, X, Y, Z, S, S_DAG, SQRT_X/Y,<br>CNOT, CZ, SWAP, ISWAP, M, R</span></div>
+        <div class="arrow-down">&darr; <span style="font-size:0.6em;">superset</span></div>
+        <div class="box accent-box" style="width:90%;"><strong>Clifft</strong> (near-Clifford)<br><span style="font-size:0.8em;">All Stim gates + <strong>T, T_DAG, RZ(&theta;)</strong></span></div>
+      </div>
+    </div>
+    <div>
+      <pre><code class="language-plaintext"># This circuit is valid Clifft,
+# but NOT valid Stim:
+
+H 0
+T 0          # non-Clifford!
+CNOT 0 1
+T_DAG 1      # non-Clifford!
+RZ(0.123) 2  # non-Clifford!
+M 0 1 2</code></pre>
+      <pre><code class="language-python"># Check peak rank after compile
+prog = clifft.compile(circuit_text)
+print(f"Peak rank: {prog.peak_rank}")
+# Peak rank: 3  (three non-Clifford gates)</code></pre>
+    </div>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: Python API — Input Side -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">04</span>
+  <h2>Python API &mdash; Input Side</h2>
+  <p class="dim" style="text-align:center;">clifft.compile() and its options</p>
+</section>
+
+<section>
+  <h2>clifft.compile() &mdash; Full Signature</h2>
+  <pre><code class="language-python">clifft.compile(
+    stim_text: str,
+    postselection_mask: list[int] | None = None,
+    expected_detectors: list[int] | None = None,
+    expected_observables: list[int] | None = None,
+    normalize_syndromes: bool = False,
+    hir_passes: HirPassManager | None = &lt;default&gt;,
+    bytecode_passes: BytecodePassManager | None = &lt;default&gt;,
+) -> Program</code></pre>
+
+  <div style="margin-top:0.8em;">
+    <div class="flow-row">
+      <div class="flow-box">stim_text</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">parse</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">trace (HIR)</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">HIR passes</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">lower</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent">bytecode passes</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box green">Program</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Compilation Examples</h2>
+  <pre><code class="language-python">import clifft
+
+# --- Basic compile ---
+circuit = """
+H 0
+CNOT 0 1
+DEPOLARIZE1(0.001) 0 1
+M 0 1
+DETECTOR rec[-1] rec[-2]
+OBSERVABLE_INCLUDE(0) rec[-1]
+"""
+program = clifft.compile(circuit)
+
+
+# --- With syndrome normalization (auto-detect reference parities) ---
+program = clifft.compile(circuit, normalize_syndromes=True)
+
+
+# --- With all-detector postselection (discard shots with detection events) ---
+program = clifft.compile(
+    circuit,
+    normalize_syndromes=True,
+    postselection_mask=[1] * program.num_detectors,  # postselect all detectors
+)
+
+
+# --- Skip optimization passes ---
+program = clifft.compile(circuit, hir_passes=None, bytecode_passes=None)
+
+
+# --- Custom pass pipeline ---
+hpm = clifft.default_hir_pass_manager()  # get default, modify as needed
+bpm = clifft.default_bytecode_pass_manager()
+program = clifft.compile(circuit, hir_passes=hpm, bytecode_passes=bpm)</code></pre>
+</section>
+
+<section>
+  <h2>Available Optimization Passes</h2>
+  <div class="cols">
+    <div>
+      <h3>HIR Passes</h3>
+      <table>
+        <thead><tr><th>Pass</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">RemoveNoisePass</td><td>Strip noise channels</td></tr>
+          <tr><td class="hl">DropNonUnitaryPass</td><td>Drop measurements/resets</td></tr>
+          <tr><td class="hl">ExpandTPass</td><td>Decompose T gates</td></tr>
+          <tr><td class="hl">ExpandRotPass</td><td>Decompose rotations</td></tr>
+          <tr><td class="hl">MultiGatePass</td><td>Multi-gate fusion</td></tr>
+          <tr><td class="hl">NoiseBlockPass</td><td>Noise block optimization</td></tr>
+          <tr><td class="hl">SwapMeasPass</td><td>Swap-measure reordering</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Bytecode Passes</h3>
+      <table>
+        <thead><tr><th>Pass</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">PeepholeFusionPass</td><td>Fuse adjacent ops</td></tr>
+          <tr><td class="hl">SingleAxisFusionPass</td><td>Merge single-axis rotations</td></tr>
+          <tr><td class="hl">StatevectorSqueezePass</td><td>Reduce active dimension k</td></tr>
+        </tbody>
+      </table>
+      <p class="dim small" style="margin-top:0.5em;">Passes reduce peak_rank and instruction count, directly improving simulation speed.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Lower-Level Pipeline Access</h2>
+  <pre><code class="language-python">import clifft
+
+circuit_text = open("circuit.stim").read()
+
+# Step 1: Parse to AST
+circuit = clifft.parse(circuit_text)
+# or: circuit = clifft.parse_file("circuit.stim")
+
+# Step 2: Trace to HIR (High-level Intermediate Representation)
+hir = clifft.trace(circuit)
+
+# Step 3: Run HIR optimization passes
+hpm = clifft.default_hir_pass_manager()
+hpm.run(hir)  # mutates hir in-place
+
+# Step 4: Compute reference syndrome (noiseless parities)
+ref = clifft.compute_reference_syndrome(hir)
+# ref.detectors: list of expected detector values
+# ref.observables: list of expected observable values
+
+# Step 5: Lower HIR to bytecode
+program = clifft.lower(
+    hir,
+    postselection_mask=[1] * len(ref.detectors),
+    expected_detectors=ref.detectors,
+    expected_observables=ref.observables,
+)
+
+# Step 6: Run bytecode optimization passes
+bpm = clifft.default_bytecode_pass_manager()
+bpm.run(program)  # mutates program in-place</code></pre>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: Python API — Output Side -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">05</span>
+  <h2>Python API &mdash; Output Side</h2>
+  <p class="dim" style="text-align:center;">Sampling functions and result types</p>
+</section>
+
+<section>
+  <h2>Output Data Flow</h2>
+  <div class="diagram" style="flex-direction:column; gap:0.5em; margin-top:0.5em;">
+    <div class="flow-row">
+      <div class="flow-box green">Program (bytecode)</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent" style="padding:0.5em 1.2em;">SVM Execution<br><span style="font-size:0.7em; color:var(--dim);">Schrodinger Virtual Machine</span></div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box output">SampleResult</div>
+    </div>
+  </div>
+
+  <div class="diagram" style="margin-top:1em;">
+    <div style="display:grid; grid-template-columns: auto 1fr; gap:0.4em 1.5em; font-size:0.82em;">
+      <div class="flow-box output" style="font-size:0.9em;">SampleResult</div>
+      <div></div>
+
+      <div style="padding-left:2em; color:var(--highlight);">.measurements</div>
+      <div class="dim">uint8 array [shots x num_measurements]</div>
+
+      <div style="padding-left:2em; color:var(--highlight);">.detectors</div>
+      <div class="dim">uint8 array [shots x num_detectors]</div>
+
+      <div style="padding-left:2em; color:var(--highlight);">.observables</div>
+      <div class="dim">uint8 array [shots x num_observables]</div>
+
+      <div style="padding-left:2em; color:var(--highlight);">.exp_vals</div>
+      <div class="dim">float64 array [shots x num_exp_vals]</div>
+
+      <div style="padding-left:2em; color:var(--orange);">.total_shots</div>
+      <div class="dim">int | None (survivor modes)</div>
+
+      <div style="padding-left:2em; color:var(--orange);">.passed_shots</div>
+      <div class="dim">int | None (survivor modes)</div>
+
+      <div style="padding-left:2em; color:var(--orange);">.discards</div>
+      <div class="dim">int | None (total - passed)</div>
+
+      <div style="padding-left:2em; color:var(--orange);">.logical_errors</div>
+      <div class="dim">int | None (survivors with observable flip)</div>
+
+      <div style="padding-left:2em; color:var(--orange);">.observable_ones</div>
+      <div class="dim">uint64 array per-observable error counts</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>clifft.sample()</h2>
+  <pre><code class="language-python">import clifft
+import numpy as np
+
+circuit = """
+H 0
+CNOT 0 1
+DEPOLARIZE1(0.01) 0 1
+M 0 1
+DETECTOR rec[-1] rec[-2]
+OBSERVABLE_INCLUDE(0) rec[-1]
+"""
+program = clifft.compile(circuit, normalize_syndromes=True)
+
+# --- Standard sampling ---
+result = clifft.sample(program, shots=10000, seed=42)
+
+print(result)
+# SampleResult(shots=10000, measurements=2)
+
+print(result.measurements.shape)  # (10000, 2)  - uint8
+print(result.detectors.shape)     # (10000, 1)  - uint8
+print(result.observables.shape)   # (10000, 1)  - uint8
+
+# Fraction of shots with detection events
+detection_rate = np.mean(result.detectors)
+print(f"Detection rate: {detection_rate:.4f}")
+
+# Tuple unpacking (backward compatibility)
+m, d, o = clifft.sample(program, shots=1000)</code></pre>
+</section>
+
+<section>
+  <h2>clifft.sample_survivors()</h2>
+  <pre><code class="language-python"># --- Postselection: discard shots with any detection event ---
+program = clifft.compile(
+    circuit,
+    normalize_syndromes=True,
+    postselection_mask=[1] * 1,  # postselect on all detectors
+)
+
+result = clifft.sample_survivors(program, shots=100000, seed=42)
+
+print(f"Total shots attempted:  {result.total_shots}")
+print(f"Shots surviving:        {result.passed_shots}")
+print(f"Discarded:              {result.discards}")
+print(f"Logical errors:         {result.logical_errors}")
+print(f"Survival rate:          {result.passed_shots / result.total_shots:.4f}")
+print(f"Error rate (survivors): {result.logical_errors / result.passed_shots:.6f}")
+
+# Per-observable error counts
+print(f"Observable errors:      {result.observable_ones}")
+
+# Measurements array only contains surviving shots
+print(f"Measurements shape:     {result.measurements.shape}")
+# (passed_shots, num_measurements)</code></pre>
+</section>
+
+<section>
+  <h2>Importance Sampling &amp; Probability Functions</h2>
+  <div class="cols">
+    <div>
+      <h3>clifft.sample_k()</h3>
+      <pre><code class="language-python"># Force exactly k noise sites to fire
+# Importance sampling for rare events
+result = clifft.sample_k(
+    program,
+    shots=10000,
+    k=2,        # exactly 2 faults
+    seed=42,
+)
+
+# Also available with postselection:
+result = clifft.sample_k_survivors(
+    program,
+    shots=10000,
+    k=2,
+    seed=42,
+)</code></pre>
+    </div>
+    <div>
+      <h3>Exact probabilities</h3>
+      <pre><code class="language-python"># Born probabilities (unitary circuits)
+prog = clifft.compile("H 0\nCNOT 0 1")
+probs = clifft.basis_probabilities(
+    prog, ["00", "01", "10", "11"]
+)
+# array([0.5, 0.0, 0.0, 0.5])
+
+# Log-space for tiny probabilities
+log_p = clifft.basis_probabilities(
+    prog, "00", return_log=True
+)
+
+# Measurement record probabilities
+prog2 = clifft.compile("H 0\nM 0")
+p = clifft.record_probabilities(
+    prog2, ["0", "1"]
+)
+# array([0.5, 0.5])</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Statevector Access</h2>
+  <pre><code class="language-python"># Get amplitude of a specific basis state
+prog = clifft.compile("H 0\nCNOT 0 1")
+
+amp_00 = clifft.get_statevector(prog, 0)  # basis index 0 = |00>
+print(f"|00> amplitude: {amp_00}")         # (0.707...+0j)
+
+amp_01 = clifft.get_statevector(prog, 1)  # basis index 1 = |01>
+print(f"|01> amplitude: {amp_01}")         # 0j
+
+amp_10 = clifft.get_statevector(prog, 2)  # basis index 2 = |10>
+print(f"|10> amplitude: {amp_10}")         # 0j
+
+amp_11 = clifft.get_statevector(prog, 3)  # basis index 3 = |11>
+print(f"|11> amplitude: {amp_11}")         # (0.707...+0j)</code></pre>
+
+  <div style="margin-top:0.5em; background:rgba(233,69,96,0.1); border-left:3px solid var(--accent); padding:0.5em 1em; border-radius:4px;">
+    <p class="small" style="margin:0;"><span class="accent">Note:</span> <code>get_statevector</code> retrieves one amplitude at a time. For unitary circuits, use <code>basis_probabilities</code> for batch probability queries. Cost scales with peak_rank k, not total qubits n.</p>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: Introspection API -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">06</span>
+  <h2>Introspection API</h2>
+  <p class="dim" style="text-align:center;">Inspecting compiled programs</p>
+</section>
+
+<section>
+  <h2>Program Properties</h2>
+  <pre><code class="language-python">import clifft
+
+circuit = open("surface_code_d5.stim").read()
+program = clifft.compile(circuit, normalize_syndromes=True)
+
+# --- Circuit dimensions ---
+print(f"Qubits:       {program.num_qubits}")
+print(f"Measurements: {program.num_measurements}")
+print(f"Detectors:    {program.num_detectors}")
+print(f"Observables:  {program.num_observables}")
+
+# --- Compilation metrics ---
+print(f"Peak rank k:      {program.peak_rank}")         # max active dimension
+print(f"Instructions:     {program.num_instructions}")   # bytecode ops
+print(f"Total meas slots: {program.total_meas_slots}")   # measurement record size
+print(f"Postselection:    {program.has_postselection}")   # bool
+
+# --- Noise site analysis ---
+noise_probs = program.noise_site_probabilities  # numpy array
+print(f"Noise sites:      {len(noise_probs)}")
+if len(noise_probs) > 0:
+    print(f"Max noise prob:   {noise_probs.max():.6f}")
+    print(f"Min noise prob:   {noise_probs.min():.6f}")</code></pre>
+</section>
+
+<section>
+  <h2>Program Properties Diagram</h2>
+  <div class="diagram" style="flex-direction:column; gap:0.6em; margin-top:0.5em;">
+    <div class="flow-row" style="gap:1.5em;">
+      <div class="box" style="min-width:200px;">
+        <div style="font-size:0.9em; color:var(--dim);">Circuit Dimensions</div>
+        <div style="font-size:1.1em; margin-top:0.3em;">
+          <span class="hl">num_qubits</span><br>
+          <span class="hl">num_measurements</span><br>
+          <span class="hl">num_detectors</span><br>
+          <span class="hl">num_observables</span>
+        </div>
+      </div>
+      <div class="box accent-box" style="min-width:200px;">
+        <div style="font-size:0.9em; color:var(--dim);">Compilation Metrics</div>
+        <div style="font-size:1.1em; margin-top:0.3em;">
+          <span style="color:var(--accent);">peak_rank</span><br>
+          <span style="color:var(--accent);">num_instructions</span><br>
+          <span style="color:var(--accent);">total_meas_slots</span><br>
+          <span style="color:var(--accent);">has_postselection</span>
+        </div>
+      </div>
+      <div class="box green-box" style="min-width:200px;">
+        <div style="font-size:0.9em; color:var(--dim);">Noise Analysis</div>
+        <div style="font-size:1.1em; margin-top:0.3em;">
+          <span style="color:var(--green);">noise_site_probabilities</span><br>
+          <span class="dim" style="font-size:0.8em;">ndarray[float64]</span><br>
+          <span class="dim" style="font-size:0.8em;">per-site fault rates</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:1.2em;">
+    <h3>Runtime &amp; Backend Info</h3>
+    <pre><code class="language-python"># Runtime configuration
+print(f"Clifft version:  {clifft.version()}")
+print(f"SVM backend:     {clifft.svm_backend()}")  # e.g. "avx2", "avx512"
+print(f"OMP threads:     {clifft.get_num_threads()}")
+
+# Adjust thread count
+clifft.set_num_threads(4)</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>Noise Site Probabilities &mdash; Detailed Example</h2>
+  <pre><code class="language-python">import clifft
+import numpy as np
+
+circuit = """
+H 0
+CNOT 0 1
+DEPOLARIZE1(0.001) 0 1
+DEPOLARIZE2(0.01) 0 1
+X_ERROR(0.005) 0
+Z_ERROR(0.003) 1
+M 0 1
+"""
+program = clifft.compile(circuit)
+
+# Each noise instruction creates one or more noise sites
+probs = program.noise_site_probabilities
+print(f"Number of noise sites: {len(probs)}")
+print(f"Probabilities: {probs}")
+# e.g. array([0.001, 0.001, 0.01, 0.005, 0.003])
+
+# Use for importance sampling analysis
+total_fault_rate = 1.0 - np.prod(1.0 - probs)
+print(f"Prob of at least one fault: {total_fault_rate:.6f}")</code></pre>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: GPU Backend I/O -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">07</span>
+  <h2>GPU Backend I/O</h2>
+  <p class="dim" style="text-align:center;">CUDA and HIP command-line tools &amp; Python wrappers</p>
+</section>
+
+<section>
+  <h2>GPU CLI Architecture</h2>
+  <div class="diagram" style="flex-direction:column; gap:0.6em;">
+    <div class="flow-row" style="gap:1em;">
+      <div class="flow-box">.stim file</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent" style="padding:0.5em 1.2em;">
+        <div>C++ Binary</div>
+        <div style="font-size:0.7em; color:var(--dim);">run_msc_cuda / run_msc_hip</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box output">JSON stdout</div>
+    </div>
+    <div style="font-size:0.7em; color:var(--dim); text-align:center;">Progress and errors go to stderr</div>
+    <div class="flow-row" style="gap:1em; margin-top:0.5em;">
+      <div class="flow-box">.stim file</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box accent" style="padding:0.5em 1.2em;">
+        <div>Python Wrapper</div>
+        <div style="font-size:0.7em; color:var(--dim);">run_msc.py</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box output">JSON stdout</div>
+    </div>
+  </div>
+
+  <div class="cols" style="margin-top:1em;">
+    <div>
+      <h3>NVIDIA (CUDA)</h3>
+      <pre><code class="language-bash">./build-core-cuda/run_msc_cuda \
+  --circuit surface_code.stim \
+  --shots 10000000 \
+  --seed 42 \
+  --block-size 256 \
+  --postselection all</code></pre>
+    </div>
+    <div>
+      <h3>AMD (HIP / ROCm)</h3>
+      <pre><code class="language-bash">./build-core-hip/run_msc_hip \
+  --circuit surface_code.stim \
+  --shots 10000000 \
+  --seed 42 \
+  --block-size 256 \
+  --postselection all</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>GPU CLI &mdash; All Arguments</h2>
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="hl">--circuit &lt;path&gt;</td><td>./circuit_d5_p=0.001.stim</td><td>Path to .stim circuit file</td></tr>
+      <tr><td class="hl">--shots &lt;int&gt;</td><td>10,000,000</td><td>Number of shots to simulate</td></tr>
+      <tr><td class="hl">--seed &lt;int&gt;</td><td>42</td><td>Random number generator seed</td></tr>
+      <tr><td class="hl">--block-size &lt;int&gt;</td><td>256</td><td>GPU thread block size</td></tr>
+      <tr><td class="hl">--postselection {all|none}</td><td>all</td><td>Detector-based postselection mode</td></tr>
+      <tr><td class="hl">--cpu-reference</td><td>off</td><td>Run CPU reference sampler instead</td></tr>
+      <tr><td class="hl">--diagnose</td><td>off</td><td>Print backend diagnostics and exit</td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:0.8em;">
+    <h3>Diagnostics mode</h3>
+    <pre><code class="language-bash"># Check GPU availability and capabilities
+./run_msc_hip --diagnose
+# Prints: GPU device name, compute capability, memory, driver version</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>GPU CLI &mdash; JSON Output Format</h2>
+  <pre><code class="language-json" style="font-size:0.62em;">{
+  "backend": "hip-low-rank",
+  "circuit_path": "./surface_code_d5.stim",
+  "shots": 10000000,
+  "seed": 42,
+  "postselection": "all",
+  "has_postselection": true,
+  "peak_rank": 0,
+  "detectors": 96,
+  "observables": 1,
+  "measurements": 96,
+  "total_meas_slots": 192,
+  "noise_sites": 756,
+  "num_instructions": 1842,
+  "passed_shots": 9876543,
+  "discarded_shots": 123457,
+  "logical_errors": 42,
+  "observable_ones": [42],
+  "discard_rate": 0.0123457,
+  "survival_rate": 0.9876543,
+  "error_rate_per_survivor": 4.2526e-06,
+  "error_rate_per_total_shot": 4.2e-06,
+  "probe_compile_seconds": 0.0034,
+  "postselection_compile_seconds": 0.0089,
+  "kernel_seconds": 0.847,
+  "sample_seconds": 0.851,
+  "total_seconds": 0.863,
+  "shots_per_second_sampling_only": 11750881.3,
+  "shots_per_second_total": 11587485.5
+}</code></pre>
+</section>
+
+<section>
+  <h2>JSON Output Fields &mdash; Reference</h2>
+  <div class="cols">
+    <div>
+      <h3>Circuit Metadata</h3>
+      <table class="compact">
+        <tbody>
+          <tr><td class="hl">backend</td><td>"cuda-low-rank" | "hip-low-rank" | "cpu-reference-clifft-core"</td></tr>
+          <tr><td class="hl">circuit_path</td><td>Input file path</td></tr>
+          <tr><td class="hl">peak_rank</td><td>Max active dimension k</td></tr>
+          <tr><td class="hl">detectors</td><td># detector definitions</td></tr>
+          <tr><td class="hl">observables</td><td># observable definitions</td></tr>
+          <tr><td class="hl">measurements</td><td># measurement ops</td></tr>
+          <tr><td class="hl">noise_sites</td><td># noise channel sites</td></tr>
+          <tr><td class="hl">num_instructions</td><td># bytecode instructions</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Results &amp; Performance</h3>
+      <table class="compact">
+        <tbody>
+          <tr><td class="orange">passed_shots</td><td>Surviving shots</td></tr>
+          <tr><td class="orange">discarded_shots</td><td>Failed postselection</td></tr>
+          <tr><td class="orange">logical_errors</td><td>Survivors w/ observable flip</td></tr>
+          <tr><td class="orange">observable_ones</td><td>Per-observable error counts</td></tr>
+          <tr><td class="orange">survival_rate</td><td>passed / total</td></tr>
+          <tr><td class="orange">error_rate_per_survivor</td><td>errors / passed</td></tr>
+          <tr><td class="green">kernel_seconds</td><td>GPU kernel time</td></tr>
+          <tr><td class="green">shots_per_second_total</td><td>Throughput</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Python GPU Wrapper &mdash; clifft_cuda</h2>
+  <pre><code class="language-python">from clifft_cuda.compiler import compile_for_survivors
+from clifft_cuda.backends import (
+    sample_survivors_cpu,
+    sample_survivors_cuda,
+    sample_survivors_hip,
+    check_cuda,
+    check_rocm,
+    BackendUnavailable,
+)
+from pathlib import Path
+
+# --- Compile circuit for survivor sampling ---
+workload = compile_for_survivors(
+    Path("surface_code_d5.stim"),
+    shots=10_000_000,
+    seed=42,
+    threads=4,         # OMP threads for CPU fallback
+)
+
+# --- Run on GPU ---
+try:
+    summary = sample_survivors_hip(workload)   # AMD MI300X
+    # summary = sample_survivors_cuda(workload)  # NVIDIA
+except BackendUnavailable as e:
+    print(f"GPU unavailable: {e}")
+    summary = sample_survivors_cpu(workload)    # CPU fallback
+
+# summary is a dict with same fields as CLI JSON output
+print(f"Survival rate: {summary['survival_rate']:.4f}")
+print(f"Logical errors: {summary['logical_errors']}")
+print(f"Throughput: {summary['shots_per_second_sampling_only']:.0f} shots/s")</code></pre>
+</section>
+
+<section>
+  <h2>Python GPU Wrapper &mdash; Diagnostics</h2>
+  <div class="cols">
+    <div>
+      <h3>CUDA diagnostics</h3>
+      <pre><code class="language-python">from clifft_cuda.backends import check_cuda
+
+diag = check_cuda()
+print(f"GPU driver:     {diag.driver_available}")
+print(f"CUDA toolkit:   {diag.toolkit_available}")
+print(f"JIT available:  {diag.jit_available}")
+print(f"Can build:      {diag.can_build_native_cuda}")
+print(f"Can JIT:        {diag.can_runtime_jit_cuda}")
+
+if not diag.driver_available:
+    print(f"Missing: {diag.missing_summary()}")
+</code></pre>
+    </div>
+    <div>
+      <h3>ROCm diagnostics</h3>
+      <pre><code class="language-python">from clifft_cuda.backends import check_rocm
+
+diag = check_rocm()
+print(f"GPU driver:     {diag.driver_available}")
+print(f"HIP toolkit:    {diag.toolkit_available}")
+print(f"Can build:      {diag.can_build_native_hip}")
+print(f"GCN arch:       {diag.gcn_arch}")
+#                        e.g. "gfx942" for MI300X
+
+if not diag.driver_available:
+    print(f"Missing: {diag.missing_summary()}")
+</code></pre>
+    </div>
+  </div>
+
+  <div style="margin-top:0.8em;">
+    <h3>CLI diagnostics</h3>
+    <pre><code class="language-bash"># Python wrapper
+python run_msc.py --backend hip --diagnose
+python run_msc.py --backend cuda --diagnose
+
+# C++ binary
+./run_msc_hip --diagnose
+./run_msc_cuda --diagnose</code></pre>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: Output Format Details -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">08</span>
+  <h2>Output Format Details</h2>
+  <p class="dim" style="text-align:center;">Record arrays, aggregated stats, and data shapes</p>
+</section>
+
+<section>
+  <h2>Record Types &mdash; Bit Arrays</h2>
+  <div class="cols">
+    <div>
+      <h3>Measurement Records</h3>
+      <div style="background:var(--code-bg); padding:0.6em; border-radius:6px; font-family:monospace; font-size:0.75em; margin-bottom:0.5em;">
+        <div class="dim">shape: (shots, num_measurements)</div>
+        <div class="dim">dtype: uint8 (0 or 1)</div>
+        <div style="margin-top:0.5em;">
+          shot 0: <span class="hl">[ 0 1 0 1 1 0 ]</span><br>
+          shot 1: <span class="hl">[ 1 0 0 1 0 1 ]</span><br>
+          shot 2: <span class="hl">[ 0 0 1 1 1 0 ]</span><br>
+          <span class="dim">... N shots ...</span>
+        </div>
+      </div>
+      <p class="dim small">Raw measurement outcomes. Position i = i-th measurement instruction in circuit order.</p>
+    </div>
+    <div>
+      <h3>Detector Records</h3>
+      <div style="background:var(--code-bg); padding:0.6em; border-radius:6px; font-family:monospace; font-size:0.75em; margin-bottom:0.5em;">
+        <div class="dim">shape: (shots, num_detectors)</div>
+        <div class="dim">dtype: uint8 (0 or 1)</div>
+        <div style="margin-top:0.5em;">
+          shot 0: <span class="green">[ 0 0 0 0 ]</span> no errors<br>
+          shot 1: <span class="accent">[ 0 1 0 0 ]</span> detection event!<br>
+          shot 2: <span class="green">[ 0 0 0 0 ]</span> no errors<br>
+          <span class="dim">... N shots ...</span>
+        </div>
+      </div>
+      <p class="dim small">0 = matches noiseless reference. 1 = detection event (error syndrome triggered).</p>
+    </div>
+  </div>
+
+  <div class="cols" style="margin-top:0.5em;">
+    <div>
+      <h3>Observable Records</h3>
+      <div style="background:var(--code-bg); padding:0.6em; border-radius:6px; font-family:monospace; font-size:0.75em;">
+        <div class="dim">shape: (shots, num_observables)</div>
+        <div class="dim">dtype: uint8 (0 or 1)</div>
+        <div style="margin-top:0.5em;">
+          shot 0: <span class="green">[ 0 ]</span> no logical error<br>
+          shot 1: <span class="green">[ 0 ]</span> no logical error<br>
+          shot 2: <span class="accent">[ 1 ]</span> logical error!<br>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Expectation Values</h3>
+      <div style="background:var(--code-bg); padding:0.6em; border-radius:6px; font-family:monospace; font-size:0.75em;">
+        <div class="dim">shape: (shots, num_exp_vals)</div>
+        <div class="dim">dtype: float64</div>
+        <div style="margin-top:0.5em;">
+          <span class="dim">Continuous-valued expectation</span><br>
+          <span class="dim">Empty array if no EXP_VAL ops</span><br>
+          <span class="dim">in the circuit</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Data Flow: SVM &rarr; Records &rarr; Statistics</h2>
+  <div class="diagram" style="flex-direction:column; gap:0.3em; margin-top:0.3em;">
+    <div class="flow-row">
+      <div class="flow-box" style="background:#0d2137;">Program (bytecode)</div>
+    </div>
+    <div class="arrow-down">&darr;</div>
+    <div class="flow-row">
+      <div class="flow-box accent" style="padding:0.6em 2em;">
+        SVM Execution Engine<br>
+        <span style="font-size:0.7em; color:var(--dim);">CPU (OpenMP) or GPU (CUDA/HIP)</span>
+      </div>
+    </div>
+    <div class="arrow-down">&darr;</div>
+    <div class="flow-row" style="gap:1em;">
+      <div class="flow-box output" style="min-width:120px;">measurements<br><span class="dim" style="font-size:0.7em;">uint8[S,M]</span></div>
+      <div class="flow-box output" style="min-width:120px;">detectors<br><span class="dim" style="font-size:0.7em;">uint8[S,D]</span></div>
+      <div class="flow-box output" style="min-width:120px;">observables<br><span class="dim" style="font-size:0.7em;">uint8[S,O]</span></div>
+      <div class="flow-box output" style="min-width:120px;">exp_vals<br><span class="dim" style="font-size:0.7em;">float64[S,E]</span></div>
+    </div>
+    <div class="arrow-down">&darr; <span style="font-size:0.6em;">aggregation</span></div>
+    <div class="flow-row" style="gap:1em;">
+      <div class="flow-box green" style="min-width:130px;">survival_rate<br><span class="dim" style="font-size:0.7em;">passed / total</span></div>
+      <div class="flow-box green" style="min-width:130px;">error_rate<br><span class="dim" style="font-size:0.7em;">logical_errors / passed</span></div>
+      <div class="flow-box green" style="min-width:130px;">observable_ones<br><span class="dim" style="font-size:0.7em;">per-obs counts</span></div>
+      <div class="flow-box green" style="min-width:130px;">throughput<br><span class="dim" style="font-size:0.7em;">shots/s</span></div>
+    </div>
+  </div>
+  <p class="dim small" style="text-align:center; margin-top:0.5em;">S = shots, M = measurements, D = detectors, O = observables, E = expectation values</p>
+</section>
+
+<section>
+  <h2>Python vs GPU CLI: Output Comparison</h2>
+  <div class="cols">
+    <div>
+      <h3>Python API (CPU)</h3>
+      <ul class="compact">
+        <li><span class="hl">Per-shot</span> record arrays (numpy)</li>
+        <li>Full measurement, detector, observable records</li>
+        <li>Caller does aggregation</li>
+        <li>Can inspect individual shots</li>
+        <li>Memory: O(shots * records)</li>
+      </ul>
+      <pre><code class="language-python"># You get the raw data
+result = clifft.sample(prog, 10000)
+error_rate = np.mean(result.observables)
+detection_counts = result.detectors.sum(axis=0)</code></pre>
+    </div>
+    <div>
+      <h3>GPU CLI (CUDA/HIP)</h3>
+      <ul class="compact">
+        <li><span class="accent">Aggregated</span> statistics (JSON)</li>
+        <li>No per-shot records (GPU-side reduction)</li>
+        <li>Pre-computed rates and counts</li>
+        <li>Constant memory output</li>
+        <li>Memory: O(1) output</li>
+      </ul>
+      <pre><code class="language-json">// You get the summary
+{
+  "passed_shots": 9876543,
+  "logical_errors": 42,
+  "survival_rate": 0.9877,
+  "shots_per_second_total": 1200000
+}</code></pre>
+    </div>
+  </div>
+</section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 9: File Formats Summary -->
+<!-- ============================================================ -->
+<section>
+<section class="section-title">
+  <span class="section-num">09</span>
+  <h2>File Formats Summary</h2>
+  <p class="dim" style="text-align:center;">Complete reference table</p>
+</section>
+
+<section>
+  <h2>I/O Formats &mdash; Master Reference</h2>
+  <table style="font-size:0.72em;">
+    <thead>
+      <tr>
+        <th>Format</th>
+        <th>Direction</th>
+        <th>Used By</th>
+        <th>Data Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="hl">.stim file</span></td>
+        <td><span class="badge input">INPUT</span></td>
+        <td>All backends</td>
+        <td>Text (line-oriented)</td>
+        <td>Circuit definition in Stim format with Clifft extensions (T, T_DAG, RZ)</td>
+      </tr>
+      <tr>
+        <td><span class="hl">Python string</span></td>
+        <td><span class="badge input">INPUT</span></td>
+        <td>CPU Python API</td>
+        <td>str</td>
+        <td>Inline circuit text passed to clifft.compile()</td>
+      </tr>
+      <tr>
+        <td><span class="hl">numpy arrays</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>Python API</td>
+        <td>uint8 / float64</td>
+        <td>Per-shot measurement, detector, observable records</td>
+      </tr>
+      <tr>
+        <td><span class="hl">SampleResult</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>Python API</td>
+        <td>Python object</td>
+        <td>Structured container with arrays + survivor stats</td>
+      </tr>
+      <tr>
+        <td><span class="hl">JSON stdout</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>GPU CLI</td>
+        <td>JSON object</td>
+        <td>Aggregated results: counts, rates, timing</td>
+      </tr>
+      <tr>
+        <td><span class="hl">JSON dict</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>Python GPU wrapper</td>
+        <td>dict[str, Any]</td>
+        <td>Same fields as CLI JSON, as Python dict</td>
+      </tr>
+      <tr>
+        <td><span class="hl">float64 array</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>Probability API</td>
+        <td>ndarray[float64]</td>
+        <td>Exact Born / record probabilities</td>
+      </tr>
+      <tr>
+        <td><span class="hl">complex128</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>Statevector API</td>
+        <td>complex128</td>
+        <td>Single basis-state amplitude</td>
+      </tr>
+      <tr>
+        <td><span class="hl">Diagnostics</span></td>
+        <td><span class="badge output">OUTPUT</span></td>
+        <td>GPU backends</td>
+        <td>JSON / dataclass</td>
+        <td>GPU availability: driver, toolkit, device arch</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>End-to-End I/O Map</h2>
+  <div style="margin-top:0.5em;">
+    <div class="diagram" style="flex-direction:column; gap:0.4em;">
+      <!-- Input layer -->
+      <div style="text-align:center; color:var(--dim); font-size:0.75em; font-weight:600; letter-spacing:0.1em;">INPUTS</div>
+      <div class="flow-row" style="gap:1.2em;">
+        <div class="box" style="min-width:150px;">.stim file<br><span class="dim" style="font-size:0.7em;">on disk</span></div>
+        <div class="box" style="min-width:150px;">Python string<br><span class="dim" style="font-size:0.7em;">inline circuit</span></div>
+      </div>
+
+      <div class="arrow-down">&darr;</div>
+
+      <!-- Processing layer -->
+      <div style="text-align:center; color:var(--dim); font-size:0.75em; font-weight:600; letter-spacing:0.1em;">COMPILATION</div>
+      <div class="flow-row">
+        <div class="box accent-box" style="min-width:350px; padding:0.8em;">
+          Clifft Compiler Pipeline<br>
+          <span style="font-size:0.7em;">parse &rarr; trace &rarr; HIR optimize &rarr; lower &rarr; bytecode optimize</span>
+        </div>
+      </div>
+
+      <div class="arrow-down">&darr;</div>
+
+      <div style="text-align:center; color:var(--dim); font-size:0.75em; font-weight:600; letter-spacing:0.1em;">EXECUTION</div>
+      <div class="flow-row" style="gap:1.2em;">
+        <div class="box green-box" style="min-width:140px;">CPU SVM<br><span style="font-size:0.7em;">OpenMP threads</span></div>
+        <div class="box orange-box" style="min-width:140px;">CUDA Kernel<br><span style="font-size:0.7em;">NVIDIA GPU</span></div>
+        <div class="box purple-box" style="min-width:140px;">HIP Kernel<br><span style="font-size:0.7em;">AMD GPU</span></div>
+      </div>
+
+      <div class="arrow-down">&darr;</div>
+
+      <!-- Output layer -->
+      <div style="text-align:center; color:var(--dim); font-size:0.75em; font-weight:600; letter-spacing:0.1em;">OUTPUTS</div>
+      <div class="flow-row" style="gap:0.8em;">
+        <div class="flow-box output" style="font-size:0.8em;">numpy arrays<br><span class="dim" style="font-size:0.75em;">per-shot records</span></div>
+        <div class="flow-box output" style="font-size:0.8em;">SampleResult<br><span class="dim" style="font-size:0.75em;">structured object</span></div>
+        <div class="flow-box output" style="font-size:0.8em;">JSON<br><span class="dim" style="font-size:0.75em;">aggregated stats</span></div>
+        <div class="flow-box output" style="font-size:0.8em;">float64 / complex<br><span class="dim" style="font-size:0.75em;">probabilities</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Quick API Cheat Sheet</h2>
+  <div class="cols">
+    <div>
+      <h3>Compile &amp; Sample (CPU)</h3>
+      <pre><code class="language-python">import clifft
+
+# Compile
+prog = clifft.compile(
+    open("circuit.stim").read(),
+    normalize_syndromes=True,
+)
+
+# Sample
+r = clifft.sample(prog, shots=10000)
+r.measurements  # [S, M] uint8
+r.detectors     # [S, D] uint8
+r.observables   # [S, O] uint8
+
+# Survivors
+r = clifft.sample_survivors(prog, 100000)
+r.passed_shots, r.logical_errors
+
+# Importance sampling
+r = clifft.sample_k(prog, 10000, k=2)
+
+# Exact probabilities
+p = clifft.basis_probabilities(
+    prog, ["00", "11"])
+p = clifft.record_probabilities(
+    prog, ["01", "10"])</code></pre>
+    </div>
+    <div>
+      <h3>GPU (CLI &amp; Python)</h3>
+      <pre><code class="language-bash"># CLI
+./run_msc_hip \
+  --circuit circuit.stim \
+  --shots 100000000 \
+  --seed 42 \
+  --postselection all \
+  > results.json</code></pre>
+      <pre><code class="language-python"># Python wrapper
+from clifft_cuda.compiler import (
+    compile_for_survivors,
+)
+from clifft_cuda.backends import (
+    sample_survivors_hip,
+    sample_survivors_cpu,
+)
+
+w = compile_for_survivors(
+    Path("circuit.stim"),
+    shots=100_000_000,
+    seed=42,
+)
+summary = sample_survivors_hip(w)
+print(summary["survival_rate"])
+print(summary["logical_errors"])</code></pre>
+    </div>
+  </div>
+</section>
+
+<section class="section-title">
+  <h2 style="font-size:2.2em; border:none;">End of I/O Formats</h2>
+  <p style="text-align:center; color:var(--dim); font-size:0.9em; margin-top:1em;">
+    Stim circuits in &rarr; Compiled bytecode &rarr; Numpy arrays / JSON out
+  </p>
+  <div style="text-align:center; margin-top:2em;">
+    <div style="display:inline-flex; gap:2em;">
+      <div style="text-align:center;">
+        <div class="accent" style="font-size:2em; font-weight:900;">3</div>
+        <div class="dim small">Input paths</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="accent" style="font-size:2em; font-weight:900;">6</div>
+        <div class="dim small">Sampling functions</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="accent" style="font-size:2em; font-weight:900;">9</div>
+        <div class="dim small">Output formats</div>
+      </div>
+      <div style="text-align:center;">
+        <div class="accent" style="font-size:2em; font-weight:900;">3</div>
+        <div class="dim small">Backends</div>
+      </div>
+    </div>
+  </div>
+</section>
+</section>
+
+</div><!-- .slides -->
+</div><!-- .reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  width: 1280,
+  height: 720,
+  margin: 0.04,
+  transition: 'slide',
+  backgroundTransition: 'fade',
+  plugins: [ RevealHighlight ],
+  highlight: { highlightOnLoad: true },
+});
+</script>
+</body>
+</html>

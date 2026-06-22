@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft SVM &mdash; Schr&ouml;dinger Virtual Machine</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+<style>
+  :root {
+    --bg-dark: #1a1a2e;
+    --purple: #c084fc;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --text-dim: #888;
+    --text: #e0e0e0;
+    --accent: #e94560;
+    --secondary: #0f3460;
+    --highlight: #53d8fb;
+    --text: #e8e8e8;
+    --dim: #8892b0;
+    --code-bg: #16213e;
+    --success: #4ade80;
+    --warn: #fbbf24;
+  }
+  .reveal { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: var(--text); }
+  .reveal .slides { text-align: left; }
+  .reveal .slides section { background: var(--bg-dark); }
+  .reveal h1 { font-size: 2.2em; color: var(--accent); font-weight: 700; text-align: center; margin-bottom: 0.3em; }
+  .reveal h2 { font-size: 1.6em; color: var(--highlight); font-weight: 600; border-bottom: 2px solid var(--accent); padding-bottom: 0.15em; margin-bottom: 0.4em; }
+  .reveal h3 { font-size: 1.2em; color: var(--accent); font-weight: 600; margin-bottom: 0.3em; }
+  .reveal h4 { font-size: 1.0em; color: var(--highlight); margin-bottom: 0.2em; }
+  .reveal p, .reveal li { font-size: 0.72em; line-height: 1.55; }
+  .reveal ul { margin-left: 1.2em; }
+  .reveal li { margin-bottom: 0.2em; }
+  .reveal code { background: var(--code-bg); color: var(--highlight); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
+  .reveal pre { background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 8px; padding: 0.7em; margin: 0.4em 0; }
+  .reveal pre code { background: transparent; padding: 0; font-size: 0.7em; }
+  .reveal .accent { color: var(--accent); }
+  .reveal .hl { color: var(--highlight); }
+  .reveal .dim { color: var(--dim); }
+  .reveal .success { color: var(--success); }
+  .reveal .warn { color: var(--warn); }
+  .reveal strong { color: var(--accent); }
+  .reveal em { color: var(--highlight); font-style: normal; }
+
+  /* ================================================================ */
+  /* DIAGRAM FRAMEWORK                                                */
+  /* ================================================================ */
+  .diagram-box {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.45em 0.9em; border-radius: 8px; font-size: 0.68em;
+    font-weight: 600; text-align: center; line-height: 1.3;
+    white-space: nowrap; min-width: 2.5em;
+  }
+  .box-primary   { background: var(--secondary); border: 2px solid var(--highlight); color: var(--highlight); }
+  .box-accent    { background: #3b1029; border: 2px solid var(--accent); color: var(--accent); }
+  .box-success   { background: #0c2e1c; border: 2px solid var(--success); color: var(--success); }
+  .box-warn      { background: #2e2a0c; border: 2px solid var(--warn); color: var(--warn); }
+  .box-dim       { background: #1e1e3a; border: 2px solid var(--dim); color: var(--dim); }
+  .box-gpu       { background: #1a0a2e; border: 2px solid #a855f7; color: #a855f7; }
+
+  .arrow { color: var(--dim); font-size: 1.3em; margin: 0 0.3em; display: inline-flex; align-items: center; }
+  .arrow-down { color: var(--dim); font-size: 1.2em; text-align: center; margin: 0.2em 0; }
+
+  .flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em; margin: 0.5em 0; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; gap: 0.15em; margin: 0.4em 0; }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8em; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1em; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 1em; }
+
+  /* Cards */
+  .card {
+    background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 10px;
+    padding: 0.7em; margin: 0.3em 0;
+  }
+  .card-accent { border-color: var(--accent); }
+  .card-hl     { border-color: var(--highlight); }
+
+  /* Table */
+  .reveal table { font-size: 0.65em; border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+  .reveal th { background: var(--secondary); color: var(--highlight); padding: 0.4em 0.6em; border: 1px solid #2a3a5e; text-align: left; }
+  .reveal td { padding: 0.35em 0.6em; border: 1px solid #2a3a5e; }
+
+  /* State diagram */
+  .state-block {
+    display: flex; align-items: stretch; border: 2px solid var(--highlight);
+    border-radius: 10px; overflow: hidden; margin: 0.5em auto; max-width: 95%;
+  }
+  .state-segment {
+    padding: 0.5em 0.8em; text-align: center; font-size: 0.62em;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .state-label { font-weight: 700; font-size: 1.1em; margin-bottom: 0.2em; }
+  .state-detail { font-size: 0.85em; color: var(--dim); }
+
+  /* Pipeline step boxes */
+  .pipeline-step {
+    display: flex; align-items: flex-start; gap: 0.6em; margin: 0.35em 0;
+  }
+  .pipeline-num {
+    flex-shrink: 0; width: 1.8em; height: 1.8em; border-radius: 50%;
+    background: var(--accent); color: #fff; display: flex; align-items: center;
+    justify-content: center; font-weight: 800; font-size: 0.75em;
+  }
+  .pipeline-content { flex: 1; }
+
+  /* Opcode table compact */
+  .opcode-group { margin-bottom: 0.4em; }
+  .opcode-group-title { font-size: 0.7em; color: var(--accent); font-weight: 700; border-bottom: 1px solid #2a3a5e; padding-bottom: 0.15em; margin-bottom: 0.2em; }
+  .opcode-list { font-size: 0.58em; color: var(--dim); line-height: 1.5; font-family: 'Consolas', monospace; }
+  .opcode-list .op { color: var(--highlight); }
+
+  /* Big number */
+  .big-num { font-size: 2.5em; font-weight: 800; color: var(--accent); text-align: center; margin: 0.2em 0; }
+  .big-label { font-size: 0.7em; color: var(--dim); text-align: center; }
+
+  /* Title slide */
+  .title-slide { text-align: center !important; }
+  .title-slide h1 { font-size: 3em; margin-bottom: 0.1em; }
+  .title-slide .subtitle { font-size: 1.1em; color: var(--highlight); margin-bottom: 1.5em; }
+  .title-slide .meta { font-size: 0.7em; color: var(--dim); }
+
+  /* Section divider */
+  .section-divider { text-align: center !important; display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+  .section-divider h1 { font-size: 2.8em; }
+  .section-divider .section-num { font-size: 5em; font-weight: 900; color: var(--secondary); opacity: 0.5; margin-bottom: -0.3em; }
+
+  /* Horizontal rule */
+  .reveal hr { border: none; border-top: 1px solid #2a3a5e; margin: 0.5em 0; }
+
+  /* Fragment highlight */
+  .reveal .fragment.highlight-accent.visible { color: var(--accent); }
+
+  /* ================================================================ */
+  /* PART 1 CUSTOM: Memory map, byte-layout, Pauli grid               */
+  /* ================================================================ */
+  .mem-map {
+    display: flex; align-items: stretch; border-radius: 8px; overflow: hidden;
+    margin: 0.5em auto; border: 2px solid var(--highlight); max-width: 95%;
+    font-size: 0.6em;
+  }
+  .mem-cell {
+    padding: 0.4em 0.5em; text-align: center; display: flex; flex-direction: column;
+    justify-content: center; border-right: 1px solid rgba(255,255,255,0.1);
+  }
+  .mem-cell:last-child { border-right: none; }
+  .mem-cell-label { font-weight: 700; font-size: 0.95em; }
+  .mem-cell-sub { font-size: 0.78em; color: var(--dim); margin-top: 0.15em; }
+
+  .byte-layout {
+    display: grid; grid-template-columns: repeat(32, 1fr); gap: 1px;
+    margin: 0.5em auto; max-width: 95%; font-size: 0.48em;
+  }
+  .byte-cell {
+    background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 3px;
+    text-align: center; padding: 0.3em 0; font-family: 'Consolas', monospace;
+    color: var(--dim);
+  }
+  .byte-span {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0.35em 0.15em; font-family: 'Consolas', monospace;
+    border: 1px solid #2a3a5e; border-radius: 3px; text-align: center;
+  }
+  .byte-span-label { font-weight: 700; font-size: 1.1em; }
+  .byte-span-offset { font-size: 0.85em; color: var(--dim); }
+
+  .pauli-grid {
+    display: grid; grid-template-columns: auto auto auto auto;
+    gap: 2px; margin: 0.4em auto; max-width: 70%; font-size: 0.65em;
+  }
+  .pauli-cell {
+    text-align: center; padding: 0.35em 0.6em; border-radius: 5px;
+    font-family: 'Consolas', monospace; font-weight: 700;
+  }
+  .pauli-header { background: var(--secondary); color: var(--highlight); }
+  .pauli-I  { background: #1e1e3a; color: var(--dim); }
+  .pauli-X  { background: #2e0a1a; color: var(--accent); }
+  .pauli-Z  { background: #0a1a2e; color: var(--highlight); }
+  .pauli-Y  { background: #1a2e0a; color: var(--success); }
+
+  /* Gate transform visual */
+  .gate-transform {
+    display: flex; align-items: center; justify-content: center; gap: 0.8em;
+    margin: 0.4em 0; font-size: 0.72em;
+  }
+  .gate-box {
+    background: var(--code-bg); border: 2px solid var(--highlight); border-radius: 8px;
+    padding: 0.4em 0.8em; font-family: 'Consolas', monospace; text-align: center;
+    min-width: 6em;
+  }
+  .gate-box-accent { border-color: var(--accent); }
+  .gate-arrow { color: var(--accent); font-size: 1.4em; font-weight: 700; }
+
+  /* Qubit row diagram */
+  .qubit-row {
+    display: flex; align-items: center; gap: 0; margin: 0.15em 0; font-size: 0.6em;
+  }
+  .qubit-label {
+    width: 2.5em; text-align: right; padding-right: 0.4em; color: var(--dim);
+    font-family: 'Consolas', monospace;
+  }
+  .qubit-wire {
+    flex: 1; height: 2px; background: var(--dim); position: relative;
+  }
+  .qubit-gate {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2em; height: 2em; background: var(--secondary); border: 2px solid var(--highlight);
+    border-radius: 6px; color: var(--highlight); font-weight: 700; font-size: 0.95em;
+    font-family: 'Consolas', monospace; z-index: 2; position: relative;
+  }
+  .qubit-gate-accent { border-color: var(--accent); background: #3b1029; color: var(--accent); }
+
+  /* Comparison bars */
+  .compare-row {
+    display: flex; align-items: center; gap: 0.6em; margin: 0.3em 0; font-size: 0.65em;
+  }
+  .compare-label { width: 8em; text-align: right; color: var(--dim); flex-shrink: 0; }
+  .compare-bar {
+    height: 26px; border-radius: 6px; display: flex; align-items: center;
+    padding-left: 0.6em; font-weight: 700; font-size: 0.85em; color: #fff;
+    transition: width 0.8s ease;
+  }
+
+  /* SVG inline overrides */
+  .reveal svg text { font-family: 'Consolas', 'Fira Code', monospace; }
+
+  /* Responsive fixes */
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+  }
+  /* ================================================================ */
+  /* MISSING CLASS DEFINITIONS (merged from part2)                   */
+  /* ================================================================ */
+
+  /* Section dividers */
+  .section-title { text-align: center; }
+  .section-title h1 { font-size: 2em; }
+  .section-num { font-size: 0.7em; color: var(--dim); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.2em; text-align: center; }
+  .section-line { width: 60px; height: 3px; background: var(--accent); margin: 0.5em auto; border-radius: 2px; }
+
+  /* Diagram container */
+  .diagram { background: rgba(15,52,96,0.15); border: 1px solid #2a3a5e; border-radius: 10px; padding: 1em; margin: 0.5em 0; }
+  .diagram-label { text-align: center; font-size: 0.6em; color: var(--dim); margin-top: 0.5em; font-style: italic; }
+
+  /* Callout boxes */
+  .callout { border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; font-size: 0.7em; }
+  .callout.info { background: rgba(83,216,251,0.1); border-left: 3px solid var(--highlight); }
+  .callout.warning { background: rgba(251,191,36,0.1); border-left: 3px solid var(--warn); }
+  .callout.success { background: rgba(74,222,128,0.1); border-left: 3px solid var(--success); }
+
+  /* Compare row */
+  .compare-row { display: flex; gap: 0.8em; margin: 0.5em 0; }
+  .compare-box { flex: 1; background: var(--code-bg); border-top: 3px solid var(--highlight); border-radius: 0 0 8px 8px; padding: 0.6em; font-size: 0.7em; }
+  .compare-box.alt { border-top-color: var(--accent); }
+
+  /* Timeline segments for noise diagram */
+  .timeline-segment { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; }
+  .timeline-silent { background: #16213e; }
+  .timeline-fire { background: var(--accent); border-radius: 4px; }
+
+  /* Dispatch flow diagram */
+  .dispatch-flow { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .dispatch-node { padding: 6px 14px; border-radius: 6px; font-size: 0.7em; font-weight: 600; text-align: center; }
+  .dispatch-node.env { background: rgba(251,191,36,0.15); border: 1px solid var(--warn); color: var(--warn); }
+  .dispatch-node.check { background: rgba(83,216,251,0.1); border: 1px solid var(--highlight); color: var(--highlight); }
+  .dispatch-node.result { background: rgba(74,222,128,0.1); border: 1px solid var(--success); color: var(--success); min-width: 180px; }
+  .dispatch-branch { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .dispatch-branch-label { font-size: 0.6em; color: var(--dim); margin-bottom: 4px; }
+
+  /* Mode cards */
+  .mode-card { background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 8px; padding: 0.6em; }
+
+  /* PRNG state visualization */
+  .prng-state { display: flex; gap: 4px; justify-content: center; margin: 0.5em 0; }
+  .prng-word { width: 60px; height: 30px; background: var(--secondary); border: 1px solid var(--highlight); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.65em; color: var(--highlight); font-weight: 700; font-family: monospace; }
+
+  /* Memory block visualization */
+  .mem-block { display: inline-flex; align-items: center; justify-content: center; padding: 0.3em 0.6em; border-radius: 4px; font-size: 0.65em; font-weight: 600; font-family: monospace; }
+  .mem-block.active { background: rgba(233,69,96,0.2); border: 1px solid var(--accent); color: var(--accent); }
+  .mem-block.zero { background: rgba(136,146,176,0.1); border: 1px solid #333; color: #555; }
+
+  /* Scale bars */
+  .scale-bar { height: 18px; border-radius: 3px; display: flex; align-items: center; padding: 0 8px; font-size: 0.6em; font-weight: 700; }
+
+  /* Summary */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8em; }
+  .summary-card { background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 10px; padding: 0.8em; text-align: center; }
+  .summary-card h3 { margin-bottom: 0.3em; }
+
+  /* Mode card variants */
+  .mode-card.m2 { border-left: 3px solid var(--highlight); }
+  .mode-card.m3 { border-left: 3px solid var(--accent); }
+  .mode-card.m4 { border-left: 3px solid var(--success); }
+  .mode-card.m5 { border-left: 3px solid var(--purple); }
+  .mode-card.m6 { border-left: 3px solid var(--warn); }
+
+  /* Misc helpers */
+  .bar { display: inline-block; height: 16px; border-radius: 3px; }
+  .label { font-size: 0.65em; color: var(--dim); }
+  .header { font-weight: 700; color: var(--highlight); }
+  .green { color: var(--green); }
+
+  /* font-size-override-applied */
+  .reveal { font-size: 24px !important; }
+  .reveal h1 { font-size: 1.8em !important; }
+  .reveal h2 { font-size: 1.4em !important; }
+  .reveal h3 { font-size: 1.1em !important; }
+  .reveal h4 { font-size: 0.9em !important; }
+  .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+  .reveal pre { font-size: 0.75em !important; }
+  .reveal code { font-size: 0.85em !important; }
+  .reveal .small { font-size: 0.7em !important; }
+  .reveal table { font-size: 0.8em !important; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================== -->
+<!-- TITLE SLIDE                                                     -->
+<!-- ============================================================== -->
+<section class="title-slide">
+  <h1>Schr&ouml;dinger Virtual Machine</h1>
+  <div class="subtitle">Inside Clifft's Bytecode Interpreter</div>
+  <div style="margin: 1.2em 0;">
+    <div class="flow-row">
+      <span class="diagram-box box-primary">Circuit</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">Compiler</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-warn">Bytecode</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">SVM</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary">Measurements</span>
+    </div>
+  </div>
+  <div class="meta">
+    Architecture, State, Compilation, Opcodes, Execution &amp; Performance
+  </div>
+</section>
+
+<!-- ============================================================== -->
+<!-- SECTION 1: WHAT IS THE SVM?                                     -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">1</div>
+  <h1>What is the SVM?</h1>
+</section>
+
+<!-- Slide 1.1: The SVM Analogy -->
+<section>
+  <h2>The SVM: A Bytecode Interpreter for Quantum</h2>
+  <div class="grid-2">
+    <div>
+      <h3>JVM Analogy</h3>
+      <div class="flow-col" style="margin:0.4em 0;">
+        <div class="flow-row">
+          <span class="diagram-box box-dim">Java Source</span>
+          <span class="arrow">&rarr;</span>
+          <span class="diagram-box box-warn">.class bytecode</span>
+        </div>
+        <div class="arrow-down">&darr;</div>
+        <div class="flow-row">
+          <span class="diagram-box box-success">JVM Executes</span>
+        </div>
+      </div>
+      <h3>SVM Analogy</h3>
+      <div class="flow-col" style="margin:0.4em 0;">
+        <div class="flow-row">
+          <span class="diagram-box box-dim">Stim Circuit</span>
+          <span class="arrow">&rarr;</span>
+          <span class="diagram-box box-warn">CompiledModule</span>
+        </div>
+        <div class="arrow-down">&darr;</div>
+        <div class="flow-row">
+          <span class="diagram-box box-success">SVM Executes</span>
+        </div>
+      </div>
+    </div>
+    <div class="card card-hl">
+      <h4>Why a Virtual Machine?</h4>
+      <ul>
+        <li>Decouple <strong>compilation</strong> (expensive, once) from <strong>execution</strong> (fast, millions of shots)</li>
+        <li>Compact bytecode is <strong>cache-friendly</strong> &mdash; 32-byte aligned instructions</li>
+        <li>Optimizer can fuse, reorder, and specialize ops <strong>before</strong> execution</li>
+        <li>Same bytecode can run on <strong>CPU or GPU</strong> backends</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 1.2: Input/Output -->
+<section>
+  <h2>Input &amp; Output</h2>
+  <div style="margin: 0.6em 0;">
+    <div class="flow-row" style="gap:0.4em;">
+      <div class="diagram-box box-warn" style="font-size:0.62em;padding:0.5em 1em;">
+        <div><strong style="color:var(--warn);">CompiledModule</strong></div>
+      </div>
+      <span class="arrow">&rarr;</span>
+      <div style="border:2px solid var(--success);border-radius:12px;padding:0.5em 1.5em;text-align:center;">
+        <div style="font-size:0.75em;font-weight:700;color:var(--success);">SVM</div>
+        <div style="font-size:0.55em;color:var(--dim);">execute(program, state)</div>
+      </div>
+      <span class="arrow">&rarr;</span>
+      <div class="diagram-box box-primary" style="font-size:0.62em;padding:0.5em 1em;">
+        <div><strong style="color:var(--highlight);">SampleResult</strong></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:0.5em;">
+    <div class="card">
+      <h4>CompiledModule Contains</h4>
+      <ul>
+        <li><code class="nohighlight">bytecode</code> &mdash; vector of 32-byte <code class="nohighlight">Instruction</code>s</li>
+        <li><code class="nohighlight">constant_pool</code> &mdash; Pauli masks, fused unitaries, noise sites</li>
+        <li><code class="nohighlight">peak_rank</code> &mdash; max active dimension <em>k</em> needed</li>
+        <li><code class="nohighlight">num_qubits</code>, <code class="nohighlight">num_measurements</code>, metadata</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>SampleResult Contains</h4>
+      <ul>
+        <li><code class="nohighlight">meas_record</code> &mdash; measurement outcomes (per shot)</li>
+        <li><code class="nohighlight">det_record</code> &mdash; detector parities</li>
+        <li><code class="nohighlight">obs_record</code> &mdash; observable parities</li>
+        <li><code class="nohighlight">exp_vals</code> &mdash; expectation value probes (optional)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card card-accent" style="margin-top:0.4em;">
+    <p style="text-align:center;margin:0;">
+      <code class="nohighlight">sample(program, shots=10_000_000)</code> &mdash; compile once, execute millions of independent shots
+    </p>
+  </div>
+</section>
+
+<!-- Slide 1.3: The Core Trick -->
+<section>
+  <h2>The Core Trick: Factored State</h2>
+  <div class="state-block" style="margin:0.6em auto;">
+    <div class="state-segment" style="background:var(--secondary);flex:5;">
+      <div class="state-label" style="color:var(--success);">Cheap: Pauli Frame</div>
+      <div class="state-detail">Clifford gates &rarr; O(1) bit ops</div>
+      <div class="state-detail" style="color:var(--success);">H, S, CNOT, CZ, SWAP</div>
+    </div>
+    <div class="state-segment" style="background:#3b1029;flex:2;">
+      <div class="state-label" style="color:var(--accent);">Expensive: Amplitudes</div>
+      <div class="state-detail">Non-Clifford &rarr; O(2<sup>k</sup>)</div>
+      <div class="state-detail" style="color:var(--accent);">T, Rz(&theta;)</div>
+    </div>
+  </div>
+  <div style="text-align:center;margin:0.6em 0;">
+    <div style="font-size:0.85em;font-family:'Consolas',monospace;color:var(--highlight);background:var(--code-bg);display:inline-block;padding:0.5em 1.5em;border-radius:8px;border:1px solid #2a3a5e;">
+      |&psi;&rang; = &gamma; &middot; U<sub>C</sub> &middot; P &middot; ( |&phi;&rang;<sub>A</sub> &otimes; |0&rang;<sub>D</sub> )
+    </div>
+  </div>
+  <div class="grid-3" style="margin-top:0.5em;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:1.8em;font-weight:800;color:var(--success);">O(1)</div>
+      <div style="font-size:0.65em;color:var(--dim);">per Clifford gate</div>
+      <div style="font-size:0.6em;">update <code class="nohighlight">p_x</code>, <code class="nohighlight">p_z</code> bits</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:1.8em;font-weight:800;color:var(--accent);">O(2<sup>k</sup>)</div>
+      <div style="font-size:0.65em;color:var(--dim);">per non-Clifford gate</div>
+      <div style="font-size:0.6em;">strided loop over <code class="nohighlight">v[]</code></div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:1.8em;font-weight:800;color:var(--warn);">k &lt;&lt; n</div>
+      <div style="font-size:0.65em;color:var(--dim);">active qubits &lt;&lt; total</div>
+      <div style="font-size:0.6em;">QEC: k = 3&ndash;5 out of 1000s</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- SECTION 2: THE FACTORED STATE                                   -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">2</div>
+  <h1>The Factored State</h1>
+  <p style="color:var(--dim);font-size:0.8em;">SchrodingerState internals</p>
+</section>
+
+<!-- Slide 2.1: Three Components -->
+<section>
+  <h2>Three Components of SchrodingerState</h2>
+  <div style="margin:0.5em 0;">
+    <!-- Visual block diagram -->
+    <svg viewBox="0 0 800 220" style="width:100%;max-width:800px;display:block;margin:0 auto;">
+      <!-- Amplitude vector -->
+      <rect x="10" y="20" width="250" height="180" rx="12" fill="#16213e" stroke="#e94560" stroke-width="2.5"/>
+      <text x="135" y="55" text-anchor="middle" fill="#e94560" font-size="16" font-weight="700">Amplitude Vector v[]</text>
+      <text x="135" y="80" text-anchor="middle" fill="#8892b0" font-size="12">2^k complex doubles</text>
+      <!-- Mini array cells -->
+      <rect x="30" y="100" width="42" height="32" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+      <text x="51" y="121" text-anchor="middle" fill="#53d8fb" font-size="11">v[0]</text>
+      <rect x="77" y="100" width="42" height="32" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+      <text x="98" y="121" text-anchor="middle" fill="#53d8fb" font-size="11">v[1]</text>
+      <rect x="124" y="100" width="42" height="32" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+      <text x="145" y="121" text-anchor="middle" fill="#53d8fb" font-size="11">v[2]</text>
+      <text x="180" y="121" fill="#8892b0" font-size="14">...</text>
+      <rect x="195" y="100" width="46" height="32" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+      <text x="218" y="121" text-anchor="middle" fill="#53d8fb" font-size="10">v[2<tspan font-size="8" dy="-4">k</tspan><tspan dy="4">&minus;1]</tspan></text>
+      <text x="135" y="165" text-anchor="middle" fill="#e94560" font-size="11">64-byte aligned, complex&lt;double&gt;</text>
+      <text x="135" y="185" text-anchor="middle" fill="#8892b0" font-size="11">The EXPENSIVE part</text>
+
+      <!-- Pauli Frame -->
+      <rect x="290" y="20" width="250" height="180" rx="12" fill="#16213e" stroke="#53d8fb" stroke-width="2.5"/>
+      <text x="415" y="55" text-anchor="middle" fill="#53d8fb" font-size="16" font-weight="700">Pauli Frame</text>
+      <text x="415" y="80" text-anchor="middle" fill="#8892b0" font-size="12">2 x ceil(n/64) words of uint64</text>
+      <!-- p_x row -->
+      <text x="310" y="110" fill="#e94560" font-size="13" font-weight="600">p_x:</text>
+      <rect x="345" y="95" width="30" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+      <text x="360" y="111" text-anchor="middle" fill="#e94560" font-size="10">1</text>
+      <rect x="378" y="95" width="30" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+      <text x="393" y="111" text-anchor="middle" fill="#e94560" font-size="10">0</text>
+      <rect x="411" y="95" width="30" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+      <text x="426" y="111" text-anchor="middle" fill="#e94560" font-size="10">1</text>
+      <rect x="444" y="95" width="30" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+      <text x="459" y="111" text-anchor="middle" fill="#e94560" font-size="10">0</text>
+      <text x="485" y="111" fill="#8892b0" font-size="12">...</text>
+      <!-- p_z row -->
+      <text x="310" y="147" fill="#53d8fb" font-size="13" font-weight="600">p_z:</text>
+      <rect x="345" y="132" width="30" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+      <text x="360" y="148" text-anchor="middle" fill="#53d8fb" font-size="10">0</text>
+      <rect x="378" y="132" width="30" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+      <text x="393" y="148" text-anchor="middle" fill="#53d8fb" font-size="10">1</text>
+      <rect x="411" y="132" width="30" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+      <text x="426" y="148" text-anchor="middle" fill="#53d8fb" font-size="10">1</text>
+      <rect x="444" y="132" width="30" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+      <text x="459" y="148" text-anchor="middle" fill="#53d8fb" font-size="10">0</text>
+      <text x="485" y="148" fill="#8892b0" font-size="12">...</text>
+      <text x="415" y="185" text-anchor="middle" fill="#4ade80" font-size="11">The CHEAP part &mdash; O(1) updates</text>
+
+      <!-- Gamma -->
+      <rect x="570" y="20" width="220" height="180" rx="12" fill="#16213e" stroke="#fbbf24" stroke-width="2.5"/>
+      <text x="680" y="55" text-anchor="middle" fill="#fbbf24" font-size="16" font-weight="700">Global Scalar &gamma;</text>
+      <text x="680" y="85" text-anchor="middle" fill="#8892b0" font-size="12">complex&lt;double&gt;</text>
+      <text x="680" y="120" text-anchor="middle" fill="#fbbf24" font-size="28" font-weight="800">&gamma;</text>
+      <text x="680" y="155" text-anchor="middle" fill="#8892b0" font-size="11">phase tracking +</text>
+      <text x="680" y="175" text-anchor="middle" fill="#8892b0" font-size="11">deferred normalization</text>
+    </svg>
+  </div>
+  <div style="text-align:center;font-size:0.72em;margin-top:0.3em;">
+    <code class="nohighlight">|&psi;&rang; = &gamma; &middot; U<sub>C</sub> &middot; P &middot; ( |&phi;&rang;<sub>A</sub> &otimes; |0&rang;<sub>D</sub> )</code>
+    &nbsp;&nbsp;&mdash;&nbsp;&nbsp;
+    <em>k</em> active qubits, <em>n&minus;k</em> dormant qubits in |0&rang; state
+  </div>
+</section>
+
+<!-- Slide 2.2: Concrete Example -->
+<section>
+  <h2>Concrete Example: n=100, k=3</h2>
+  <div class="grid-2">
+    <div>
+      <h3>What the SVM Actually Stores</h3>
+      <div class="card card-hl" style="margin:0.3em 0;">
+        <h4>Amplitude Vector</h4>
+        <p>2<sup>3</sup> = <strong style="color:var(--accent);">8 complex numbers</strong></p>
+        <p>8 &times; 16 bytes = <em>128 bytes</em></p>
+      </div>
+      <div class="card" style="border-color:var(--success);margin:0.3em 0;">
+        <h4>Pauli Frame</h4>
+        <p>p_x: ceil(100/64) = <strong style="color:var(--accent);">2 words</strong> &rarr; <em>16 bytes</em></p>
+        <p>p_z: ceil(100/64) = <strong style="color:var(--accent);">2 words</strong> &rarr; <em>16 bytes</em></p>
+      </div>
+      <div class="card" style="border-color:var(--warn);margin:0.3em 0;">
+        <h4>Global Scalar &gamma;</h4>
+        <p>1 complex&lt;double&gt; &rarr; <em>16 bytes</em></p>
+      </div>
+      <hr>
+      <p style="font-size:0.8em;text-align:center;font-weight:700;">
+        Total: <span class="accent">128 + 16 + 16 + 16 = 176 bytes</span>
+      </p>
+    </div>
+    <div>
+      <h3>Memory Visualization</h3>
+      <div class="mem-map" style="flex-direction:column;border-color:var(--accent);">
+        <div style="display:flex;">
+          <div class="mem-cell" style="flex:8;background:#3b1029;">
+            <div class="mem-cell-label" style="color:var(--accent);">v[0..7]</div>
+            <div class="mem-cell-sub">128 bytes &mdash; 8 amplitudes</div>
+          </div>
+        </div>
+        <div style="display:flex;">
+          <div class="mem-cell" style="flex:1;background:var(--secondary);">
+            <div class="mem-cell-label" style="color:var(--highlight);">p_x</div>
+            <div class="mem-cell-sub">16 B</div>
+          </div>
+          <div class="mem-cell" style="flex:1;background:var(--secondary);">
+            <div class="mem-cell-label" style="color:var(--highlight);">p_z</div>
+            <div class="mem-cell-sub">16 B</div>
+          </div>
+          <div class="mem-cell" style="flex:1;background:#2e2a0c;">
+            <div class="mem-cell-label" style="color:var(--warn);">&gamma;</div>
+            <div class="mem-cell-sub">16 B</div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-accent" style="margin-top:0.5em;text-align:center;">
+        <div style="font-size:0.7em;color:var(--dim);">Full statevector for 100 qubits would need:</div>
+        <div class="big-num" style="font-size:1.6em;">2<sup>100</sup> &times; 16 B</div>
+        <div style="font-size:0.65em;color:var(--accent);font-weight:700;">&asymp; 2 &times; 10<sup>16</sup> TB &mdash; more than all storage on Earth</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 2.3: Pauli Frame Encoding -->
+<section>
+  <h2>Pauli Frame Encoding</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Two-Bit Encoding per Qubit</h3>
+      <p>Each qubit <em>i</em> has one bit in <code class="nohighlight">p_x</code> and one in <code class="nohighlight">p_z</code>:</p>
+      <div class="pauli-grid">
+        <div class="pauli-cell pauli-header">p_x[i]</div>
+        <div class="pauli-cell pauli-header">p_z[i]</div>
+        <div class="pauli-cell pauli-header">Pauli</div>
+        <div class="pauli-cell pauli-header">Effect</div>
+        <div class="pauli-cell pauli-I">0</div>
+        <div class="pauli-cell pauli-I">0</div>
+        <div class="pauli-cell pauli-I">I</div>
+        <div class="pauli-cell pauli-I">identity</div>
+        <div class="pauli-cell pauli-X">1</div>
+        <div class="pauli-cell pauli-X">0</div>
+        <div class="pauli-cell pauli-X">X</div>
+        <div class="pauli-cell pauli-X">bit-flip</div>
+        <div class="pauli-cell pauli-Z">0</div>
+        <div class="pauli-cell pauli-Z">1</div>
+        <div class="pauli-cell pauli-Z">Z</div>
+        <div class="pauli-cell pauli-Z">phase-flip</div>
+        <div class="pauli-cell pauli-Y">1</div>
+        <div class="pauli-cell pauli-Y">1</div>
+        <div class="pauli-cell pauli-Y">Y</div>
+        <div class="pauli-cell pauli-Y">both</div>
+      </div>
+    </div>
+    <div>
+      <h3>Stored as Packed uint64 Words</h3>
+      <pre><code class="nohighlight language-cpp">// Bit operations on Pauli frame
+// p_x and p_z are vectors of uint64_t
+
+// Read bit i:
+bool x = bit_get(p_x, i);
+bool z = bit_get(p_z, i);
+
+// Each uint64 word holds 64 qubits:
+// p_x = [ word0 | word1 | ... ]
+//         q0-q63  q64-q127
+
+// For n=100 qubits:
+//   ceil(100/64) = 2 words per array
+//   Total frame = 4 words = 32 bytes</code></pre>
+      <div class="card card-accent" style="margin-top:0.3em;">
+        <p style="margin:0;font-size:0.8em;">
+          Key: Clifford gates update <strong>only these bits</strong> &mdash; never touch the amplitude vector. This is why they are O(1).
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 2.4: Memory Comparison -->
+<section>
+  <h2>Memory: Full Statevector vs Clifft</h2>
+  <div style="margin:0.6em 0;">
+    <div class="compare-row">
+      <div class="compare-label" style="color:var(--accent);">Full Statevector</div>
+      <div class="compare-bar" style="width:95%;background:linear-gradient(90deg,#e94560,#a33050);">
+        2<sup>n</sup> &times; 16 bytes &mdash; EXPONENTIAL in n
+      </div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-label" style="color:var(--success);">Clifft Factored</div>
+      <div class="compare-bar" style="width:8%;background:linear-gradient(90deg,#4ade80,#22a060);min-width:12em;">
+        2<sup>k</sup> &times; 16 + O(n) bits
+      </div>
+    </div>
+  </div>
+  <table style="margin-top:0.4em;">
+    <thead>
+      <tr>
+        <th>Qubits (n)</th>
+        <th>Active (k)</th>
+        <th>Full Statevector</th>
+        <th>Clifft State</th>
+        <th>Savings</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>10</td>
+        <td>3</td>
+        <td>16 KiB</td>
+        <td style="color:var(--success);">176 B</td>
+        <td style="color:var(--success);">93&times;</td>
+      </tr>
+      <tr>
+        <td>100</td>
+        <td>3</td>
+        <td style="color:var(--accent);">2 &times; 10<sup>16</sup> TB</td>
+        <td style="color:var(--success);">176 B</td>
+        <td style="color:var(--success);">impossible &rarr; trivial</td>
+      </tr>
+      <tr>
+        <td>1,000</td>
+        <td>5</td>
+        <td style="color:var(--accent);">way beyond universe</td>
+        <td style="color:var(--success);">784 B</td>
+        <td style="color:var(--success);">impossible &rarr; trivial</td>
+      </tr>
+      <tr>
+        <td>17</td>
+        <td>17</td>
+        <td>2 MiB</td>
+        <td style="color:var(--warn);">2 MiB + 36 B</td>
+        <td style="color:var(--warn);">~1&times; (no advantage)</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="card card-hl" style="margin-top:0.3em;">
+    <p style="margin:0;text-align:center;">
+      The advantage is <strong>exponential</strong> whenever <em>k &lt;&lt; n</em> &mdash; which is exactly the QEC regime.
+    </p>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- SECTION 3: FROM CIRCUIT TO BYTECODE                             -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">3</div>
+  <h1>From Circuit to Bytecode</h1>
+  <p style="color:var(--dim);font-size:0.8em;">The compilation pipeline</p>
+</section>
+
+<!-- Slide 3.1: Compilation Pipeline -->
+<section>
+  <h2>The Compilation Pipeline</h2>
+  <div class="flow-col" style="margin:0.3em 0;">
+    <div class="flow-row" style="gap:0.15em;flex-wrap:wrap;">
+      <span class="diagram-box box-dim" style="font-size:0.58em;">Stim Text</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-primary" style="font-size:0.58em;">Parser</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-primary" style="font-size:0.58em;">Circuit (AST)</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-accent" style="font-size:0.58em;">Frontend (Trace)</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-warn" style="font-size:0.58em;">HIR</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-accent" style="font-size:0.58em;">Optimizer</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-accent" style="font-size:0.58em;">Backend (Lower)</span>
+      <span class="arrow" style="font-size:1em;">&rarr;</span>
+      <span class="diagram-box box-success" style="font-size:0.58em;">CompiledModule</span>
+    </div>
+  </div>
+  <div style="margin-top:0.4em;">
+    <div class="pipeline-step">
+      <div class="pipeline-num">1</div>
+      <div class="pipeline-content">
+        <strong>Parser</strong> &mdash; reads Stim-superset text, unrolls <code class="nohighlight">REPEAT</code> blocks, decomposes multi-target gates
+        <span class="dim" style="font-size:0.85em;">&rarr; <code class="nohighlight">Circuit</code> AST with <code class="nohighlight">nodes</code>, <code class="nohighlight">num_qubits</code>, <code class="nohighlight">num_measurements</code></span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">2</div>
+      <div class="pipeline-content">
+        <strong>Frontend (Trace)</strong> &mdash; drives Stim's <code class="nohighlight">TableauSimulator</code> to absorb all Clifford gates; emits <code class="nohighlight">HeisenbergOp</code>s only for T gates and measurements
+        <span class="dim" style="font-size:0.85em;">&rarr; <code class="nohighlight">HirModule</code> with Heisenberg IR</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">3</div>
+      <div class="pipeline-content">
+        <strong>Optimizer</strong> &mdash; fusion passes (ExpandT, Peephole, MultiGate, SwapMeas, SingleAxisFusion, TileAxisFusion)
+        <span class="dim" style="font-size:0.85em;">&rarr; optimized <code class="nohighlight">HirModule</code></span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">4</div>
+      <div class="pipeline-content">
+        <strong>Backend (Lower)</strong> &mdash; translates HIR ops into <code class="nohighlight">Instruction</code> bytecode, builds <code class="nohighlight">ConstantPool</code>
+        <span class="dim" style="font-size:0.85em;">&rarr; <code class="nohighlight">CompiledModule</code> ready for SVM</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 3.2: Tracing an Example -->
+<section>
+  <h2>Example: Tracing Through the Pipeline</h2>
+  <div class="card" style="margin-bottom:0.3em;">
+    <h4>Input Circuit</h4>
+    <pre><code class="nohighlight">H 0
+CNOT 0 1
+T 2
+M 0 1 2</code></pre>
+  </div>
+  <div class="grid-2">
+    <div>
+      <div class="card card-hl" style="margin:0.2em 0;">
+        <h4>After Parser &rarr; Circuit AST</h4>
+        <p style="font-size:0.85em;"><code class="nohighlight">nodes: [H(0), CNOT(0,1), T(2), M(0), M(1), M(2)]</code></p>
+        <p style="font-size:0.85em;"><code class="nohighlight">num_qubits: 3, num_measurements: 3</code></p>
+      </div>
+      <div class="card card-accent" style="margin:0.2em 0;">
+        <h4>After Frontend &rarr; HIR</h4>
+        <p style="font-size:0.85em;">Stim tableau absorbs H and CNOT (Clifford). Only T and measurements survive as <code class="nohighlight">HeisenbergOp</code>s:</p>
+        <pre style="font-size:0.85em;margin:0.2em 0;"><code class="nohighlight">ops: [
+  T_GATE(mask=Z2),      // T on qubit 2
+  MEASURE(mask=X0*X1),   // M on 0 (Heisenberg-rotated)
+  MEASURE(mask=Z0*Z1),   // M on 1
+  MEASURE(mask=Z2)       // M on 2
+]</code></pre>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--warn);margin:0.2em 0;">
+        <h4>After Optimizer</h4>
+        <p style="font-size:0.85em;">ExpandT pass may fuse the T-gate with EXPAND if qubit 2 is dormant. Peephole optimizations applied.</p>
+      </div>
+      <div class="card card-hl" style="margin:0.2em 0;">
+        <h4>After Backend &rarr; Bytecode</h4>
+        <pre style="font-size:0.85em;margin:0.2em 0;"><code class="nohighlight">Instruction[0]: OP_EXPAND_T  axis=2
+Instruction[1]: OP_MEAS_ACTIVE_INTERFERE
+                  axis=0, classical_idx=0
+Instruction[2]: OP_MEAS_ACTIVE_DIAGONAL
+                  axis=1, classical_idx=1
+Instruction[3]: OP_MEAS_ACTIVE_DIAGONAL
+                  axis=2, classical_idx=2</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 3.3: The 32-Byte Instruction Struct -->
+<section>
+  <h2>The 32-Byte Instruction Struct</h2>
+  <div style="margin:0.3em 0;">
+    <!-- Byte layout as visual blocks -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 3fr 3fr;gap:3px;max-width:95%;margin:0 auto;font-size:0.55em;">
+      <div class="byte-span" style="background:#3b1029;border-color:var(--accent);">
+        <div class="byte-span-label" style="color:var(--accent);">opcode</div>
+        <div class="byte-span-offset">byte 0</div>
+        <div class="byte-span-offset">uint8</div>
+      </div>
+      <div class="byte-span" style="background:#1e1e3a;border-color:var(--dim);">
+        <div class="byte-span-label" style="color:var(--dim);">rsv</div>
+        <div class="byte-span-offset">byte 1</div>
+        <div class="byte-span-offset">pad</div>
+      </div>
+      <div class="byte-span" style="background:#2e2a0c;border-color:var(--warn);">
+        <div class="byte-span-label" style="color:var(--warn);">flags</div>
+        <div class="byte-span-offset">byte 2</div>
+        <div class="byte-span-offset">uint8</div>
+      </div>
+      <div class="byte-span" style="background:#1e1e3a;border-color:var(--dim);">
+        <div class="byte-span-label" style="color:var(--dim);">pad</div>
+        <div class="byte-span-offset">byte 3</div>
+        <div class="byte-span-offset">pad</div>
+      </div>
+      <div class="byte-span" style="background:var(--secondary);border-color:var(--highlight);">
+        <div class="byte-span-label" style="color:var(--highlight);">axis_1</div>
+        <div class="byte-span-offset">bytes 4&ndash;5 &mdash; uint16</div>
+        <div class="byte-span-offset">target / control qubit</div>
+      </div>
+      <div class="byte-span" style="background:var(--secondary);border-color:var(--highlight);">
+        <div class="byte-span-label" style="color:var(--highlight);">axis_2</div>
+        <div class="byte-span-offset">bytes 6&ndash;7 &mdash; uint16</div>
+        <div class="byte-span-offset">second qubit (2-axis ops)</div>
+      </div>
+    </div>
+    <!-- Payload union -->
+    <div style="display:grid;grid-template-columns:1fr;gap:3px;max-width:95%;margin:4px auto 0;font-size:0.55em;">
+      <div class="byte-span" style="background:#16213e;border-color:var(--success);min-height:3em;">
+        <div class="byte-span-label" style="color:var(--success);">Payload Union &mdash; 24 bytes (offset 8&ndash;31)</div>
+        <div class="byte-span-offset" style="margin-top:0.3em;">
+          <span style="color:var(--accent);font-weight:600;">math:</span> weight_re + weight_im (2 doubles) &nbsp;|&nbsp;
+          <span style="color:var(--highlight);font-weight:600;">classical:</span> classical_idx + expected_val &nbsp;|&nbsp;
+          <span style="color:var(--warn);font-weight:600;">multi_gate:</span> 64-bit mask
+        </div>
+        <div class="byte-span-offset">
+          <span style="color:#a855f7;font-weight:600;">pauli:</span> cp_mask_idx + condition_idx &nbsp;|&nbsp;
+          <span style="color:var(--success);font-weight:600;">u2/u4:</span> cp_idx into ConstantPool fused nodes
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:0.4em;">
+    <div class="card">
+      <h4>Design Rationale</h4>
+      <ul>
+        <li><code class="nohighlight">alignas(32)</code> &mdash; fits exactly in one AVX-256 register / cache half-line</li>
+        <li>Fixed size = <strong>no pointer chasing</strong>, perfect for prefetch</li>
+        <li>Union payload &mdash; zero overhead, interpreted per opcode</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>Flag Bits</h4>
+      <ul>
+        <li><code class="nohighlight">FLAG_SIGN</code> (bit 0) &mdash; XOR measurement outcome</li>
+        <li><code class="nohighlight">FLAG_HIDDEN</code> (bit 1) &mdash; not in visible record</li>
+        <li><code class="nohighlight">FLAG_IDENTITY</code> (bit 2) &mdash; skip frame interaction</li>
+        <li><code class="nohighlight">FLAG_EXPECTED_ONE</code> (bit 3) &mdash; noiseless parity ref</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- SECTION 4: BYTECODE OPCODES                                     -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">4</div>
+  <h1>Bytecode Opcodes</h1>
+  <p style="color:var(--dim);font-size:0.8em;">The SVM instruction set</p>
+</section>
+
+<!-- Slide 4.1: Frame Opcodes -->
+<section>
+  <h2>Frame Opcodes &mdash; O(1) Pauli Updates</h2>
+  <p>These never touch the amplitude vector. Pure bitwise operations on <code class="nohighlight">p_x</code> and <code class="nohighlight">p_z</code>.</p>
+  <table>
+    <thead>
+      <tr><th>Opcode</th><th>Action on Pauli Frame</th><th>Cost</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_H</code></td>
+        <td>swap <code class="nohighlight">p_x[i]</code> &harr; <code class="nohighlight">p_z[i]</code></td>
+        <td style="color:var(--success);">1 XOR + swap</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_S</code></td>
+        <td><code class="nohighlight">p_z[i] ^= p_x[i]</code></td>
+        <td style="color:var(--success);">1 XOR</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_S_DAG</code></td>
+        <td><code class="nohighlight">p_z[i] ^= p_x[i]</code> (same + phase)</td>
+        <td style="color:var(--success);">1 XOR</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_CNOT</code></td>
+        <td><code class="nohighlight">p_x[t] ^= p_x[c]; p_z[c] ^= p_z[t]</code></td>
+        <td style="color:var(--success);">2 XORs</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_CZ</code></td>
+        <td><code class="nohighlight">p_z[i] ^= p_x[j]; p_z[j] ^= p_x[i]</code></td>
+        <td style="color:var(--success);">2 XORs</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight op" style="color:var(--highlight);">OP_FRAME_SWAP</code></td>
+        <td>swap <code class="nohighlight">p_x[i] &harr; p_x[j]</code> and <code class="nohighlight">p_z[i] &harr; p_z[j]</code></td>
+        <td style="color:var(--success);">2 swaps</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="card card-hl" style="margin-top:0.3em;">
+    <p style="margin:0;text-align:center;">
+      A QEC circuit with 10,000 Clifford gates &rarr; <strong>10,000 bitwise ops</strong>. No floating-point math.
+    </p>
+  </div>
+</section>
+
+<!-- Slide 4.2: Array Opcodes -->
+<section>
+  <h2>Array Opcodes &mdash; O(2<sup>k</sup>) Amplitude Operations</h2>
+  <p>These operate on the amplitude vector <code class="nohighlight">v[0..2<sup>k</sup>-1]</code> with strided loops.</p>
+  <div class="grid-2">
+    <div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Single-Qubit Array Ops</div>
+        <div class="opcode-list">
+          <span class="op">OP_ARRAY_H</span> &mdash; Hadamard on active qubit<br>
+          <span class="op">OP_ARRAY_S</span> / <span class="op">OP_ARRAY_S_DAG</span> &mdash; phase gate<br>
+          <span class="op">OP_ARRAY_T</span> / <span class="op">OP_ARRAY_T_DAG</span> &mdash; T gate (&pi;/8)<br>
+          <span class="op">OP_ARRAY_ROT</span> &mdash; arbitrary Rz(&theta;) rotation<br>
+          <span class="op">OP_ARRAY_U2</span> &mdash; fused single-axis 2&times;2 unitary
+        </div>
+      </div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Two-Qubit Array Ops</div>
+        <div class="opcode-list">
+          <span class="op">OP_ARRAY_CNOT</span> &mdash; controlled-NOT<br>
+          <span class="op">OP_ARRAY_CZ</span> &mdash; controlled-Z<br>
+          <span class="op">OP_ARRAY_SWAP</span> &mdash; swap two active qubits<br>
+          <span class="op">OP_ARRAY_U4</span> &mdash; fused 2-axis 4&times;4 unitary
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="opcode-group">
+        <div class="opcode-group-title">Multi-Gate (Fused) Ops</div>
+        <div class="opcode-list">
+          <span class="op">OP_ARRAY_MULTI_CNOT</span> &mdash; 64-bit bitmask of controls<br>
+          <span class="op">OP_ARRAY_MULTI_CZ</span> &mdash; 64-bit bitmask of targets
+        </div>
+      </div>
+      <div class="card card-accent" style="margin-top:0.5em;">
+        <h4>Strided Loop Pattern</h4>
+        <pre style="font-size:0.85em;"><code class="nohighlight language-cpp">// T gate on axis a among k active qubits:
+uint64_t stride = 1ULL << a;
+for (uint64_t i = 0; i < (1ULL << k); i++) {
+  if (i & stride)
+    v[i] *= exp(i*pi/4); // phase
+}</code></pre>
+        <p style="font-size:0.75em;color:var(--dim);margin:0;">Uses PDEP (BMI2) for branchless qubit indexing on x86.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 4.3: Subspace Opcodes -->
+<section>
+  <h2>Subspace Opcodes &mdash; Growing &amp; Shrinking k</h2>
+  <div class="grid-2">
+    <div>
+      <h3>OP_EXPAND: k &rarr; k+1</h3>
+      <div class="card card-hl">
+        <p>When a <strong>dormant</strong> qubit (in |0&rang;) needs to become <strong>active</strong> for a non-Clifford gate:</p>
+        <ol style="font-size:0.85em;">
+          <li>Allocate new vector of size 2<sup>k+1</sup></li>
+          <li>Copy existing amplitudes to even-indexed slots</li>
+          <li>Zero-fill odd-indexed slots (they correspond to |1&rang; of the new qubit)</li>
+          <li>Increment <code class="nohighlight">active_k</code></li>
+        </ol>
+      </div>
+      <div class="card" style="border-color:var(--warn);">
+        <h4>OP_EXPAND_T &mdash; Fused Expand+T</h4>
+        <p style="font-size:0.85em;">Combines expand and T-gate in one pass. Avoids allocating the intermediate state. The optimizer's <code class="nohighlight">ExpandTPass</code> produces these.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Visual: EXPAND doubles the vector</h3>
+      <svg viewBox="0 0 340 240" style="width:100%;max-width:340px;display:block;margin:0.3em auto;">
+        <!-- Before: k=2, 4 amplitudes -->
+        <text x="10" y="20" fill="#8892b0" font-size="13" font-weight="600">Before: k=2</text>
+        <rect x="10" y="30" width="70" height="35" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="45" y="53" text-anchor="middle" fill="#53d8fb" font-size="12">v[0]</text>
+        <rect x="85" y="30" width="70" height="35" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="120" y="53" text-anchor="middle" fill="#53d8fb" font-size="12">v[1]</text>
+        <rect x="160" y="30" width="70" height="35" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="195" y="53" text-anchor="middle" fill="#53d8fb" font-size="12">v[2]</text>
+        <rect x="235" y="30" width="70" height="35" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="270" y="53" text-anchor="middle" fill="#53d8fb" font-size="12">v[3]</text>
+
+        <!-- Arrow -->
+        <text x="160" y="90" text-anchor="middle" fill="#e94560" font-size="16" font-weight="700">EXPAND &darr;</text>
+
+        <!-- After: k=3, 8 amplitudes -->
+        <text x="10" y="120" fill="#8892b0" font-size="13" font-weight="600">After: k=3</text>
+        <rect x="10" y="130" width="35" height="35" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="27" y="152" text-anchor="middle" fill="#53d8fb" font-size="9">v[0]</text>
+        <rect x="48" y="130" width="35" height="35" rx="4" fill="#1e1e3a" stroke="#8892b0" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="65" y="152" text-anchor="middle" fill="#8892b0" font-size="9">0</text>
+        <rect x="86" y="130" width="35" height="35" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="103" y="152" text-anchor="middle" fill="#53d8fb" font-size="9">v[1]</text>
+        <rect x="124" y="130" width="35" height="35" rx="4" fill="#1e1e3a" stroke="#8892b0" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="141" y="152" text-anchor="middle" fill="#8892b0" font-size="9">0</text>
+        <rect x="162" y="130" width="35" height="35" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="179" y="152" text-anchor="middle" fill="#53d8fb" font-size="9">v[2]</text>
+        <rect x="200" y="130" width="35" height="35" rx="4" fill="#1e1e3a" stroke="#8892b0" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="217" y="152" text-anchor="middle" fill="#8892b0" font-size="9">0</text>
+        <rect x="238" y="130" width="35" height="35" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="255" y="152" text-anchor="middle" fill="#53d8fb" font-size="9">v[3]</text>
+        <rect x="276" y="130" width="35" height="35" rx="4" fill="#1e1e3a" stroke="#8892b0" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="293" y="152" text-anchor="middle" fill="#8892b0" font-size="9">0</text>
+
+        <!-- Legend -->
+        <rect x="10" y="185" width="14" height="14" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+        <text x="30" y="196" fill="#53d8fb" font-size="11">= copied from old vector</text>
+        <rect x="10" y="210" width="14" height="14" rx="3" fill="#1e1e3a" stroke="#8892b0" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="30" y="221" fill="#8892b0" font-size="11">= zero-filled (new qubit in |0&rang;)</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 4.4: Measurement Opcodes -->
+<section>
+  <h2>Measurement Opcodes</h2>
+  <p>Four categories based on whether the measured qubit is <strong>dormant vs active</strong> and the measurement <strong>basis</strong>.</p>
+  <table>
+    <thead>
+      <tr><th>Opcode</th><th>Qubit State</th><th>Measurement Type</th><th>Cost</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="nohighlight" style="color:var(--success);">OP_MEAS_DORMANT_STATIC</code></td>
+        <td>Dormant</td>
+        <td>Deterministic (known |0&rang; or |1&rang;)</td>
+        <td style="color:var(--success);">O(1)</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight" style="color:var(--success);">OP_MEAS_DORMANT_RANDOM</code></td>
+        <td>Dormant</td>
+        <td>Random 50/50 (X-basis of |0&rang;)</td>
+        <td style="color:var(--success);">O(1)</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight" style="color:var(--warn);">OP_MEAS_ACTIVE_DIAGONAL</code></td>
+        <td>Active</td>
+        <td>Z-basis (diagonal) &mdash; Born rule on |v[i]|&sup2;</td>
+        <td style="color:var(--warn);">O(2<sup>k</sup>)</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight" style="color:var(--accent);">OP_MEAS_ACTIVE_INTERFERE</code></td>
+        <td>Active</td>
+        <td>X/Y-basis (off-diagonal) &mdash; requires Hadamard first</td>
+        <td style="color:var(--accent);">O(2<sup>k</sup>)</td>
+      </tr>
+      <tr>
+        <td><code class="nohighlight" style="color:var(--accent);">OP_SWAP_MEAS_INTERFERE</code></td>
+        <td>Active</td>
+        <td>Fused swap + interfering measurement</td>
+        <td style="color:var(--accent);">O(2<sup>k</sup>)</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="grid-2" style="margin-top:0.3em;">
+    <div class="card card-hl">
+      <h4>After Measurement</h4>
+      <ul>
+        <li>Born rule: sample outcome with probability |amplitude|&sup2;</li>
+        <li>Collapse: zero out inconsistent amplitudes, renormalize</li>
+        <li>If qubit becomes deterministic &rarr; can <strong>REDUCE k</strong> (shrink vector)</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>Forced Variants</h4>
+      <p style="font-size:0.85em;">Each measurement opcode has a <code class="nohighlight">_FORCED</code> variant for importance sampling. The outcome is predetermined from <code class="nohighlight">forced_record</code> &mdash; tracks log-probability instead of sampling.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- SECTION 5: HOW GATES TRANSFORM STATE                            -->
+<!-- ============================================================== -->
+<section class="section-divider">
+  <div class="section-num">5</div>
+  <h1>How Gates Transform State</h1>
+  <p style="color:var(--dim);font-size:0.8em;">Clifford vs non-Clifford execution paths</p>
+</section>
+
+<!-- Slide 5.1: Clifford Gate Transforms -->
+<section>
+  <h2>Clifford Gates: Pauli Frame Only</h2>
+  <div class="grid-3">
+    <!-- H gate -->
+    <div class="card card-hl">
+      <h4 style="text-align:center;">H gate on qubit i</h4>
+      <div class="gate-transform" style="flex-direction:column;gap:0.3em;">
+        <div style="font-size:0.85em;font-family:'Consolas',monospace;">
+          <span style="color:var(--accent);">p_x[i]</span> &harr; <span style="color:var(--highlight);">p_z[i]</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 200 80" style="width:100%;max-width:200px;display:block;margin:0.2em auto;">
+        <text x="20" y="25" fill="#e94560" font-size="14" font-weight="600">p_x:</text>
+        <rect x="70" y="10" width="30" height="24" rx="4" fill="#3b1029" stroke="#e94560" stroke-width="1.5"/>
+        <text x="85" y="27" text-anchor="middle" fill="#e94560" font-size="12">1</text>
+        <text x="20" y="65" fill="#53d8fb" font-size="14" font-weight="600">p_z:</text>
+        <rect x="70" y="50" width="30" height="24" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="85" y="67" text-anchor="middle" fill="#53d8fb" font-size="12">0</text>
+        <!-- swap arrows -->
+        <path d="M105,25 C130,25 130,62 105,62" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowY)"/>
+        <path d="M108,62 C133,62 133,25 108,25" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowY)"/>
+        <text x="155" y="30" fill="#e94560" font-size="12">0</text>
+        <text x="155" y="68" fill="#53d8fb" font-size="12">1</text>
+        <defs><marker id="arrowY" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#fbbf24"/></marker></defs>
+      </svg>
+      <p style="font-size:0.7em;color:var(--dim);text-align:center;margin:0;">X &harr; Z under Hadamard</p>
+    </div>
+
+    <!-- S gate -->
+    <div class="card card-hl">
+      <h4 style="text-align:center;">S gate on qubit i</h4>
+      <div class="gate-transform" style="flex-direction:column;gap:0.3em;">
+        <div style="font-size:0.85em;font-family:'Consolas',monospace;">
+          <span style="color:var(--highlight);">p_z[i]</span> ^= <span style="color:var(--accent);">p_x[i]</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 200 80" style="width:100%;max-width:200px;display:block;margin:0.2em auto;">
+        <text x="20" y="25" fill="#e94560" font-size="14" font-weight="600">p_x:</text>
+        <rect x="70" y="10" width="30" height="24" rx="4" fill="#3b1029" stroke="#e94560" stroke-width="1.5"/>
+        <text x="85" y="27" text-anchor="middle" fill="#e94560" font-size="12">1</text>
+        <text x="20" y="65" fill="#53d8fb" font-size="14" font-weight="600">p_z:</text>
+        <rect x="70" y="50" width="30" height="24" rx="4" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="85" y="67" text-anchor="middle" fill="#53d8fb" font-size="12">0</text>
+        <!-- XOR arrow -->
+        <path d="M100,22 L100,55" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowY)"/>
+        <text x="110" y="42" fill="#fbbf24" font-size="11">XOR</text>
+        <text x="155" y="30" fill="#e94560" font-size="12">1</text>
+        <text x="155" y="68" fill="#53d8fb" font-size="12">1</text>
+      </svg>
+      <p style="font-size:0.7em;color:var(--dim);text-align:center;margin:0;">X &rarr; Y (= iXZ) under S</p>
+    </div>
+
+    <!-- CNOT gate -->
+    <div class="card card-hl">
+      <h4 style="text-align:center;">CNOT (c &rarr; t)</h4>
+      <div style="font-size:0.75em;font-family:'Consolas',monospace;text-align:center;line-height:1.8;">
+        <span style="color:var(--accent);">p_x[t]</span> ^= <span style="color:var(--accent);">p_x[c]</span><br>
+        <span style="color:var(--highlight);">p_z[c]</span> ^= <span style="color:var(--highlight);">p_z[t]</span>
+      </div>
+      <svg viewBox="0 0 200 80" style="width:100%;max-width:200px;display:block;margin:0.2em auto;">
+        <!-- Control qubit -->
+        <text x="5" y="25" fill="#8892b0" font-size="11">ctrl c:</text>
+        <rect x="60" y="10" width="24" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+        <text x="72" y="26" text-anchor="middle" fill="#e94560" font-size="10">x</text>
+        <rect x="88" y="10" width="24" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+        <text x="100" y="26" text-anchor="middle" fill="#53d8fb" font-size="10">z</text>
+        <!-- Target qubit -->
+        <text x="5" y="65" fill="#8892b0" font-size="11">targ t:</text>
+        <rect x="60" y="50" width="24" height="22" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="1"/>
+        <text x="72" y="66" text-anchor="middle" fill="#e94560" font-size="10">x</text>
+        <rect x="88" y="50" width="24" height="22" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1"/>
+        <text x="100" y="66" text-anchor="middle" fill="#53d8fb" font-size="10">z</text>
+        <!-- Arrows -->
+        <path d="M72,32 L72,50" fill="none" stroke="#e94560" stroke-width="1.5" marker-end="url(#arrowR)"/>
+        <path d="M100,50 L100,32" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowB)"/>
+        <text x="130" y="25" fill="#e94560" font-size="9">x fwd</text>
+        <text x="130" y="65" fill="#53d8fb" font-size="9">z back</text>
+        <defs>
+          <marker id="arrowR" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5" fill="#e94560"/></marker>
+          <marker id="arrowB" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5" fill="#53d8fb"/></marker>
+        </defs>
+      </svg>
+      <p style="font-size:0.7em;color:var(--dim);text-align:center;margin:0;">X flows forward, Z flows back</p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0.3em;text-align:center;">
+    <p style="margin:0;">All frame updates are <strong>single bit operations</strong> &mdash; no floating-point math, no memory allocation, no loops.</p>
+  </div>
+</section>
+
+<!-- Slide 5.2: Non-Clifford (T gate) -->
+<section>
+  <h2>Non-Clifford: The T Gate</h2>
+  <div class="grid-2">
+    <div>
+      <h3>T = diag(1, e<sup>i&pi;/4</sup>)</h3>
+      <p>Applies phase <code class="nohighlight">e<sup>i&pi;/4</sup></code> to every amplitude where the target qubit is |1&rang;.</p>
+      <div class="card card-accent">
+        <h4>Strided Loop over v[]</h4>
+        <pre><code class="nohighlight language-cpp">// T gate on active axis 'a' at rank k
+const complex&lt;double&gt; w = exp(i * pi/4);
+uint64_t half = 1ULL &lt;&lt; k;
+uint64_t stride = 1ULL &lt;&lt; a;
+
+for (uint64_t i = 0; i &lt; half; i++) {
+  // PDEP maps logical index to
+  // physical index, skipping axis 'a'
+  uint64_t lo = pdep(i, ~stride);
+  v[lo | stride] *= w;  // |1> gets phase
+  // v[lo] unchanged      // |0> stays
+}</code></pre>
+      </div>
+      <p>Cost: <strong style="color:var(--accent);">O(2<sup>k</sup>)</strong> complex multiplications</p>
+    </div>
+    <div>
+      <h3>Visual: T on axis 1, k=3</h3>
+      <svg viewBox="0 0 300 260" style="width:100%;max-width:300px;display:block;margin:0 auto;">
+        <text x="10" y="20" fill="#8892b0" font-size="12" font-weight="600">v[0..7], axis 1 highlighted:</text>
+        <!-- 8 amplitude cells -->
+        <rect x="10" y="30" width="60" height="40" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="40" y="45" text-anchor="middle" fill="#53d8fb" font-size="10">v[0]=|000&rang;</text>
+        <text x="40" y="60" text-anchor="middle" fill="#4ade80" font-size="9">unchanged</text>
+
+        <rect x="80" y="30" width="60" height="40" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="110" y="45" text-anchor="middle" fill="#53d8fb" font-size="10">v[1]=|001&rang;</text>
+        <text x="110" y="60" text-anchor="middle" fill="#4ade80" font-size="9">unchanged</text>
+
+        <rect x="150" y="30" width="60" height="40" rx="5" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+        <text x="180" y="45" text-anchor="middle" fill="#e94560" font-size="10">v[2]=|010&rang;</text>
+        <text x="180" y="60" text-anchor="middle" fill="#e94560" font-size="9">&times; e<tspan font-size="7" dy="-3">i&pi;/4</tspan></text>
+
+        <rect x="220" y="30" width="60" height="40" rx="5" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+        <text x="250" y="45" text-anchor="middle" fill="#e94560" font-size="10">v[3]=|011&rang;</text>
+        <text x="250" y="60" text-anchor="middle" fill="#e94560" font-size="9">&times; e<tspan font-size="7" dy="-3">i&pi;/4</tspan></text>
+
+        <rect x="10" y="85" width="60" height="40" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="40" y="100" text-anchor="middle" fill="#53d8fb" font-size="10">v[4]=|100&rang;</text>
+        <text x="40" y="115" text-anchor="middle" fill="#4ade80" font-size="9">unchanged</text>
+
+        <rect x="80" y="85" width="60" height="40" rx="5" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="110" y="100" text-anchor="middle" fill="#53d8fb" font-size="10">v[5]=|101&rang;</text>
+        <text x="110" y="115" text-anchor="middle" fill="#4ade80" font-size="9">unchanged</text>
+
+        <rect x="150" y="85" width="60" height="40" rx="5" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+        <text x="180" y="100" text-anchor="middle" fill="#e94560" font-size="10">v[6]=|110&rang;</text>
+        <text x="180" y="115" text-anchor="middle" fill="#e94560" font-size="9">&times; e<tspan font-size="7" dy="-3">i&pi;/4</tspan></text>
+
+        <rect x="220" y="85" width="60" height="40" rx="5" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+        <text x="250" y="100" text-anchor="middle" fill="#e94560" font-size="10">v[7]=|111&rang;</text>
+        <text x="250" y="115" text-anchor="middle" fill="#e94560" font-size="9">&times; e<tspan font-size="7" dy="-3">i&pi;/4</tspan></text>
+
+        <!-- Legend -->
+        <rect x="10" y="145" width="14" height="14" rx="3" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="30" y="156" fill="#53d8fb" font-size="11">bit 1 = 0 &rarr; no phase change</text>
+        <rect x="10" y="168" width="14" height="14" rx="3" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+        <text x="30" y="179" fill="#e94560" font-size="11">bit 1 = 1 &rarr; multiply by e<tspan font-size="9" dy="-3">i&pi;/4</tspan></text>
+
+        <text x="10" y="210" fill="#8892b0" font-size="11">Pattern: every amplitude where qubit 1</text>
+        <text x="10" y="225" fill="#8892b0" font-size="11">is |1&rang; gets the T-phase applied.</text>
+        <text x="10" y="250" fill="#fbbf24" font-size="12" font-weight="600">Stride = 2<tspan font-size="9" dy="-3">1</tspan> = 2 &mdash; alternating pairs</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 5.3: EXPAND Operation -->
+<section>
+  <h2>EXPAND: Dormant &rarr; Active</h2>
+  <div class="grid-2">
+    <div>
+      <h3>When Does EXPAND Happen?</h3>
+      <div class="card card-hl">
+        <p>A non-Clifford gate targets a <strong>dormant</strong> qubit (one that is still in the tensor product |0&rang;<sub>D</sub>). The qubit must become <strong>active</strong> before the gate can be applied.</p>
+      </div>
+      <h3>Algorithm</h3>
+      <ol style="font-size:0.85em;">
+        <li>Allocate <code class="nohighlight">new_v[2<sup>k+1</sup>]</code></li>
+        <li>For each index <code class="nohighlight">j</code> in 0..2<sup>k</sup>-1:
+          <ul>
+            <li><code class="nohighlight">new_v[2j]</code> = <code class="nohighlight">old_v[j]</code> (qubit in |0&rang;)</li>
+            <li><code class="nohighlight">new_v[2j+1]</code> = 0 (qubit in |1&rang;)</li>
+          </ul>
+        </li>
+        <li>Update <code class="nohighlight">active_k = k + 1</code></li>
+        <li>Free old vector</li>
+      </ol>
+      <p>Cost: <strong>O(2<sup>k</sup>)</strong> &mdash; one memcpy-like pass</p>
+    </div>
+    <div>
+      <h3>EXPAND + Measurement Can REDUCE</h3>
+      <div class="card card-accent">
+        <h4>Measurement Collapse &rarr; k&minus;1</h4>
+        <p style="font-size:0.85em;">After measuring an active qubit, half the amplitudes become zero. If the remaining state is separable, the qubit returns to dormant and <code class="nohighlight">k</code> decreases.</p>
+      </div>
+      <div style="margin-top:0.4em;">
+        <svg viewBox="0 0 300 110" style="width:100%;max-width:300px;display:block;margin:0 auto;">
+          <text x="10" y="18" fill="#8892b0" font-size="11" font-weight="600">k lifecycle through a circuit:</text>
+          <!-- Timeline -->
+          <line x1="20" y1="55" x2="280" y2="55" stroke="#8892b0" stroke-width="2"/>
+          <!-- Points -->
+          <circle cx="40" cy="55" r="6" fill="var(--secondary)" stroke="#53d8fb" stroke-width="2"/>
+          <text x="40" y="42" text-anchor="middle" fill="#53d8fb" font-size="10">k=0</text>
+          <text x="40" y="80" text-anchor="middle" fill="#8892b0" font-size="8">start</text>
+
+          <circle cx="100" cy="55" r="6" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+          <text x="100" y="42" text-anchor="middle" fill="#e94560" font-size="10">k=1</text>
+          <text x="100" y="80" text-anchor="middle" fill="#8892b0" font-size="8">T gate</text>
+
+          <circle cx="155" cy="55" r="6" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+          <text x="155" y="42" text-anchor="middle" fill="#e94560" font-size="10">k=2</text>
+          <text x="155" y="80" text-anchor="middle" fill="#8892b0" font-size="8">T gate</text>
+
+          <circle cx="210" cy="55" r="6" fill="#0c2e1c" stroke="#4ade80" stroke-width="2"/>
+          <text x="210" y="42" text-anchor="middle" fill="#4ade80" font-size="10">k=1</text>
+          <text x="210" y="80" text-anchor="middle" fill="#8892b0" font-size="8">measure</text>
+
+          <circle cx="260" cy="55" r="6" fill="#3b1029" stroke="#e94560" stroke-width="2"/>
+          <text x="260" y="42" text-anchor="middle" fill="#e94560" font-size="10">k=2</text>
+          <text x="260" y="80" text-anchor="middle" fill="#8892b0" font-size="8">T gate</text>
+
+          <text x="150" y="105" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600">peak_rank bounds max memory allocation</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 5.4: Measurement Execution -->
+<section>
+  <h2>Measurement: Born Rule &rarr; Collapse</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Step 1: Compute Probabilities</h3>
+      <div class="card card-hl">
+        <h4>Diagonal (Z-basis)</h4>
+        <pre><code class="nohighlight language-cpp">// Sum |v[i]|^2 where target bit = 0
+double p0 = 0;
+for (uint64_t i = 0; i &lt; (1&lt;&lt;k); i++)
+  if (!(i &amp; stride))
+    p0 += norm(v[i]);
+// p1 = 1 - p0 (or sum directly)</code></pre>
+      </div>
+      <div class="card card-accent">
+        <h4>Interfering (X/Y-basis)</h4>
+        <p style="font-size:0.85em;">Must first apply an implicit Hadamard to convert X/Y eigenstates into Z eigenstates, then sum. More expensive due to complex additions.</p>
+      </div>
+    </div>
+    <div>
+      <h3>Step 2: Sample &amp; Collapse</h3>
+      <div class="card" style="border-color:var(--warn);">
+        <h4>Born Rule Sampling</h4>
+        <pre><code class="nohighlight language-cpp">// PRNG: Xoshiro256++
+double u = rng.uniform();
+bool outcome = (u &gt; p0) ? 1 : 0;</code></pre>
+      </div>
+      <div class="card card-hl">
+        <h4>State Collapse</h4>
+        <pre><code class="nohighlight language-cpp">// Zero out amplitudes inconsistent
+// with the measurement outcome
+for (uint64_t i = 0; i &lt; (1&lt;&lt;k); i++)
+  if (bit_of(i,a) != outcome)
+    v[i] = 0;
+// Renormalize via gamma</code></pre>
+      </div>
+      <div class="card" style="border-color:var(--success);margin-top:0.2em;">
+        <p style="margin:0;font-size:0.8em;">
+          After collapse: if all non-zero amplitudes agree on qubit <em>a</em>, the qubit can be <strong>reduced</strong> back to dormant, shrinking <code class="nohighlight">k &rarr; k&minus;1</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+
+<!-- ================================================================== -->
+<!-- SECTION 6: THE EXECUTION LOOP                                      -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 6</div>
+  <h1>The Execution Loop</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Dispatch, ISA selection, and parallelism</p>
+</section>
+
+<!-- Slide 6.1: Dispatch Loop Pseudocode -->
+<section>
+  <h2>Computed-Goto Dispatch Loop</h2>
+  <p>The SVM uses a <strong>threaded dispatch</strong> pattern via GCC/Clang computed <code class="nohighlight">goto</code> (with a <code class="nohighlight">switch</code> fallback for MSVC).</p>
+  <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; color: var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">void execute_internal(const CompiledModule& program,
+                      SchrodingerState& state) {
+    <span style="color:var(--purple);">// Build jump table: opcode -> label address</span>
+    static const void* dispatch_table[] = {
+        [OP_FRAME_CNOT]  = &&L_FRAME_CNOT,
+        [OP_ARRAY_H]     = &&L_ARRAY_H,
+        [OP_EXPAND_T]    = &&L_EXPAND_T,
+        [OP_NOISE_BLOCK] = &&L_NOISE_BLOCK,
+        ...
+    };
+    const Instruction* pc  = program.bytecode.data();
+    const Instruction* end = pc + program.bytecode.size();
+
+    <span style="color:var(--green);">goto</span>* dispatch_table[pc->opcode];   <span style="color:var(--purple);">// first opcode</span>
+
+  L_ARRAY_H:
+    exec_array_h(state, pc->axis_1);
+    <span style="color:var(--green);">DISPATCH</span>();   <span style="color:var(--purple);">// ++pc; if (pc==end) return; goto*</span>
+    ...
+}</pre>
+  <div class="callout info">
+    <p><strong>Why computed goto?</strong> Eliminates branch predictor pollution from a central <code class="nohighlight">switch</code>. Each label site has its own branch-target-buffer entry, giving near-zero dispatch overhead per opcode.</p>
+  </div>
+</section>
+
+<!-- Slide 6.2: ISA Dispatch -->
+<section>
+  <h2>ISA Dispatch: Runtime CPUID Selection</h2>
+  <p>Three copies of every kernel are compiled into separate translation units with different <code class="nohighlight">-m</code> flags. At startup, CPUID selects the best one.</p>
+
+  <div class="diagram" style="padding: 16px;">
+    <div class="dispatch-flow">
+      <div class="dispatch-node env">CLIFFT_FORCE_ISA env var (optional override)</div>
+      <div style="font-size:1.2em; color:var(--text-dim);">|</div>
+      <div class="dispatch-node check">CPUID: avx512f + avx512dq + avx2 + bmi2 + fma?</div>
+      <div class="dispatch-branch">
+        <div style="text-align:center;">
+          <div class="dispatch-branch-label">Yes</div>
+          <div class="dispatch-node result">avx512::execute_internal<br><span style="font-size:0.8em;">-mavx512f -mavx512dq</span></div>
+        </div>
+        <div style="text-align:center;">
+          <div class="dispatch-branch-label">No -- has avx2+bmi2+fma?</div>
+          <div class="dispatch-node result">avx2::execute_internal<br><span style="font-size:0.8em;">-mavx2 -mbmi2 -mfma</span></div>
+        </div>
+        <div style="text-align:center;">
+          <div class="dispatch-branch-label">No</div>
+          <div class="dispatch-node result">scalar::execute_internal<br><span style="font-size:0.8em;">portable C++20</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warning">
+    <p><code class="nohighlight">CLIFFT_FORCE_ISA=avx512|avx2|scalar</code> -- overrides auto-detect for benchmarking. If the host CPU lacks the requested features, <code class="nohighlight">execute()</code> throws at the first call (not at import time).</p>
+  </div>
+</section>
+
+<!-- Slide 6.3: Parallel Loop Helpers -->
+<section>
+  <h2>Parallel Loop Helpers</h2>
+  <p>OpenMP threading engages only when <code class="nohighlight">active_k &ge; 18</code> (statevector &ge; 4 MB). Below that, a C++ <code class="nohighlight">if</code>-guard bypasses the OpenMP runtime entirely -- no futex overhead.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>parallel_stride_loop</h3>
+      <p style="font-size:0.65em;">2D waterfall for <strong>1-qubit gates</strong>. Outer blocks of size <code class="nohighlight">2*step</code>, inner sweep at <code class="nohighlight">inner_stride</code>. Parallelizes outermost dimension when &ge; 4 iterations.</p>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">for oi in 0..total/(2*step):   <span style="color:var(--green);"># OMP here</span>
+  for k in 0..step by stride:
+    kernel(oi*2*step, k)</pre>
+    </div>
+    <div class="card">
+      <h3>parallel_3d_stride_loop</h3>
+      <p style="font-size:0.65em;">3D waterfall for <strong>2-qubit gates</strong>. Three nested dimensions: outer, mid, inner. Parallelizes the outermost level with &ge; 4 iterations; falls back inward.</p>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">for oi in 0..total/(2*step_hi): <span style="color:var(--green);"># OMP here</span>
+  for mi in 0..step_hi/(2*step_lo):
+    for ki in 0..step_lo/stride:
+      kernel(base, ki*stride)</pre>
+    </div>
+  </div>
+
+  <div class="compare-row" style="margin-top:10px;">
+    <div class="compare-box" style="border-top-color:var(--green); flex: 1;">
+      <h3 style="color:var(--green);">parallel_for</h3>
+      <p>Simple 1D loop over <code class="nohighlight">v[]</code> indices</p>
+    </div>
+    <div class="compare-box alt" style="flex: 1;">
+      <h3 style="color:var(--highlight);">parallel_reduce</h3>
+      <p>2 or 3 accumulators for measurement probability sums via OMP reduction</p>
+    </div>
+    <div class="compare-box" style="border-top-color:var(--yellow); flex: 1;">
+      <h3 style="color:var(--yellow);">parallel_flat_loop</h3>
+      <p>Flat strided loop for uniform array sweeps</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- SECTION 7: SAMPLING MODES                                          -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 7</div>
+  <h1>Sampling Modes</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Six ways to query the quantum state</p>
+</section>
+
+<!-- Slide 7.1: Modes 1-3 (Shot-based) -->
+<section>
+  <h2>Shot-Based Sampling Modes</h2>
+
+  <div class="mode-card">
+    <h3 style="color:var(--accent);">Mode 1: <code class="nohighlight">sample(shots)</code></h3>
+    <p>Standard Monte Carlo. Run the full bytecode <code class="nohighlight">shots</code> times, collect all measurement / detector / observable records. PRNG seeded once and streams forward across shots -- no per-shot reseeding.</p>
+  </div>
+
+  <div class="mode-card m2">
+    <h3 style="color:var(--highlight);">Mode 2: <code class="nohighlight">sample_survivors(shots)</code></h3>
+    <p>Post-selection aware. Runs all shots but keeps only those that pass every <code class="nohighlight">OP_POSTSELECT</code> check. Returns <code class="nohighlight">passed_shots</code>, <code class="nohighlight">logical_errors</code>, and per-observable counts. With <code class="nohighlight">keep_records=false</code>, zero array allocation -- counts only.</p>
+  </div>
+
+  <div class="mode-card m3">
+    <h3 style="color:var(--green);">Mode 3: <code class="nohighlight">sample_k(shots, k)</code></h3>
+    <p>Importance sampling. Forces <strong>exactly k fault events</strong> per shot (quantum noise + readout). Sites drawn from the conditional Poisson-Binomial distribution via a DP table sweep. Uniform-probability circuits get an O(k) Fisher-Yates sampler automatically.</p>
+  </div>
+
+  <div class="callout info">
+    <p><strong>All three</strong> share the same <code class="nohighlight">SchrodingerState</code> + <code class="nohighlight">execute()</code> path. The difference is how noise sites fire and which shots are kept.</p>
+  </div>
+</section>
+
+<!-- Slide 7.2: Modes 4-6 (Exact) -->
+<section>
+  <h2>Exact Computation Modes</h2>
+
+  <div class="mode-card m4">
+    <h3 style="color:var(--yellow);">Mode 4: <code class="nohighlight">basis_probabilities(masks)</code></h3>
+    <p>Exact Born-rule probabilities <code class="nohighlight">|&lt;x|psi&gt;|&sup2;</code> for given computational-basis states. No sampling, no noise. Unitary programs only (no measurements, feedback, or noise opcodes). Each basis mask is word-packed little-endian.</p>
+  </div>
+
+  <div class="mode-card m5">
+    <h3 style="color:var(--purple);">Mode 5: <code class="nohighlight">record_probabilities(records)</code></h3>
+    <p>Exact log-probabilities for a batch of measurement records. Computes <code class="nohighlight">log P(record)</code> under the compiled program, using forced-outcome kernels that read from <code class="nohighlight">forced_record[]</code> instead of the PRNG and accumulate log-prob. Unreachable records return <code class="nohighlight">-DBL_MAX</code>.</p>
+  </div>
+
+  <div class="mode-card m6">
+    <h3 style="color:var(--orange);">Mode 6: <code class="nohighlight">get_statevector()</code></h3>
+    <p>Debug / validation oracle. Expands the factored state into a dense <code class="nohighlight">2^n</code> vector: embed <code class="nohighlight">|phi&gt;_A</code>, apply Pauli frame <code class="nohighlight">P</code>, multiply by Clifford unitary <code class="nohighlight">U_C</code>, scale by <code class="nohighlight">gamma</code>. <strong>Capped at n &le; 10 qubits</strong> (8 MB dense unitary matrix).</p>
+  </div>
+</section>
+
+<!-- Slide 7.3: Decision Tree -->
+<section>
+  <h2>Which Sampling Mode to Use?</h2>
+
+  <svg viewBox="0 0 760 340" style="width:100%; max-width:760px; margin:0 auto; display:block;">
+    <defs>
+      <marker id="dtarrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#888"/>
+      </marker>
+    </defs>
+    <!-- Root question -->
+    <rect x="240" y="5" width="280" height="36" rx="6" fill="#0f3460" stroke="#53d8fb" stroke-width="1.5"/>
+    <text x="380" y="28" text-anchor="middle" fill="#53d8fb" font-size="12" font-weight="700">Need exact probabilities?</text>
+    <!-- Branches from root -->
+    <line x1="310" y1="41" x2="170" y2="70" stroke="#888" stroke-width="1.5" marker-end="url(#dtarrow)"/>
+    <text x="225" y="55" fill="#4ade80" font-size="10" font-weight="700">Yes</text>
+    <line x1="450" y1="41" x2="570" y2="70" stroke="#888" stroke-width="1.5" marker-end="url(#dtarrow)"/>
+    <text x="520" y="55" fill="#e94560" font-size="10" font-weight="700">No — need samples</text>
+
+    <!-- Left: exact branch -->
+    <rect x="60" y="72" width="230" height="34" rx="6" fill="#0f3460" stroke="#53d8fb" stroke-width="1.2"/>
+    <text x="175" y="93" text-anchor="middle" fill="#53d8fb" font-size="11">Per-basis-state |⟨x|ψ⟩|²?</text>
+    <line x1="120" y1="106" x2="80" y2="135" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="88" y="122" fill="#4ade80" font-size="9" font-weight="700">Yes</text>
+    <line x1="230" y1="106" x2="260" y2="135" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="250" y="122" fill="#e94560" font-size="9" font-weight="700">No</text>
+    <!-- Leaf: basis_probabilities -->
+    <rect x="10" y="138" width="155" height="30" rx="5" fill="#1a2e1a" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="87" y="158" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700" font-family="monospace">basis_probabilities()</text>
+    <!-- Leaf: record_probabilities -->
+    <rect x="185" y="138" width="160" height="30" rx="5" fill="#1a2e1a" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="265" y="158" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700" font-family="monospace">record_probabilities()</text>
+
+    <!-- Right: sampling branch -->
+    <rect x="430" y="72" width="280" height="34" rx="6" fill="#0f3460" stroke="#53d8fb" stroke-width="1.2"/>
+    <text x="570" y="93" text-anchor="middle" fill="#53d8fb" font-size="11">Importance sampling (force k faults)?</text>
+    <line x1="500" y1="106" x2="460" y2="145" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="468" y="125" fill="#4ade80" font-size="9" font-weight="700">Yes</text>
+    <line x1="640" y1="106" x2="640" y2="145" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="655" y="125" fill="#e94560" font-size="9" font-weight="700">No</text>
+    <!-- Leaf: sample_k -->
+    <rect x="385" y="148" width="155" height="30" rx="5" fill="#2a1020" stroke="#e94560" stroke-width="1.5"/>
+    <text x="462" y="168" text-anchor="middle" fill="#e94560" font-size="11" font-weight="700" font-family="monospace">sample_k(shots, k)</text>
+
+    <!-- Next question: Post-selection? -->
+    <rect x="565" y="148" width="170" height="34" rx="6" fill="#0f3460" stroke="#53d8fb" stroke-width="1.2"/>
+    <text x="650" y="169" text-anchor="middle" fill="#53d8fb" font-size="11">Post-selection?</text>
+    <line x1="610" y1="182" x2="570" y2="215" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="578" y="200" fill="#4ade80" font-size="9" font-weight="700">Yes</text>
+    <line x1="690" y1="182" x2="710" y2="215" stroke="#888" stroke-width="1.2" marker-end="url(#dtarrow)"/>
+    <text x="710" y="200" fill="#e94560" font-size="9" font-weight="700">No</text>
+    <!-- Leaf: sample_survivors -->
+    <rect x="490" y="218" width="165" height="30" rx="5" fill="#1a2e1a" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="572" y="238" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700" font-family="monospace">sample_survivors()</text>
+    <!-- Leaf: sample -->
+    <rect x="670" y="218" width="85" height="30" rx="5" fill="#1a2e1a" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="712" y="238" text-anchor="middle" fill="#4ade80" font-size="11" font-weight="700" font-family="monospace">sample()</text>
+
+    <!-- Debug note at bottom -->
+    <rect x="180" y="280" width="400" height="40" rx="6" fill="#2e2a0c" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="380" y="296" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">Debug only: get_statevector()</text>
+    <text x="380" y="312" text-anchor="middle" fill="#999" font-size="9">Validation for small circuits (n ≤ 10). O(4ⁿ) — never in production.</text>
+
+    <!-- Title -->
+    <text x="380" y="338" text-anchor="middle" fill="#888" font-size="10" font-style="italic">Decision tree for selecting the right sampling API</text>
+  </svg>
+
+  <div class="callout success">
+    <p><strong>Debug only:</strong> <code class="nohighlight">get_statevector()</code> is for validation of small circuits (n &le; 10). Never use in production -- O(4^n) unitary expansion.</p>
+  </div>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- SECTION 8: PRNG                                                    -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 8</div>
+  <h1>PRNG</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Xoshiro256++ with SplitMix64 seeding</p>
+</section>
+
+<!-- Slide 8.1: Xoshiro256++ -->
+<section>
+  <h2>Xoshiro256++ PRNG</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>Why Xoshiro256++?</h3>
+      <ul>
+        <li><strong>32 bytes</strong> state (vs. MT19937's 2504 bytes) -- per-shot reseeding ~100x cheaper</li>
+        <li>Period: <strong>2<sup>256</sup> - 1</strong></li>
+        <li>Pure bitwise math -- identical sequences across GCC / Clang / MSVC</li>
+        <li>Blackman & Vigna (2021), ACM Trans. Math. Softw.</li>
+      </ul>
+
+      <h3 style="margin-top:16px;">53-bit Uniform Doubles</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; color: var(--text); font-size:0.75em;; font-family: monospace; font-size: 0.8em; line-height: 1.5;"><span style="color:var(--purple);">// CRITICAL: avoid std::uniform_real_distribution</span>
+<span style="color:var(--purple);">// -- its output varies across compilers!</span>
+double random_double() {
+  return (rng_() >> 11) * 0x1.0p-53;
+}</pre>
+      <p style="font-size:0.65em; color:var(--text-dim);">Shift right 11 bits to keep the top 53 significant bits, then scale to [0, 1) with exact IEEE-754 representability.</p>
+    </div>
+    <div>
+      <h3>256-bit State</h3>
+      <div class="prng-state">
+        <div class="prng-word" style="background:rgba(233,69,96,0.2); color:var(--accent);">s[0]</div>
+        <div class="prng-word" style="background:rgba(83,216,251,0.2); color:var(--highlight);">s[1]</div>
+        <div class="prng-word" style="background:rgba(100,255,218,0.2); color:var(--green);">s[2]</div>
+        <div class="prng-word" style="background:rgba(189,147,249,0.2); color:var(--purple);">s[3]</div>
+      </div>
+      <p style="font-size:0.65em; text-align:center; color:var(--text-dim);">4 x uint64_t = 32 bytes total</p>
+
+      <h3 style="margin-top:16px;">SplitMix64 Seeding</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; color: var(--text); font-size:0.7em;; font-family: monospace; font-size: 0.8em; line-height: 1.5;">void seed(uint64_t seed_val) {
+  uint64_t z = seed_val;
+  s_[0] = splitmix64(z);  <span style="color:var(--purple);">// z += golden ratio</span>
+  s_[1] = splitmix64(z);  <span style="color:var(--purple);">// z ^= z>>30; z *= ...</span>
+  s_[2] = splitmix64(z);  <span style="color:var(--purple);">// z ^= z>>27; z *= ...</span>
+  s_[3] = splitmix64(z);  <span style="color:var(--purple);">// z ^= z>>31</span>
+}</pre>
+      <p style="font-size:0.65em; color:var(--text-dim);">Expands a single <code class="nohighlight">uint64_t</code> seed into all 256 bits. Alternatively, <code class="nohighlight">seed_from_entropy()</code> reads <code class="nohighlight">/dev/urandom</code> for full entropy seeding.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 8.2: Per-shot PRNG behavior -->
+<section>
+  <h2>PRNG Streaming Across Shots</h2>
+
+  <div class="diagram" style="padding: 20px;">
+    <div style="display: flex; align-items: center; gap: 0; justify-content: center;">
+      <div style="background: rgba(233,69,96,0.15); border: 2px solid var(--accent); border-radius: 8px; padding: 12px 18px; text-align: center;">
+        <div style="font-size: 0.7em; font-weight: 600; color: var(--accent);">Shot 0</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">seed(user_seed)<br>rng() rng() rng() ...</div>
+      </div>
+      <div style="width: 40px; height: 2px; background: var(--green);"></div>
+      <div style="background: rgba(83,216,251,0.15); border: 2px solid var(--highlight); border-radius: 8px; padding: 12px 18px; text-align: center;">
+        <div style="font-size: 0.7em; font-weight: 600; color: var(--highlight);">Shot 1</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">NO reseed<br>rng() rng() ...</div>
+      </div>
+      <div style="width: 40px; height: 2px; background: var(--green);"></div>
+      <div style="background: rgba(100,255,218,0.15); border: 2px solid var(--green); border-radius: 8px; padding: 12px 18px; text-align: center;">
+        <div style="font-size: 0.7em; font-weight: 600; color: var(--green);">Shot 2</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">NO reseed<br>rng() rng() ...</div>
+      </div>
+      <div style="width: 40px; height: 2px; background: var(--green);"></div>
+      <div style="font-size: 0.9em; color: var(--text-dim);">...</div>
+    </div>
+    <div class="diagram-label">PRNG state streams forward naturally -- <code class="nohighlight">reset()</code> does NOT reseed</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color:var(--accent);">CPU (SIMD within shot)</h3>
+      <ul>
+        <li style="font-size:0.65em;">Single PRNG instance per <code class="nohighlight">SchrodingerState</code></li>
+        <li style="font-size:0.65em;">State advances naturally across shots</li>
+        <li style="font-size:0.65em;">Deterministic when seed is provided: same seed = identical results</li>
+        <li style="font-size:0.65em;">No seed = 256 bits from <code class="nohighlight">/dev/urandom</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--highlight);">GPU (SIMT across shots)</h3>
+      <ul>
+        <li style="font-size:0.65em;">Each thread gets its own PRNG, seeded from <code class="nohighlight">base_seed + thread_id</code></li>
+        <li style="font-size:0.65em;">Shots execute in parallel, one per thread</li>
+        <li style="font-size:0.65em;">32 bytes per thread fits comfortably in registers</li>
+        <li style="font-size:0.65em;">No synchronization needed for RNG state</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- SECTION 9: NOISE HANDLING                                          -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 9</div>
+  <h1>Noise Handling</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Skip-ahead gap sampling and noise blocks</p>
+</section>
+
+<!-- Slide 9.1: Gap Sampling Algorithm -->
+<section>
+  <h2>Skip-Ahead Gap Sampling</h2>
+  <p>Instead of rolling the RNG at every noise site, sample an <strong>exponential gap</strong> to jump directly to the next site that fires.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color:var(--accent);">Naive Approach</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">for each site in 0..N_sites:
+  if random() < site.probability:
+    apply_pauli(site.channels)
+<span style="color:var(--accent);">// Cost: O(N_sites) per shot</span>
+<span style="color:var(--accent);">// d=17 surface code: ~5000 sites</span></pre>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--green);">Gap Sampling</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">gap = -log(1 - random())
+target = current_hazard + gap
+next_idx = upper_bound(hazards, target)
+<span style="color:var(--green);">// Cost: O(k_fired * log N_sites)</span>
+<span style="color:var(--green);">// Typical: k_fired ~ 5 out of 5000</span></pre>
+    </div>
+  </div>
+
+  <div class="callout success" style="margin-top:10px;">
+    <p><strong>Speedup: 100-1000x</strong> for realistic QEC circuits. The cumulative hazard table is precomputed by the compiler into <code class="nohighlight">noise_hazards[]</code>. Binary search (<code class="nohighlight">std::upper_bound</code>) finds the next firing site in O(log N).</p>
+  </div>
+
+  <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.68em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">void draw_next_noise(const vector&lt;double&gt;& hazards) {
+    double current = (next_noise_idx == 0) ? 0.0 : hazards[next_noise_idx - 1];
+    double gap     = -std::log(1.0 - random_double());   <span style="color:var(--purple);">// Exponential(1)</span>
+    double target  = current + gap;
+    auto it = std::upper_bound(hazards.begin(), hazards.end(), target);
+    next_noise_idx = std::distance(hazards.begin(), it);  <span style="color:var(--purple);">// may == size() => done</span>
+}</pre>
+</section>
+
+<!-- Slide 9.2: OP_NOISE_BLOCK -->
+<section>
+  <h2>OP_NOISE_BLOCK: Batched Noise Processing</h2>
+  <p>The <strong>noise_block_pass</strong> optimization groups consecutive noise sites <code class="nohighlight">[start, start+count)</code> into a single instruction for a tight inner loop.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="color:var(--text-dim);">Without noise blocks</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">OP_NOISE  site_42   <span style="color:var(--text-dim);">// dispatch overhead</span>
+OP_NOISE  site_43   <span style="color:var(--text-dim);">// dispatch overhead</span>
+OP_NOISE  site_44   <span style="color:var(--text-dim);">// dispatch overhead</span>
+OP_NOISE  site_45   <span style="color:var(--text-dim);">// dispatch overhead</span>
+...                  <span style="color:var(--text-dim);">// 100 more</span></pre>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--green);">With OP_NOISE_BLOCK</h3>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">OP_NOISE_BLOCK  start=42, count=104
+<span style="color:var(--green);">// Single dispatch, tight while loop:</span>
+while (next_noise_idx >= start
+    && next_noise_idx < start+count) {
+  exec_noise(state, pool, next_noise_idx);
+}</pre>
+    </div>
+  </div>
+
+  <div class="callout info" style="margin-top:12px;">
+    <p><strong>Key insight:</strong> Most shots skip the entire block when <code class="nohighlight">next_noise_idx</code> falls outside <code class="nohighlight">[start, start+count)</code>. The while-loop condition fails immediately -- one comparison instead of 100+ dispatch table lookups.</p>
+  </div>
+</section>
+
+<!-- Slide 9.3: Skip-Ahead Timeline Diagram -->
+<section>
+  <h2>Noise Skip-Ahead in Action</h2>
+  <p>A d=17 surface code round has ~5000 noise sites. On a typical shot, only ~5 fire.</p>
+
+  <div class="diagram" style="padding: 15px 10px;">
+    <!-- Timeline visualization -->
+    <div style="position: relative; height: 50px; margin: 10px 0; display: flex; align-items: center; border-radius: 6px; overflow: hidden;">
+      <div class="timeline-segment timeline-silent" style="flex: 7;">
+        <span style="font-size:0.6em;">silent (sites 0-699)</span>
+      </div>
+      <div class="timeline-segment timeline-fire" style="flex: 0.5; min-width: 30px;">
+        <span style="font-size:0.5em;">#700</span>
+      </div>
+      <div class="timeline-segment timeline-silent" style="flex: 12;">
+        <span style="font-size:0.6em;">skip 1200 sites</span>
+      </div>
+      <div class="timeline-segment timeline-fire" style="flex: 0.5; min-width: 30px;">
+        <span style="font-size:0.5em;">#1923</span>
+      </div>
+      <div class="timeline-segment timeline-silent" style="flex: 8;">
+        <span style="font-size:0.6em;">skip 800</span>
+      </div>
+      <div class="timeline-segment timeline-fire" style="flex: 0.5; min-width: 30px;">
+        <span style="font-size:0.5em;">#2741</span>
+      </div>
+      <div class="timeline-segment timeline-silent" style="flex: 10;">
+        <span style="font-size:0.6em;">skip 1000</span>
+      </div>
+      <div class="timeline-segment timeline-fire" style="flex: 0.5; min-width: 30px;">
+        <span style="font-size:0.5em;">#3788</span>
+      </div>
+      <div class="timeline-segment timeline-silent" style="flex: 10;">
+        <span style="font-size:0.6em;">skip 1100</span>
+      </div>
+      <div class="timeline-segment timeline-fire" style="flex: 0.5; min-width: 30px;">
+        <span style="font-size:0.5em;">#4901</span>
+      </div>
+      <div class="timeline-segment timeline-silent" style="flex: 1;">
+      </div>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.55em; color: var(--text-dim); margin-top: 4px;">
+      <span>Site 0</span>
+      <span>Site 5000</span>
+    </div>
+
+    <!-- Arrows showing jumps -->
+    <div style="margin-top: 12px; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+      <div style="font-size: 0.6em; color: var(--green); background: rgba(100,255,218,0.1); padding: 4px 10px; border-radius: 4px;">gap = exp(1) &rarr; site 700</div>
+      <div style="font-size: 0.6em; color: var(--green); background: rgba(100,255,218,0.1); padding: 4px 10px; border-radius: 4px;">gap &rarr; site 1923</div>
+      <div style="font-size: 0.6em; color: var(--green); background: rgba(100,255,218,0.1); padding: 4px 10px; border-radius: 4px;">gap &rarr; site 2741</div>
+      <div style="font-size: 0.6em; color: var(--green); background: rgba(100,255,218,0.1); padding: 4px 10px; border-radius: 4px;">gap &rarr; site 3788</div>
+      <div style="font-size: 0.6em; color: var(--green); background: rgba(100,255,218,0.1); padding: 4px 10px; border-radius: 4px;">gap &rarr; site 4901</div>
+      <div style="font-size: 0.6em; color: var(--text-dim); background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 4px;">gap &gt; remaining &rarr; DONE</div>
+    </div>
+    <div class="diagram-label">5 RNG calls + 5 binary searches instead of 5000 RNG calls</div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-box">
+      <h3 style="color:var(--accent);">exec_noise() guard</h3>
+      <p><code class="nohighlight">if (site_idx != next_noise_idx) return;</code><br>Single integer comparison per silent site. The gap sampler guarantees all sites before <code class="nohighlight">next_noise_idx</code> are identity.</p>
+    </div>
+    <div class="compare-box alt">
+      <h3 style="color:var(--highlight);">Gap exhaustion</h3>
+      <p>When the sampled gap exceeds total remaining hazard, <code class="nohighlight">upper_bound</code> returns <code class="nohighlight">end()</code>, setting <code class="nohighlight">next_noise_idx = N</code>. All subsequent noise opcodes short-circuit in O(1).</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- SECTION 10: MEMORY MANAGEMENT                                      -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 10</div>
+  <h1>Memory Management</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Aligned allocation, huge pages, and shot reuse</p>
+</section>
+
+<!-- Slide 10.1: Allocation Strategy -->
+<section>
+  <h2>Amplitude Vector Allocation</h2>
+  <p>The amplitude array <code class="nohighlight">v_[]</code> holds <code class="nohighlight">2<sup>peak_rank</sup></code> complex doubles. Size is fixed at construction and reused across all shots.</p>
+
+  <div class="diagram" style="padding: 16px;">
+    <div class="mem-block" style="justify-content:center;">
+      <div class="mem-cell header">v_[0]</div>
+      <div class="mem-cell active">v_[1]</div>
+      <div class="mem-cell active">v_[2]</div>
+      <div class="mem-cell active">...</div>
+      <div class="mem-cell active">v_[2<sup>k</sup>-1]</div>
+      <div class="mem-cell zero">0</div>
+      <div class="mem-cell zero">0</div>
+      <div class="mem-cell zero">...</div>
+      <div class="mem-cell zero">0</div>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 4px; margin-top: 8px;">
+      <div style="font-size: 0.6em; padding: 4px 12px; border-radius: 4px; background: rgba(233,69,96,0.15); color: var(--accent);">active: 2<sup>active_k</sup> entries used</div>
+      <div style="font-size: 0.6em; padding: 4px 12px; border-radius: 4px; background: rgba(136,146,176,0.15); color: var(--text-dim);">reserved: 2<sup>peak_rank</sup> - 2<sup>active_k</sup> unused</div>
+    </div>
+    <div class="diagram-label">Size: 2<sup>peak_rank</sup> x 16 bytes (complex&lt;double&gt;). Allocated once, never reallocated.</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card" style="text-align:center;">
+      <h3 style="color:var(--green);">Small (&lt; 2 MB)</h3>
+      <p style="font-size:0.65em;"><code class="nohighlight">aligned_alloc</code><br>4096-byte alignment<br>(page boundary)</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h3 style="color:var(--highlight);">Large (&ge; 2 MB) Linux</h3>
+      <p style="font-size:0.65em;">Try <code class="nohighlight">mmap</code> + <code class="nohighlight">MAP_HUGETLB</code><br>2 MB huge page alignment<br>Falls back to <code class="nohighlight">aligned_alloc</code> + <code class="nohighlight">madvise(MADV_HUGEPAGE)</code></p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h3 style="color:var(--purple);">NUMA-Aware Init</h3>
+      <p style="font-size:0.65em;">OpenMP parallel zeroing<br>distributes pages via<br>first-touch policy</p>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 10.2: Shot Reset + Gamma Renormalization -->
+<section>
+  <h2>Shot Reset and Gamma Renormalization</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>reset() Between Shots</h3>
+      <p style="font-size:0.7em;">Zero the active region, restore initial state -- <strong>no reallocation</strong>.</p>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">void SchrodingerState::reset() {
+  <span style="color:var(--purple);">// Zero only active entries (not full array)</span>
+  for (i = 0; i < 2^active_k; i++)
+    v_[i] = {0, 0};
+  v_[0] = {1.0, 0.0};     <span style="color:var(--green);">// |0...0></span>
+
+  fill(p_x, 0);            <span style="color:var(--green);">// clear frame</span>
+  fill(p_z, 0);
+  gamma_ = {1.0, 0.0};
+  active_k = 0;
+  fill(obs_record, 0);
+
+  <span style="color:var(--purple);">// PRNG NOT reseeded -- streams forward</span>
+}</pre>
+    </div>
+    <div>
+      <h3>Gamma Renormalization</h3>
+      <p style="font-size:0.7em;">When <code class="nohighlight">|gamma|</code> drifts outside <code class="nohighlight">[1e-100, 1e100]</code>, fold the magnitude into <code class="nohighlight">v_[]</code>.</p>
+      <pre style="background: #0a0a1a; padding: 12px; border-radius: 6px; font-size:0.65em; color:var(--text);; font-family: monospace; font-size: 0.8em; line-height: 1.5;">void scale_magnitude(double scale) {
+  gamma_ *= scale;
+  double g_mag = std::abs(gamma_);
+
+  if (g_mag > 1e100 ||
+      (g_mag < 1e-100 && g_mag > 0.0)) {
+    <span style="color:var(--accent);">// Absorb magnitude into v[]</span>
+    for (i = 0; i < v_size(); i++)
+      v_[i] *= g_mag;
+    gamma_ /= g_mag;
+    <span style="color:var(--purple);">// gamma now ~unit magnitude</span>
+    <span style="color:var(--purple);">// v[] carries the scale</span>
+  }
+}</pre>
+      <div class="callout info" style="margin-top:8px;">
+        <p>Uses <code class="nohighlight">std::abs()</code> (not <code class="nohighlight">std::norm()</code>) to avoid squaring-induced underflow: <code class="nohighlight">norm()</code> squares the magnitude, so values near 1e-154 underflow to 0.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- SECTION 11: SUMMARY                                                -->
+<!-- ================================================================== -->
+
+<section class="section-title">
+  <div class="section-num">Section 11</div>
+  <h1>Summary</h1>
+  <div class="section-line"></div>
+  <p style="color: var(--text-dim); font-size: 0.9em;">Why the SVM design works</p>
+</section>
+
+<!-- Slide 11.1: Architecture Elegance -->
+<section>
+  <h2>The SVM is Elegant by Design</h2>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <h3 style="color:var(--accent);">Compiler Does the Hard Work</h3>
+      <p>Clifford absorption, Pauli localization, axis fusion, squeeze, noise blocking -- all happen at compile time. The VM sees only pre-optimized bytecode.</p>
+    </div>
+    <div class="summary-card alt">
+      <h3 style="color:var(--highlight);">VM is Simple</h3>
+      <p>A flat dispatch loop over a ~30-opcode ISA. Each kernel is a tight inner loop over <code class="nohighlight">v_[0..2^k]</code>. No graph traversal, no dynamic scheduling.</p>
+    </div>
+    <div class="summary-card green">
+      <h3 style="color:var(--green);">Same Machine, Two Targets</h3>
+      <p>CPU: SIMD within each shot (AVX-512 over the amplitude array). GPU: SIMT across shots (one thread per shot). The abstract machine is identical.</p>
+    </div>
+  </div>
+
+  <div class="diagram" style="margin-top: 20px; padding: 20px;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+      <div style="background: rgba(233,69,96,0.15); border: 2px solid var(--accent); border-radius: 10px; padding: 14px 20px; text-align: center;">
+        <div style="font-size: 0.8em; font-weight: 600; color: var(--accent);">Stim Circuit</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">1000s of gates</div>
+      </div>
+      <div style="font-size: 1.2em; color: var(--text-dim);">&rarr;</div>
+      <div style="background: rgba(83,216,251,0.15); border: 2px solid var(--highlight); border-radius: 10px; padding: 14px 20px; text-align: center;">
+        <div style="font-size: 0.8em; font-weight: 600; color: var(--highlight);">11-Pass Compiler</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">HIR + bytecode optimization</div>
+      </div>
+      <div style="font-size: 1.2em; color: var(--text-dim);">&rarr;</div>
+      <div style="background: rgba(100,255,218,0.15); border: 2px solid var(--green); border-radius: 10px; padding: 14px 20px; text-align: center;">
+        <div style="font-size: 0.8em; font-weight: 600; color: var(--green);">Compact Bytecode</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">~30 opcode types</div>
+      </div>
+      <div style="font-size: 1.2em; color: var(--text-dim);">&rarr;</div>
+      <div style="background: rgba(189,147,249,0.15); border: 2px solid var(--purple); border-radius: 10px; padding: 14px 20px; text-align: center;">
+        <div style="font-size: 0.8em; font-weight: 600; color: var(--purple);">Simple VM Loop</div>
+        <div style="font-size: 0.55em; color: var(--text-dim);">dispatch + kernel(v[])</div>
+      </div>
+    </div>
+    <div class="diagram-label">Complexity lives in the compiler, not in the runtime</div>
+  </div>
+</section>
+
+<!-- Slide 11.2: The k Insight -->
+<section>
+  <h2>The Key Insight: k Stays Small</h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>For QEC, O(2<sup>k</sup>) is Fast</h3>
+      <p style="font-size:0.7em;">Quantum error correction circuits are <strong>near-Clifford by construction</strong>. Surface codes, color codes, and other stabilizer codes use only Clifford gates in syndrome extraction. Non-Clifford gates appear only in logical operations.</p>
+
+      <div style="margin: 16px 0;">
+        <div class="scale-bar">
+          <div class="label">k = 0 (Clifford)</div>
+          <div class="bar" style="width: 40px; background: var(--green);">1</div>
+        </div>
+        <div class="scale-bar">
+          <div class="label">k = 4 (few T gates)</div>
+          <div class="bar" style="width: 50px; background: var(--highlight);">16</div>
+        </div>
+        <div class="scale-bar">
+          <div class="label">k = 8</div>
+          <div class="bar" style="width: 80px; background: var(--yellow);">256</div>
+        </div>
+        <div class="scale-bar">
+          <div class="label">k = 16</div>
+          <div class="bar" style="width: 180px; background: var(--orange);">65K</div>
+        </div>
+        <div class="scale-bar">
+          <div class="label">n = 1000 qubits</div>
+          <div class="bar" style="width: 350px; background: var(--accent);">2<sup>1000</sup> (impossible)</div>
+        </div>
+      </div>
+      <p style="font-size:0.6em; color:var(--text-dim);">Amplitude vector entries (v[] size)</p>
+    </div>
+    <div>
+      <h3>Performance Summary</h3>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:0.7em; margin:0;"><strong style="color:var(--green);">Gap sampling:</strong> O(k_fired * log N) instead of O(N_sites). For p=0.001 and N=5000, we skip ~99.9% of noise sites.</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:0.7em; margin:0;"><strong style="color:var(--highlight);">ISA dispatch:</strong> AVX-512 processes 4 complex doubles (64 bytes) per cycle. Same loop runs scalar on ARM or older x86.</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:0.7em; margin:0;"><strong style="color:var(--yellow);">Memory reuse:</strong> Allocate once, zero only the active region between shots. Huge pages reduce TLB misses for large arrays.</p>
+      </div>
+      <div class="card">
+        <p style="font-size:0.7em; margin:0;"><strong style="color:var(--purple);">Portable abstraction:</strong> The same bytecode runs on CPU (SIMD within shot) and GPU (SIMT across shots). The factored-state math is target-independent.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout success" style="margin-top:10px;">
+    <p><strong>Bottom line:</strong> The SVM is a thin, fast interpreter for a well-optimized bytecode. The compiler does the thinking; the VM does the arithmetic.</p>
+  </div>
+</section>
+
+</div><!-- .slides -->
+</div><!-- .reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    width: 1280,
+    height: 720,
+    margin: 0.04,
+    transition: 'slide',
+    backgroundTransition: 'fade',
+    center: false,
+    plugins: [ RevealHighlight ]
+  });
+</script>
+</body>
+</html>

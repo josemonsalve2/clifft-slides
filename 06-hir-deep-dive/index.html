@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft HIR Deep Dive — Heisenberg Intermediate Representation</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+<style>
+  :root {
+    --bg-dark: #1a1a2e;
+    --accent: #e94560;
+    --secondary: #0f3460;
+    --highlight: #53d8fb;
+    --text: #e8e8e8;
+    --dim: #8892b0;
+    --code-bg: #16213e;
+    --success: #4ade80;
+    --warn: #fbbf24;
+  }
+
+  /* font-size-override-applied */
+  .reveal { font-size: 24px !important; }
+  .reveal h1 { font-size: 1.8em !important; }
+  .reveal h2 { font-size: 1.4em !important; }
+  .reveal h3 { font-size: 1.1em !important; }
+  .reveal h4 { font-size: 0.9em !important; }
+  .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+  .reveal pre { font-size: 0.75em !important; }
+  .reveal code { font-size: 0.85em !important; }
+  .reveal .small { font-size: 0.7em !important; }
+  .reveal table { font-size: 0.8em !important; }
+
+  .reveal { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: var(--text); }
+  .reveal .slides { text-align: left; }
+  .reveal .slides section { background: var(--bg-dark); }
+  .reveal h1 { color: var(--accent); font-weight: 700; text-align: center; margin-bottom: 0.3em; }
+  .reveal h2 { color: var(--highlight); font-weight: 600; border-bottom: 2px solid var(--accent); padding-bottom: 0.15em; margin-bottom: 0.4em; }
+  .reveal h3 { color: var(--accent); font-weight: 600; margin-bottom: 0.3em; }
+  .reveal h4 { color: var(--highlight); margin-bottom: 0.2em; }
+  .reveal p, .reveal li { line-height: 1.55; }
+  .reveal ul { margin-left: 1.2em; }
+  .reveal li { margin-bottom: 0.2em; }
+  .reveal code { background: var(--code-bg); color: var(--highlight); padding: 0.1em 0.35em; border-radius: 4px; }
+  .reveal pre { background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 8px; padding: 0.7em; margin: 0.4em 0; }
+  .reveal pre code { background: transparent; padding: 0; }
+  .reveal .accent { color: var(--accent); }
+  .reveal .hl { color: var(--highlight); }
+  .reveal .dim { color: var(--dim); }
+  .reveal .success { color: var(--success); }
+  .reveal .warn { color: var(--warn); }
+  .reveal strong { color: var(--accent); }
+  .reveal em { color: var(--highlight); font-style: normal; }
+
+  /* Diagram boxes */
+  .diagram-box {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.45em 0.9em; border-radius: 8px; font-size: 0.72em;
+    font-weight: 600; text-align: center; line-height: 1.3;
+    white-space: nowrap; min-width: 2.5em;
+  }
+  .box-primary   { background: var(--secondary); border: 2px solid var(--highlight); color: var(--highlight); }
+  .box-accent    { background: #3b1029; border: 2px solid var(--accent); color: var(--accent); }
+  .box-success   { background: #0c2e1c; border: 2px solid var(--success); color: var(--success); }
+  .box-warn      { background: #2e2a0c; border: 2px solid var(--warn); color: var(--warn); }
+  .box-dim       { background: #1e1e3a; border: 2px solid var(--dim); color: var(--dim); }
+  .box-purple    { background: #1a0a2e; border: 2px solid #a855f7; color: #a855f7; }
+
+  .arrow { color: var(--dim); font-size: 1.3em; margin: 0 0.3em; display: inline-flex; align-items: center; }
+  .arrow-down { color: var(--dim); font-size: 1.2em; text-align: center; margin: 0.2em 0; }
+
+  .flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em; margin: 0.5em 0; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; gap: 0.15em; margin: 0.4em 0; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8em; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1em; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 1em; }
+
+  .card {
+    background: var(--code-bg); border: 1px solid #2a3a5e; border-radius: 10px;
+    padding: 0.7em; margin: 0.3em 0;
+  }
+  .card-accent { border-color: var(--accent); }
+  .card-hl     { border-color: var(--highlight); }
+
+  .reveal table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+  .reveal th { background: var(--secondary); color: var(--highlight); padding: 0.4em 0.6em; border: 1px solid #2a3a5e; text-align: left; }
+  .reveal td { padding: 0.35em 0.6em; border: 1px solid #2a3a5e; }
+
+  /* Memory layout */
+  .mem-row { display: flex; align-items: stretch; margin: 0.15em 0; }
+  .mem-cell {
+    padding: 0.3em 0.5em; text-align: center; font-family: 'Consolas', monospace;
+    font-size: 0.65em; border: 1px solid #2a3a5e; min-width: 3em;
+  }
+  .mem-label { color: var(--dim); font-size: 0.6em; min-width: 5em; display: flex; align-items: center; padding-right: 0.5em; }
+  .mem-accent { background: #3b1029; color: var(--accent); }
+  .mem-hl { background: var(--secondary); color: var(--highlight); }
+  .mem-success { background: #0c2e1c; color: var(--success); }
+  .mem-warn { background: #2e2a0c; color: var(--warn); }
+  .mem-dim { background: #1e1e3a; color: var(--dim); }
+  .mem-purple { background: #1a0a2e; color: #a855f7; }
+
+  /* Pauli encoding table */
+  .pauli-cell { width: 2.5em; height: 2.5em; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1.1em; border-radius: 6px; }
+
+  /* Step trace */
+  .step-trace { counter-reset: step; }
+  .step-trace .step { display: flex; gap: 0.8em; margin-bottom: 0.4em; align-items: flex-start; }
+  .step-trace .step::before {
+    counter-increment: step; content: counter(step);
+    background: var(--accent); color: white; width: 1.5em; height: 1.5em;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.7em; font-weight: 700; flex-shrink: 0;
+  }
+  .step-content { flex: 1; }
+
+  /* Section separator */
+  .section-title { text-align: center; }
+  .section-title h1 { font-size: 2.0em !important; margin-bottom: 0.2em; }
+  .section-title p { color: var(--dim); font-size: 0.9em !important; }
+
+  /* Bit visualization */
+  .bit-row { display: flex; gap: 2px; align-items: center; }
+  .bit { width: 2em; height: 2em; display: flex; align-items: center; justify-content: center;
+    font-family: 'Consolas', monospace; font-size: 0.75em; font-weight: 700;
+    border-radius: 4px; border: 1px solid #2a3a5e; }
+  .bit-0 { background: #1e1e3a; color: var(--dim); }
+  .bit-1 { background: var(--secondary); color: var(--highlight); }
+  .bit-x { background: #3b1029; color: var(--accent); }
+  .bit-label { font-size: 0.6em; color: var(--dim); min-width: 4em; }
+
+  /* Picture comparison boxes */
+  .picture-box { border: 2px solid; border-radius: 12px; padding: 0.8em; }
+  .picture-heisenberg { border-color: var(--accent); }
+  .picture-schrodinger { border-color: var(--highlight); }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- TITLE SLIDE                                                   -->
+<!-- ============================================================ -->
+<section class="section-title">
+  <h1>Clifft HIR Deep Dive</h1>
+  <p>Heisenberg Intermediate Representation</p>
+  <div class="flow-row" style="margin-top: 1em;">
+    <span class="diagram-box box-dim">Stim Text</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-primary">Parser</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-primary">Circuit AST</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-accent">Frontend</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-accent" style="border-width:3px"><strong>HIR</strong></span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-success">Optimizer</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-warn">Backend</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-purple">Bytecode</span>
+  </div>
+  <p class="dim small" style="text-align:center; margin-top:1em;">The central data structure that makes near-Clifford simulation tractable</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: WHAT IS THE HIR?                                   -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 1</h1>
+    <p>What is the HIR?</p>
+  </section>
+
+  <!-- 1.1: Position in the Pipeline -->
+  <section>
+    <h2>Position in the Pipeline</h2>
+    <div class="flow-row" style="margin: 0.8em 0;">
+      <span class="diagram-box box-dim">Stim Text</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary">parse()</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-primary">Circuit AST</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent">trace()</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-accent" style="border-width:3px; font-size:0.85em;"><strong>HirModule</strong></span>
+    </div>
+    <div class="flow-row" style="margin: 0.3em 0;">
+      <span class="diagram-box box-accent" style="border-width:3px; font-size:0.85em;"><strong>HirModule</strong></span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-success">HIR Passes</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-warn">lower()</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-purple">CompiledModule</span>
+      <span class="arrow">&rarr;</span>
+      <span class="diagram-box box-dim">SVM</span>
+    </div>
+    <div class="card" style="margin-top: 0.8em;">
+      <h4>Why an Intermediate Representation?</h4>
+      <ul>
+        <li><strong>Separation of concerns</strong> -- decouple parsing from optimization from code generation</li>
+        <li>The <em>Circuit AST</em> is a faithful representation of the input text (gate-by-gate)</li>
+        <li>The <em>HIR</em> is a <strong>semantic</strong> representation: Clifford gates are absorbed, only non-Clifford ops + measurements remain</li>
+        <li>The <em>Bytecode</em> is a machine-level encoding with localized single-axis operations</li>
+        <li>Each stage can evolve independently -- new Stim gates don't affect the backend, new optimizations don't affect parsing</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 1.2: Heisenberg vs Schrodinger -->
+  <section>
+    <h2>The Heisenberg Picture</h2>
+    <div class="grid-2">
+      <div class="picture-box picture-schrodinger">
+        <h3 style="color: var(--highlight);">Schrodinger Picture</h3>
+        <p class="small">Track how the <strong>state</strong> evolves <em>forward</em> through gates</p>
+        <pre><code>|psi> = U_n ... U_2 U_1 |0>
+
+// Each gate transforms the state vector
+// Cost: O(2^n) per gate</code></pre>
+        <p class="small dim">This is what the SVM does at runtime -- it carries an amplitude vector <code>v[2^k]</code></p>
+      </div>
+      <div class="picture-box picture-heisenberg">
+        <h3 style="color: var(--accent);">Heisenberg Picture</h3>
+        <p class="small">Track how <strong>observables</strong> evolve <em>backward</em> through gates</p>
+        <pre><code>O' = U_1^dag ... U_n^dag O U_n ... U_1
+
+// Clifford gates map Paulis to Paulis
+// Cost: O(n^2/64) per Clifford gate</code></pre>
+        <p class="small dim">This is what the <strong>Frontend</strong> does at compile time -- it tracks a Stim Tableau</p>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.5em;">
+      <p>The <strong>key insight</strong>: Clifford gates are "free" in the Heisenberg picture. They just update the tableau mapping. Only <em>non-Clifford</em> gates (T, rotations) and measurements produce HIR operations.</p>
+    </div>
+  </section>
+
+  <!-- 1.3: What the HIR Captures -->
+  <section>
+    <h2>What Does the HIR Actually Contain?</h2>
+    <div class="grid-2">
+      <div>
+        <h4>IN the HIR (emitted as HeisenbergOps)</h4>
+        <ul>
+          <li><strong>T gates</strong> -- with "rewound" Pauli masks showing which qubits are affected</li>
+          <li><strong>Measurements</strong> -- with rewound observable Pauli masks</li>
+          <li><strong>Classical feedback</strong> -- conditioned Pauli corrections</li>
+          <li><strong>Noise channels</strong> -- stochastic Pauli errors</li>
+          <li><strong>Phase rotations</strong> -- continuous Z-rotations (generalized T)</li>
+          <li><strong>Detectors / Observables</strong> -- QEC parity checks</li>
+          <li><strong>Expectation values</strong> -- non-destructive probes</li>
+        </ul>
+      </div>
+      <div>
+        <h4>NOT in the HIR (absorbed into tableau)</h4>
+        <ul>
+          <li class="dim">H (Hadamard)</li>
+          <li class="dim">S, S_DAG (Phase gates)</li>
+          <li class="dim">X, Y, Z (Pauli gates)</li>
+          <li class="dim">CX/CNOT (Controlled-X)</li>
+          <li class="dim">CZ (Controlled-Z)</li>
+          <li class="dim">SWAP</li>
+          <li class="dim">ISWAP, SQRT_XX, SQRT_YY, SQRT_ZZ</li>
+          <li class="dim">All 23 single-qubit Cliffords</li>
+          <li class="dim">All 22 two-qubit Cliffords</li>
+        </ul>
+        <p class="small dim" style="margin-top: 0.3em;">45 Clifford gate types produce <strong>zero</strong> HIR output</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1.4: Heisenberg vs Schrodinger Diagram -->
+  <section>
+    <h2>Heisenberg vs Schrodinger -- Visually</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>Schrodinger: State Evolves Forward</h4>
+        <div style="text-align: center; font-family: monospace; font-size: 0.7em; line-height: 2;">
+          <div><span style="color:var(--highlight)">|0></span> <span class="dim">&mdash;&mdash; [H] &mdash;&mdash; [CNOT] &mdash;&mdash; [T] &mdash;&mdash; [M] &mdash;&gt;</span> <span class="success">result</span></div>
+          <div><span style="color:var(--highlight)">|0></span> <span class="dim">&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; [CNOT] &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; [M] &mdash;&gt;</span> <span class="success">result</span></div>
+          <div style="color:var(--dim); font-size: 0.85em; margin-top:0.5em;">State transforms: |00> &rarr; |+0> &rarr; |phi+> &rarr; T|phi+> &rarr; collapse</div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Heisenberg: Observables Evolve Backward</h4>
+        <div style="text-align: center; font-family: monospace; font-size: 0.7em; line-height: 2;">
+          <div><span class="dim">rewind &lt;&mdash; [H] &lt;&mdash; [CNOT] &lt;&mdash;</span> <span style="color:var(--accent)">[T]</span> <span class="dim">&lt;&mdash;</span> <span style="color:var(--accent)">[M]</span></div>
+          <div><span class="dim">rewind &lt;&mdash;&mdash;&mdash;&mdash;&mdash; [CNOT] &lt;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</span> <span style="color:var(--accent)">[M]</span></div>
+          <div style="color:var(--dim); font-size: 0.85em; margin-top:0.5em;">Z_0 rewound through Cliffords: Z_0 &rarr; X_0 &rarr; X_0&otimes;X_1</div>
+        </div>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.6em;">
+      <p><strong>The "rewound Pauli"</strong>: When the frontend encounters <code>T 0</code>, it asks "what does Z_0 look like after undoing all Cliffords so far?" The answer is a multi-qubit Pauli string -- this becomes the T gate's <em>Pauli mask</em> in the HIR.</p>
+      <p class="small dim">Mathematically: <code>inv_state.zs[q]</code> gives the Heisenberg-picture Z observable for qubit q conjugated through the inverse of accumulated Cliffords.</p>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: THE FRONTEND                                       -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 2</h1>
+    <p>The Frontend -- Circuit to HIR</p>
+  </section>
+
+  <!-- 2.1: The trace() Function -->
+  <section>
+    <h2>The trace() Function</h2>
+    <pre><code class="language-cpp">// frontend.h -- Main entry point
+[[nodiscard]] HirModule trace(const Circuit& circuit);</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Algorithm Overview</h4>
+      <div class="step-trace">
+        <div class="step"><div class="step-content">Initialize a Stim <code>TableauSimulator</code> with an identity tableau (n qubits)</div></div>
+        <div class="step"><div class="step-content">Pre-count Pauli masks + noise channels to pre-size <code>PauliMaskArena</code> storage</div></div>
+        <div class="step"><div class="step-content">Walk each <code>AstNode</code> in the circuit sequentially</div></div>
+        <div class="step"><div class="step-content">For each gate, dispatch on its type:
+          <ul>
+            <li><strong>Clifford</strong> &rarr; apply to simulator (absorbed into tableau, no HIR output)</li>
+            <li><strong>T / T_DAG</strong> &rarr; extract rewound Pauli, emit <code>HeisenbergOp::T_GATE</code></li>
+            <li><strong>Measurement</strong> &rarr; extract rewound observable, emit <code>HeisenbergOp::MEASURE</code></li>
+            <li><strong>Feedback</strong> &rarr; extract rewound Pauli, emit <code>HeisenbergOp::CONDITIONAL_PAULI</code></li>
+            <li><strong>Noise</strong> &rarr; build noise site, emit <code>HeisenbergOp::NOISE</code></li>
+            <li><strong>R_X/R_Y/R_Z/U3</strong> &rarr; decompose into Clifford + rotation, emit <code>PHASE_ROTATION</code></li>
+          </ul>
+        </div></div>
+        <div class="step"><div class="step-content">Return the assembled <code>HirModule</code> with ops, arenas, side-tables, and final tableau</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2.2: Clifford Absorption -->
+  <section>
+    <h2>Clifford Gates: Absorbed into Tableau</h2>
+    <p>When the frontend encounters a Clifford gate, it calls the corresponding Stim simulator method:</p>
+    <div class="grid-2">
+      <div>
+        <table>
+          <tr><th>Stim Gate</th><th>Simulator Method</th></tr>
+          <tr><td><code>H</code></td><td><code>do_H_XZ(q)</code></td></tr>
+          <tr><td><code>S</code></td><td><code>do_S(q)</code></td></tr>
+          <tr><td><code>CX</code></td><td><code>do_ZCX(c, t)</code></td></tr>
+          <tr><td><code>CZ</code></td><td><code>do_ZCZ(a, b)</code></td></tr>
+          <tr><td><code>SWAP</code></td><td><code>do_SWAP(a, b)</code></td></tr>
+          <tr><td><code>X / Y / Z</code></td><td><code>do_X/Y/Z(q)</code></td></tr>
+          <tr><td><code>ISWAP</code></td><td><code>do_ISWAP(a, b)</code></td></tr>
+        </table>
+      </div>
+      <div class="card card-hl">
+        <h4>What "absorption" means</h4>
+        <p class="small">The tableau tracks how each Pauli Z_q and X_q transforms under the accumulated Clifford unitary.</p>
+        <p class="small">After <code>H 0; CNOT 0 1</code>:</p>
+        <pre><code>Z_0 maps to X_0 * X_1  (= X tensor X)
+X_0 maps to Z_0 * Z_1  (= Z tensor Z)
+Z_1 maps to Z_1
+X_1 maps to X_0 * X_1</code></pre>
+        <p class="small dim">This is stored as rows of a 2n x 2n binary matrix in Stim's tableau.</p>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.4em;">
+      <p><strong>Result</strong>: Clifford gates produce <strong>zero</strong> HIR ops. A pure-Clifford circuit with 10,000 gates produces an empty <code>ops</code> vector. Only the final tableau survives.</p>
+    </div>
+  </section>
+
+  <!-- 2.3: Non-Clifford Emission (T gates) -->
+  <section>
+    <h2>T Gates: Rewound Through Tableau</h2>
+    <p>When the frontend encounters <code>T q</code> (a pi/8 phase on qubit q):</p>
+    <div class="step-trace">
+      <div class="step"><div class="step-content">
+        Extract the "rewound Z" from the tableau: <code>inv_state.zs[q]</code><br>
+        <span class="small dim">This is the n-qubit Pauli string that Z_q maps to under the inverse of accumulated Cliffords</span>
+      </div></div>
+      <div class="step"><div class="step-content">
+        Claim a fresh slot in <code>HirModule::pauli_masks</code> arena
+      </div></div>
+      <div class="step"><div class="step-content">
+        Fill the slot with the rewound Pauli's X-bits, Z-bits, and sign:
+        <pre><code class="language-cpp">hir.append_tgate(/*dagger=*/false, [&](MutablePauliMaskView slot) {
+    stim_to_mask_view(rewound.xs, n, slot.x());
+    stim_to_mask_view(rewound.zs, n, slot.z());
+    slot.set_sign(rewound.sign);
+});</code></pre>
+      </div></div>
+    </div>
+    <div class="card" style="margin-top: 0.4em;">
+      <h4>Why rewinding matters</h4>
+      <p class="small">Consider: <code>H 0; T 0</code>. Without H, T acts as <code>diag(1, e^{i*pi/4})</code> on Z_0. But with the preceding H, the "rewound" Z is actually X_0. The HIR records the T gate as acting on the Pauli X_0 -- the backend then knows to expand qubit 0 in the X basis.</p>
+    </div>
+  </section>
+
+  <!-- 2.4: Measurements & Feedback -->
+  <section>
+    <h2>Measurements and Classical Feedback</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>Measurements</h4>
+        <p class="small">For <code>M q</code> (Z-basis measurement on qubit q):</p>
+        <ul class="small">
+          <li>Extract rewound observable: <code>inv_state.zs[q]</code></li>
+          <li>Emit <code>HeisenbergOp::MEASURE</code> with the Pauli mask and a <code>MeasRecordIdx</code></li>
+          <li>For <code>MX q</code>: extract <code>inv_state.xs[q]</code> instead</li>
+          <li>For <code>MPP</code>: combine Pauli-tagged targets into a product mask</li>
+        </ul>
+        <p class="small dim">The rewound mask tells the backend exactly which qubits are involved and in which basis</p>
+      </div>
+      <div class="card">
+        <h4>Classical Feedback (CONDITIONAL_PAULI)</h4>
+        <p class="small">For <code>CX rec[-k] q</code> ("apply X to q if measurement k was 1"):</p>
+        <ul class="small">
+          <li>The controlling measurement is <code>rec[-k]</code></li>
+          <li>The applied Pauli X_q is rewound through the tableau</li>
+          <li>Emit <code>HeisenbergOp::CONDITIONAL_PAULI</code> with:
+            <ul>
+              <li><code>ControllingMeasIdx</code>: which measurement result controls this</li>
+              <li>Pauli mask: the rewound correction to apply</li>
+            </ul>
+          </li>
+        </ul>
+        <p class="small dim">Used in QEC for Pauli frame corrections after syndrome measurement</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2.5: Step-by-step Example -->
+  <section>
+    <h2>Worked Trace: H 0; CNOT 0 1; T 2; M 0 1 2</h2>
+    <table style="width: 100%;">
+      <tr>
+        <th style="width:20%">Gate</th>
+        <th style="width:25%">Action</th>
+        <th style="width:25%">Tableau Change</th>
+        <th style="width:30%">HIR Output</th>
+      </tr>
+      <tr>
+        <td><code>H 0</code></td>
+        <td class="success">Absorbed</td>
+        <td class="small">Z_0 &harr; X_0</td>
+        <td class="dim small">(none)</td>
+      </tr>
+      <tr>
+        <td><code>CNOT 0 1</code></td>
+        <td class="success">Absorbed</td>
+        <td class="small">Z_0 &rarr; X_0&otimes;X_1<br>Z_1 &rarr; Z_0&otimes;Z_1</td>
+        <td class="dim small">(none)</td>
+      </tr>
+      <tr>
+        <td><code>T 2</code></td>
+        <td style="color:var(--accent);">Rewound &amp; emitted</td>
+        <td class="small">inv_state.zs[2] = Z_2<br>(qubit 2 untouched by H/CNOT)</td>
+        <td style="color:var(--accent);" class="small"><code>T_GATE</code> mask: I&otimes;I&otimes;Z</td>
+      </tr>
+      <tr>
+        <td><code>M 0</code></td>
+        <td style="color:var(--accent);">Rewound &amp; emitted</td>
+        <td class="small">inv_state.zs[0] = X_0&otimes;X_1</td>
+        <td style="color:var(--accent);" class="small"><code>MEASURE</code> mask: X&otimes;X&otimes;I<br>meas_record_idx = 0</td>
+      </tr>
+      <tr>
+        <td><code>M 1</code></td>
+        <td style="color:var(--accent);">Rewound &amp; emitted</td>
+        <td class="small">inv_state.zs[1] = Z_0&otimes;Z_1</td>
+        <td style="color:var(--accent);" class="small"><code>MEASURE</code> mask: Z&otimes;Z&otimes;I<br>meas_record_idx = 1</td>
+      </tr>
+      <tr>
+        <td><code>M 2</code></td>
+        <td style="color:var(--accent);">Rewound &amp; emitted</td>
+        <td class="small">inv_state.zs[2] = Z_2</td>
+        <td style="color:var(--accent);" class="small"><code>MEASURE</code> mask: I&otimes;I&otimes;Z<br>meas_record_idx = 2</td>
+      </tr>
+    </table>
+    <p class="small dim" style="margin-top:0.3em;">Result: 4 HIR ops (1 T_GATE + 3 MEASURE), 2 Clifford gates fully absorbed. The T gate's mask is <code>I&otimes;I&otimes;Z</code> because qubit 2 wasn't touched by any Clifford.</p>
+  </section>
+
+  <!-- 2.6: Gate Decomposition & REPEAT -->
+  <section>
+    <h2>Gate Decomposition and REPEAT Handling</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>Parser-Level Decompositions</h4>
+        <table>
+          <tr><th>Input Gate</th><th>Decomposition</th></tr>
+          <tr><td><code>CH c t</code></td><td><code>R_Y(0.25) t; CX c t; R_Y(-0.25) t</code></td></tr>
+          <tr><td><code>CCZ a b c</code></td><td>7 T/T_DAG + 6 CX gates</td></tr>
+          <tr><td><code>CCX a b t</code></td><td><code>H t; CCZ a b t; H t</code></td></tr>
+          <tr><td><code>MPP X0*Z1 X2</code></td><td>Two separate AstNodes</td></tr>
+          <tr><td><code>MXX a b</code></td><td>Desugared to <code>MPP X_a*X_b</code></td></tr>
+          <tr><td><code>R a</code> (reset)</td><td>Hidden M + feedback</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h4>REPEAT Block Handling</h4>
+        <pre><code>REPEAT 100 {
+  H 0
+  CNOT 0 1
+  M 0 1
+  DETECTOR rec[-1] rec[-3]
+}</code></pre>
+        <p class="small">REPEAT blocks are <strong>unrolled at parse time</strong> via text-level replay. The body is re-parsed N times against the same Circuit.</p>
+        <p class="small">This means <code>rec[-k]</code> references naturally resolve to correct absolute measurement indices as the repeat count grows.</p>
+        <p class="small dim">Safety limit: <code>kMaxUnrolledOps = 10,000,000</code> total AST nodes to prevent OOM.</p>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: HIR DATA STRUCTURES                                -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 3</h1>
+    <p>HIR Data Structures -- In Detail</p>
+  </section>
+
+  <!-- 3.1: HeisenbergOp Layout -->
+  <section>
+    <h2>HeisenbergOp: 16-Byte Layout</h2>
+    <pre><code class="language-cpp">struct HeisenbergOp {                // Exactly 16 bytes
+    PauliMaskHandle mask_handle_;    // 4 bytes  (offset 0)
+    OpType type_;                    // 1 byte   (offset 4)
+    uint8_t flags_;                  // 1 byte   (offset 5)
+    uint8_t pad_[2];                 // 2 bytes  (offset 6)
+    union { /* payload */ };         // 8 bytes  (offset 8)
+};
+static_assert(sizeof(HeisenbergOp) == 16);</code></pre>
+    <div style="margin: 0.6em 0;">
+      <p class="small dim" style="margin-bottom: 0.3em;">Memory layout (4 ops per 64-byte L1 cache line):</p>
+      <div class="mem-row">
+        <span class="mem-label">Byte offset</span>
+        <span class="mem-cell mem-dim">0</span><span class="mem-cell mem-dim">1</span><span class="mem-cell mem-dim">2</span><span class="mem-cell mem-dim">3</span>
+        <span class="mem-cell mem-dim">4</span><span class="mem-cell mem-dim">5</span><span class="mem-cell mem-dim">6</span><span class="mem-cell mem-dim">7</span>
+        <span class="mem-cell mem-dim">8</span><span class="mem-cell mem-dim">9</span><span class="mem-cell mem-dim">10</span><span class="mem-cell mem-dim">11</span>
+        <span class="mem-cell mem-dim">12</span><span class="mem-cell mem-dim">13</span><span class="mem-cell mem-dim">14</span><span class="mem-cell mem-dim">15</span>
+      </div>
+      <div class="mem-row">
+        <span class="mem-label">Field</span>
+        <span class="mem-cell mem-hl" style="min-width:12em;">mask_handle (u32)</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">type</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">flags</span>
+        <span class="mem-cell mem-dim" style="min-width:6em;">pad[2]</span>
+        <span class="mem-cell mem-success" style="min-width:24em;">union payload (8 bytes, double-aligned)</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 0.3em;">
+      <p class="small"><strong>mask_handle_</strong>: index into <code>HirModule::pauli_masks</code> arena. Value <code>kNoMask = 0xFFFFFFFF</code> for ops without Pauli masks (NOISE, DETECTOR, OBSERVABLE, READOUT_NOISE).</p>
+      <p class="small"><strong>flags_</strong>: <code>FLAG_IS_DAGGER (0x01)</code> for T_DAG vs T; <code>FLAG_HIDDEN (0x04)</code> for hidden measurements (from resets).</p>
+    </div>
+  </section>
+
+  <!-- 3.2: OpType Enum -->
+  <section>
+    <h2>OpType Enum: All Variants</h2>
+    <table>
+      <tr><th>OpType</th><th>Has Mask?</th><th>Payload</th><th>Description</th></tr>
+      <tr><td><code class="accent">T_GATE</code></td><td class="success">Yes</td><td>flags (dagger)</td><td>T or T-dagger phase rotation (pi/8). <code>FLAG_IS_DAGGER</code> distinguishes.</td></tr>
+      <tr><td><code class="accent">MEASURE</code></td><td class="success">Yes</td><td><code>meas_record_idx</code> (u32)</td><td>Destructive measurement with Pauli mask. Outcome stored at the record index.</td></tr>
+      <tr><td><code class="accent">CONDITIONAL_PAULI</code></td><td class="success">Yes</td><td><code>controlling_meas</code> (u32)</td><td>Apply Pauli correction if measurement result was 1. Classical feedback.</td></tr>
+      <tr><td><code class="accent">NOISE</code></td><td class="dim">No</td><td><code>site_idx</code> (u32)</td><td>Stochastic Pauli error channel. References <code>noise_sites[]</code> side-table.</td></tr>
+      <tr><td><code class="accent">READOUT_NOISE</code></td><td class="dim">No</td><td><code>entry_idx</code> (u32)</td><td>Classical bit-flip on measurement result. References <code>readout_noise[]</code>.</td></tr>
+      <tr><td><code class="accent">PHASE_ROTATION</code></td><td class="success">Yes</td><td><code>alpha</code> (f64)</td><td>Continuous Z-rotation by angle alpha (in half-turns). Generalized T gate.</td></tr>
+      <tr><td><code class="accent">DETECTOR</code></td><td class="dim">No</td><td><code>target_list_idx</code> (u32)</td><td>Parity check over measurement records. References <code>detector_targets[]</code>.</td></tr>
+      <tr><td><code class="accent">OBSERVABLE</code></td><td class="dim">No</td><td><code>obs_idx</code> + <code>target_list_idx</code> (u32+u32)</td><td>Logical observable accumulator. References <code>observable_targets[]</code>.</td></tr>
+      <tr><td><code class="accent">EXP_VAL</code></td><td class="success">Yes</td><td><code>exp_val_idx</code> (u32)</td><td>Non-destructive expectation value probe. Does not collapse the state.</td></tr>
+    </table>
+  </section>
+
+  <!-- 3.3: Payload Union -->
+  <section>
+    <h2>Payload Union Details</h2>
+    <pre><code class="language-cpp">// Per-OpType payload variants (8 bytes each, at offset 8)
+union {
+    MeasurePayload measure_;         // { uint32_t meas_record_idx; }
+    ConditionalPayload conditional_; // { uint32_t controlling_meas; }
+    NoisePayload noise_;             // { uint32_t site_idx; }
+    ReadoutPayload readout_;         // { uint32_t entry_idx; }
+    DetectorPayload detector_;       // { uint32_t target_list_idx; }
+    ObservablePayload observable_;   // { uint32_t obs_idx;
+                                     //   uint32_t target_list_idx; }
+    PhasePayload phase_;             // { double alpha; }   -- full 8 bytes!
+    ExpValPayload exp_val_;          // { uint32_t exp_val_idx; }
+};</code></pre>
+    <div class="grid-2" style="margin-top: 0.5em;">
+      <div class="card">
+        <h4>4-byte payloads</h4>
+        <p class="small">Most payloads use only 4 bytes (a single <code>uint32_t</code> index). The remaining 4 bytes of the 8-byte union are padding.</p>
+        <p class="small dim">Exception: <code>ObservablePayload</code> uses both uint32_t fields (obs_idx + target_list_idx = 8 bytes).</p>
+      </div>
+      <div class="card">
+        <h4>8-byte payload</h4>
+        <p class="small"><code>PhasePayload</code> stores a full <code>double alpha</code> -- the rotation angle in half-turns. This is the only variant that uses the full 8 bytes as a floating-point value.</p>
+        <p class="small dim">The union is double-aligned (offset 8) to ensure <code>alpha</code> is naturally aligned for fast load/store.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3.4: Static Factories -->
+  <section>
+    <h2>HeisenbergOp: Static Factory Methods</h2>
+    <pre><code class="language-cpp">// Construction via static factories
+static HeisenbergOp make_tgate(PauliMaskHandle handle, bool dagger);
+static HeisenbergOp make_measure(PauliMaskHandle handle, MeasRecordIdx meas_idx);
+static HeisenbergOp make_conditional(PauliMaskHandle handle, ControllingMeasIdx ctrl);
+static HeisenbergOp make_noise(NoiseSiteIdx site_idx);          // kNoMask
+static HeisenbergOp make_readout_noise(ReadoutNoiseIdx idx);    // kNoMask
+static HeisenbergOp make_detector(DetectorIdx idx);             // kNoMask
+static HeisenbergOp make_observable(ObservableIdx obs, uint32_t tgt_list);  // kNoMask
+static HeisenbergOp make_exp_val(PauliMaskHandle handle, ExpValIdx idx);
+static HeisenbergOp make_phase_rotation(PauliMaskHandle handle, double alpha);</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Lambda-fill builders on HirModule</h4>
+      <p class="small">Ops are NOT constructed directly. Instead, <code>HirModule::append_*</code> builders atomically: claim an arena slot &rarr; invoke a fill callable &rarr; append the op.</p>
+      <pre><code class="language-cpp">// Example: appending a T gate
+hir.append_tgate(/*dagger=*/false, [&](MutablePauliMaskView slot) {
+    stim_to_mask_view(rewound.xs, n, slot.x());  // write X-bits
+    stim_to_mask_view(rewound.zs, n, slot.z());  // write Z-bits
+    slot.set_sign(rewound.sign);                  // write sign
+});</code></pre>
+      <p class="small dim">This pattern guarantees that arena allocation + mask fill + op push_back happen atomically at each call site.</p>
+    </div>
+  </section>
+
+  <!-- 3.5: Strong Typedefs -->
+  <section>
+    <h2>Strong Typedefs: Type-Safe Indices</h2>
+    <pre><code class="language-cpp">// Strong typedefs prevent mixing up different index types
+enum class MeasRecordIdx : uint32_t {};       // Absolute measurement position
+enum class ControllingMeasIdx : uint32_t {};  // Which measurement controls a CONDITIONAL_PAULI
+enum class NoiseSiteIdx : uint32_t {};        // Index into noise_sites[]
+enum class DetectorIdx : uint32_t {};         // Index into detector_targets[]
+enum class ObservableIdx : uint32_t {};       // Index into observable_targets[]
+enum class ExpValIdx : uint32_t {};           // Index into exp_val records
+enum class ReadoutNoiseIdx : uint32_t {};     // Index into readout_noise[]
+enum class PauliMaskHandle : uint32_t {};     // Index into PauliMaskArena</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <p class="small"><strong>Why strong typedefs?</strong> Passing a <code>NoiseSiteIdx</code> where a <code>DetectorIdx</code> is expected is a compile-time error. All are <code>uint32_t</code> underneath, but the type system prevents accidental misuse.</p>
+      <p class="small dim">The <code>kNoMask</code> sentinel (<code>PauliMaskHandle(~0u)</code>) marks ops that carry no Pauli mask. Checked via <code>op.has_mask()</code>.</p>
+    </div>
+  </section>
+
+  <!-- 3.6: In-Place Mutation -->
+  <section>
+    <h2>In-Place Mutation (for Optimizer Passes)</h2>
+    <pre><code class="language-cpp">// In-place rewrite preserving mask handle
+void reset_to_tgate(bool dagger);          // Convert any masked op to T_GATE
+void reset_to_phase_rotation(double alpha); // Convert any masked op to PHASE_ROTATION
+
+// HirModule helpers
+void demote_to_tgate(HeisenbergOp& op, bool dagger);
+// Resets sign to false (peephole normalization convention), changes type to T_GATE
+
+void demote_to_phase_rotation(HeisenbergOp& op, double alpha);
+// Used when optimizer discovers alpha = +/-1/4 can become a T gate, or vice versa</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Determinism Check</h4>
+      <pre><code class="language-cpp">[[nodiscard]] bool is_deterministic() const {
+    for (const auto& op : ops) {
+        if (type == OpType::MEASURE || type == OpType::NOISE ||
+            type == OpType::READOUT_NOISE || type == OpType::CONDITIONAL_PAULI)
+            return false;
+    }
+    return true;  // Pure unitary: well-defined global phase
+}</code></pre>
+      <p class="small dim">Deterministic modules have a well-defined statevector including global phase. Stochastic ones (with measurements/noise) are only defined per shot.</p>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: PAULI MASK SYSTEM                                  -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 4</h1>
+    <p>The Pauli Mask System</p>
+  </section>
+
+  <!-- 4.1: Pauli Encoding -->
+  <section>
+    <h2>Pauli Encoding Convention</h2>
+    <p>Each qubit's Pauli operator is encoded using two bits: one from the X-array, one from the Z-array.</p>
+    <div style="display: flex; justify-content: center; gap: 1.5em; margin: 0.8em 0;">
+      <div style="text-align: center;">
+        <div class="pauli-cell" style="background: #1e1e3a; color: var(--dim); border: 2px solid var(--dim); margin: 0 auto;">I</div>
+        <p class="small dim">X=0, Z=0</p>
+      </div>
+      <div style="text-align: center;">
+        <div class="pauli-cell" style="background: #3b1029; color: var(--accent); border: 2px solid var(--accent); margin: 0 auto;">X</div>
+        <p class="small" style="color:var(--accent)">X=1, Z=0</p>
+      </div>
+      <div style="text-align: center;">
+        <div class="pauli-cell" style="background: var(--secondary); color: var(--highlight); border: 2px solid var(--highlight); margin: 0 auto;">Z</div>
+        <p class="small" style="color:var(--highlight)">X=0, Z=1</p>
+      </div>
+      <div style="text-align: center;">
+        <div class="pauli-cell" style="background: #0c2e1c; color: var(--success); border: 2px solid var(--success); margin: 0 auto;">Y</div>
+        <p class="small" style="color:var(--success)">X=1, Z=1</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>5-Qubit Example: X &otimes; I &otimes; Z &otimes; Y &otimes; I</h4>
+      <div style="margin: 0.5em 0;">
+        <div class="mem-row">
+          <span class="mem-label">Qubit</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">q0</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">q1</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">q2</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">q3</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">q4</span>
+        </div>
+        <div class="mem-row">
+          <span class="mem-label">X bits</span>
+          <span class="mem-cell mem-accent" style="min-width:4em;">1</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+          <span class="mem-cell mem-success" style="min-width:4em;">1</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+        </div>
+        <div class="mem-row">
+          <span class="mem-label">Z bits</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+          <span class="mem-cell mem-hl" style="min-width:4em;">1</span>
+          <span class="mem-cell mem-success" style="min-width:4em;">1</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">0</span>
+        </div>
+        <div class="mem-row">
+          <span class="mem-label">Pauli</span>
+          <span class="mem-cell mem-accent" style="min-width:4em;">X</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">I</span>
+          <span class="mem-cell mem-hl" style="min-width:4em;">Z</span>
+          <span class="mem-cell mem-success" style="min-width:4em;">Y</span>
+          <span class="mem-cell mem-dim" style="min-width:4em;">I</span>
+        </div>
+      </div>
+      <p class="small dim">Plus a <strong>sign bit</strong>: 0 = positive (+XIZYI), 1 = negative (-XIZYI). Stored separately in <code>signs_[]</code>.</p>
+    </div>
+  </section>
+
+  <!-- 4.2: PauliMaskArena -->
+  <section>
+    <h2>PauliMaskArena: Contiguous Storage</h2>
+    <pre><code class="language-cpp">class PauliMaskArena {
+    uint32_t num_words_;          // ceil(num_qubits / 64) -- fixed at construction
+    std::vector&lt;uint64_t&gt; x_;    // All X-bits, contiguous  [mask0_x | mask1_x | ...]
+    std::vector&lt;uint64_t&gt; z_;    // All Z-bits, contiguous  [mask0_z | mask1_z | ...]
+    std::vector&lt;uint8_t&gt; signs_; // One sign byte per mask  [s0 | s1 | ...]
+
+    PauliMaskView at(PauliMaskHandle h) const;        // Read-only view
+    MutablePauliMaskView mut_at(PauliMaskHandle h);   // Mutable view
+};</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Memory Layout (3 masks, 128 qubits = 2 words)</h4>
+      <div style="font-family: monospace; font-size: 0.65em; line-height: 1.8;">
+        <div><span class="hl">x_[]</span>: <span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m0_x_w0</span><span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m0_x_w1</span><span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m1_x_w0</span><span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m1_x_w1</span><span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m2_x_w0</span><span class="mem-cell mem-accent" style="display:inline-block; min-width:6em;">m2_x_w1</span></div>
+        <div><span class="hl">z_[]</span>: <span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m0_z_w0</span><span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m0_z_w1</span><span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m1_z_w0</span><span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m1_z_w1</span><span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m2_z_w0</span><span class="mem-cell mem-hl" style="display:inline-block; min-width:6em;">m2_z_w1</span></div>
+        <div><span class="hl">signs_[]</span>: <span class="mem-cell mem-success" style="display:inline-block; min-width:3em;">s0</span><span class="mem-cell mem-success" style="display:inline-block; min-width:3em;">s1</span><span class="mem-cell mem-success" style="display:inline-block; min-width:3em;">s2</span></div>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.3em;">
+      <p class="small"><strong>Why parallel arrays?</strong> Keeping <code>x_[]</code> and <code>z_[]</code> in separate contiguous arrays optimizes for the common case of iterating only X or only Z bits (e.g., the backend's localization pass reads X support and Z support independently).</p>
+      <p class="small"><strong>Fixed capacity</strong>: The arena is pre-sized at construction. No resizing means all <code>PauliMaskView</code> references (which hold raw <code>span</code> pointers) remain valid for the arena's lifetime.</p>
+    </div>
+  </section>
+
+  <!-- 4.3: PauliMaskView / MutablePauliMaskView -->
+  <section>
+    <h2>Mask Views: Read-Only and Mutable</h2>
+    <pre><code class="language-cpp">class PauliMaskView {
+    MaskView x_;          // span&lt;const uint64_t&gt; over the X-bit words for one mask
+    MaskView z_;          // span&lt;const uint64_t&gt; over the Z-bit words for one mask
+    const uint8_t* sign_; // pointer to the sign byte
+
+    MaskView x() const;   // Read X-bits
+    MaskView z() const;   // Read Z-bits
+    bool sign() const;    // Read sign
+};
+
+class MutablePauliMaskView {
+    MutableMaskView x_;   // span&lt;uint64_t&gt; -- writable
+    MutableMaskView z_;   // span&lt;uint64_t&gt; -- writable
+    uint8_t* sign_;       // writable sign
+
+    void set_sign(bool s);
+    operator PauliMaskView() const;  // implicit conversion for read-only callers
+};</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>HirModule Mask Accessors</h4>
+      <pre><code class="language-cpp">// Convenience accessors on HirModule
+MaskView destab_mask(const HeisenbergOp& op) const; // X-component (destabilizer)
+MaskView stab_mask(const HeisenbergOp& op) const;   // Z-component (stabilizer)
+bool sign(const HeisenbergOp& op) const;             // Sign bit
+PauliMaskView mask_view(const HeisenbergOp& op) const; // Full (X, Z, sign) view</code></pre>
+      <p class="small dim">The names "destab" and "stab" come from the stabilizer formalism: X-bits correspond to destabilizer rows, Z-bits to stabilizer rows in the tableau.</p>
+    </div>
+  </section>
+
+  <!-- 4.4: BitMask<N> -->
+  <section>
+    <h2>BitMask&lt;N&gt;: Compile-Time Fixed Width</h2>
+    <pre><code class="language-cpp">template &lt;size_t N&gt;
+struct BitMask {
+    static constexpr size_t kWords = N / 64;
+    std::array&lt;uint64_t, kWords&gt; w{};
+
+    // Bitwise: operator^, &, |, ~, ^=, &=, |=
+    // Queries: is_zero(), popcount(), lowest_bit()
+    // Bit-level: bit_get(idx), bit_set(idx, val), bit_xor(idx), bit_swap(i, j)
+    // Multi-word: clear_lowest_bit()  -- analog of x &= x - 1
+};</code></pre>
+    <div class="grid-2" style="margin-top: 0.5em;">
+      <div class="card">
+        <h4>N = 64 (1 word)</h4>
+        <p class="small">Single <code>uint64_t</code>. All operations compile to single machine instructions.</p>
+      </div>
+      <div class="card">
+        <h4>N = 512 (8 words = 64 bytes)</h4>
+        <p class="small">Fits exactly one <strong>AVX-512</strong> register. XOR/AND/popcount auto-vectorize to single SIMD instructions at <code>-O3</code>.</p>
+      </div>
+    </div>
+    <div class="card card-hl" style="margin-top: 0.3em;">
+      <h4>Two-Tier Width System</h4>
+      <p class="small"><code>BitMask&lt;N&gt;</code> is for compile-time widths (auto-vectorization). <code>MaskView</code> wraps <code>span&lt;uint64_t&gt;</code> for runtime-width operations. Adapters <code>view()</code> / <code>mut_view()</code> bridge the two. The HIR uses <code>MaskView</code> since qubit count is determined at runtime.</p>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: HirModule                                          -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 5</h1>
+    <p>HirModule -- The Complete IR</p>
+  </section>
+
+  <!-- 5.1: HirModule Fields -->
+  <section>
+    <h2>HirModule: What It Owns</h2>
+    <pre><code class="language-cpp">struct HirModule {
+    // === Pauli mask storage ===
+    PauliMaskArena pauli_masks;            // Gate masks (T, MEASURE, CONDITIONAL, etc.)
+    PauliMaskArena noise_channel_masks;    // Noise channel masks (separate arena)
+
+    // === Op sequence ===
+    std::vector&lt;HeisenbergOp&gt; ops;         // The core IR instruction stream
+
+    // === Side-tables (variable-length payloads) ===
+    std::vector&lt;NoiseSite&gt; noise_sites;              // Each has channels[]
+    std::vector&lt;ReadoutNoiseEntry&gt; readout_noise;    // Classical bit-flips
+    std::vector&lt;std::vector&lt;uint32_t&gt;&gt; detector_targets;    // Meas records per detector
+    std::vector&lt;std::vector&lt;uint32_t&gt;&gt; observable_targets;  // Meas records per observable
+
+    // === Metadata ===
+    uint32_t num_qubits = 0;
+    uint32_t num_measurements = 0;
+    uint32_t num_hidden_measurements = 0;  // From resets (not user-visible)
+    uint32_t num_detectors = 0;
+    uint32_t num_observables = 0;
+    uint32_t num_exp_vals = 0;
+    std::complex&lt;double&gt; global_weight = {1.0, 0.0};
+
+    // === Source mapping ===
+    std::vector&lt;std::vector&lt;uint32_t&gt;&gt; source_map;  // source_map[i] = source lines for ops[i]
+
+    // === Final Clifford tableau ===
+    std::optional&lt;stim::Tableau&lt;kStimWidth&gt;&gt; final_tableau;
+};</code></pre>
+  </section>
+
+  <!-- 5.2: HirModule Class Diagram -->
+  <section>
+    <h2>HirModule Ownership Diagram</h2>
+    <div style="text-align: center;">
+      <div class="diagram-box box-accent" style="font-size: 0.85em; padding: 0.6em 1.5em; margin-bottom: 0.5em;"><strong>HirModule</strong></div>
+      <div style="display: flex; justify-content: center; gap: 0.8em; flex-wrap: wrap;">
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-primary" style="font-size: 0.65em;">PauliMaskArena<br>pauli_masks</div>
+          <div class="small dim">gate X[], Z[], signs[]</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-primary" style="font-size: 0.65em;">PauliMaskArena<br>noise_channel_masks</div>
+          <div class="small dim">noise X[], Z[], signs[]</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-accent" style="font-size: 0.65em;">vector&lt;HeisenbergOp&gt;<br>ops</div>
+          <div class="small dim">the IR instruction stream</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-warn" style="font-size: 0.65em;">vector&lt;NoiseSite&gt;<br>noise_sites</div>
+          <div class="small dim">channels[] + probs</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-success" style="font-size: 0.65em;">detector_targets<br>observable_targets</div>
+          <div class="small dim">meas record lists</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-dim" style="font-size: 0.65em;">Metadata</div>
+          <div class="small dim">n, num_meas, etc.</div>
+        </div>
+        <div class="flow-col">
+          <div class="arrow-down">&darr;</div>
+          <div class="diagram-box box-purple" style="font-size: 0.65em;">optional&lt;Tableau&gt;<br>final_tableau</div>
+          <div class="small dim">end-of-circuit Cliffords</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 0.6em;">
+      <h4>Cross-References</h4>
+      <table>
+        <tr><th>HeisenbergOp field</th><th>References</th></tr>
+        <tr><td><code>mask_handle_</code></td><td><code>pauli_masks.at(handle)</code> -- the (X, Z, sign) Pauli triple</td></tr>
+        <tr><td><code>noise_.site_idx</code></td><td><code>noise_sites[idx].channels[]</code> &rarr; each channel's mask is in <code>noise_channel_masks</code></td></tr>
+        <tr><td><code>detector_.target_list_idx</code></td><td><code>detector_targets[idx]</code> -- list of measurement record indices</td></tr>
+        <tr><td><code>observable_.target_list_idx</code></td><td><code>observable_targets[idx]</code> -- list of measurement record indices</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 5.3: Noise Structures -->
+  <section>
+    <h2>Noise Data Structures</h2>
+    <pre><code class="language-cpp">struct NoiseChannel {
+    PauliMaskHandle mask;  // Index into noise_channel_masks arena
+    double prob;           // Firing probability for this channel
+};
+
+struct NoiseSite {
+    std::vector&lt;NoiseChannel&gt; channels;  // All Pauli error channels at this site
+};
+
+struct ReadoutNoiseEntry {
+    uint32_t meas_idx;  // Absolute measurement index to potentially flip
+    double prob;        // Flip probability
+};</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Example: DEPOLARIZE1(0.01) on qubit 3</h4>
+      <p class="small">Creates one <code>NoiseSite</code> with 3 channels:</p>
+      <table>
+        <tr><th>Channel</th><th>Pauli Mask</th><th>Probability</th></tr>
+        <tr><td>0</td><td>I&otimes;I&otimes;I&otimes;<span class="accent">X</span>&otimes;... (X on q3)</td><td>0.01/3</td></tr>
+        <tr><td>1</td><td>I&otimes;I&otimes;I&otimes;<span class="success">Y</span>&otimes;... (Y on q3)</td><td>0.01/3</td></tr>
+        <tr><td>2</td><td>I&otimes;I&otimes;I&otimes;<span class="hl">Z</span>&otimes;... (Z on q3)</td><td>0.01/3</td></tr>
+      </table>
+      <p class="small dim">Channel signs are unused -- E and -E act identically as stochastic Pauli errors.</p>
+    </div>
+  </section>
+
+  <!-- 5.4: HirModule to CompiledModule -->
+  <section>
+    <h2>What Survives Lowering?</h2>
+    <div class="grid-2">
+      <div class="card card-accent">
+        <h4>HirModule (IR-level)</h4>
+        <ul class="small">
+          <li><code>ops[]</code> -- HeisenbergOp stream</li>
+          <li><code>pauli_masks</code> -- n-qubit Pauli arenas</li>
+          <li><code>noise_channel_masks</code></li>
+          <li><code>noise_sites[]</code></li>
+          <li><code>readout_noise[]</code></li>
+          <li><code>detector_targets[]</code></li>
+          <li><code>observable_targets[]</code></li>
+          <li><code>source_map[]</code></li>
+          <li><code>final_tableau</code></li>
+          <li><code>global_weight</code></li>
+        </ul>
+      </div>
+      <div class="card card-hl">
+        <h4>CompiledModule (bytecode-level)</h4>
+        <ul class="small">
+          <li><code>bytecode[]</code> -- 32-byte Instructions</li>
+          <li><code>constant_pool.pauli_masks</code> -- re-mapped to virtual frame</li>
+          <li><code>constant_pool.noise_channel_masks</code> -- re-mapped</li>
+          <li><code>constant_pool.noise_sites[]</code></li>
+          <li><code>constant_pool.readout_noise[]</code></li>
+          <li><code>constant_pool.detector_targets[]</code></li>
+          <li><code>constant_pool.observable_targets[]</code></li>
+          <li><code>source_map</code> (CSR format)</li>
+          <li><code>constant_pool.final_tableau</code></li>
+          <li><code>constant_pool.global_weight</code></li>
+          <li class="success"><code>noise_hazards[]</code> -- NEW (cumulative hazard table)</li>
+          <li class="success"><code>fused_u2_nodes[]</code>, <code>fused_u4_nodes[]</code> -- NEW (from optimizer)</li>
+          <li class="success"><code>peak_rank</code>, <code>total_meas_slots</code> -- NEW metadata</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: THE BACKEND                                        -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 6</h1>
+    <p>The Backend -- HIR to Bytecode</p>
+  </section>
+
+  <!-- 6.1: The lower() Function -->
+  <section>
+    <h2>The lower() Function</h2>
+    <pre><code class="language-cpp">[[nodiscard]] CompiledModule lower(
+    const HirModule& hir,
+    std::span&lt;const uint8_t&gt; postselection_mask = {},
+    std::span&lt;const uint8_t&gt; expected_detectors = {},
+    std::span&lt;const uint8_t&gt; expected_observables = {});</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>Internal State: CompilerContext</h4>
+      <pre><code class="language-cpp">struct CompilerContext {
+    VirtualFrame virtual_frame;           // Lazy Clifford frame tracking
+    VirtualRegisterManager reg_manager;   // Active/Dormant partition (k)
+    std::vector&lt;Instruction&gt; bytecode;    // Output instruction stream
+    ConstantPool constant_pool;           // Heavy data referenced by index
+    double noise_hazards_accum = 0.0;     // Running cumulative hazard sum
+    SourceMap source_map;                 // Bytecode-to-source mapping
+};</code></pre>
+      <p class="small">The <code>CompilerContext</code> is initialized with <code>num_qubits</code> and a flush threshold of 128. All axes start <strong>Dormant</strong> (k=0).</p>
+    </div>
+  </section>
+
+  <!-- 6.2: Pauli Localization -->
+  <section>
+    <h2>Pauli Localization: The Core Algorithm</h2>
+    <pre><code class="language-cpp">[[nodiscard]] LocalizationResult localize_pauli(
+    CompilerContext& ctx, const stim::PauliString&lt;kStimWidth&gt;& pauli);
+
+struct LocalizationResult {
+    uint16_t pivot;        // The virtual axis the Pauli was localized onto
+    LocalizedBasis basis;  // Z_BASIS or X_BASIS
+    bool sign;             // Accumulated sign (true = negative)
+};</code></pre>
+    <div class="step-trace" style="margin-top: 0.5em;">
+      <div class="step"><div class="step-content"><strong>Count support</strong>: determine which qubits have non-identity Pauli factors (popcount of X | Z bits)</div></div>
+      <div class="step"><div class="step-content"><strong>Greedy CNOT/CZ reduction</strong>: for each extra support qubit, emit a virtual CNOT or CZ to XOR its Pauli factor onto a chosen <em>pivot</em> qubit. Each virtual gate reduces support by 1.</div></div>
+      <div class="step"><div class="step-content"><strong>Basis alignment</strong>: if the pivot has both X and Z set (i.e., Y), emit H or S to reduce to pure X or pure Z.</div></div>
+      <div class="step"><div class="step-content"><strong>Result</strong>: the Pauli is now a single-qubit <code>X_pivot</code> or <code>Z_pivot</code>, ready for a single-axis VM operation.</div></div>
+    </div>
+    <p class="small dim" style="margin-top: 0.3em;">All emitted virtual gates go into both the <code>VirtualFrame</code> (for future Pauli mappings) and the bytecode (as <code>OP_FRAME_*</code> or <code>OP_ARRAY_*</code> depending on whether the axis is active).</p>
+  </section>
+
+  <!-- 6.3: VirtualFrame -->
+  <section>
+    <h2>VirtualFrame: Lazy Clifford Composition</h2>
+    <pre><code class="language-cpp">class VirtualFrame {
+    stim::Tableau&lt;kStimWidth&gt; materialized_;  // Fully composed tableau
+    std::vector&lt;PendingGate&gt; pending_gates_;  // Queue of un-flushed gates
+    std::vector&lt;PendingGate&gt; gate_log_;       // Every gate ever appended
+    size_t flush_threshold_;                   // Default: 128
+};</code></pre>
+    <div class="grid-2" style="margin-top: 0.5em;">
+      <div class="card">
+        <h4>map_pauli() -- Lazy Path</h4>
+        <ul class="small">
+          <li>Called once per mask-carrying HIR op (T_GATE, MEASURE, etc.)</li>
+          <li>If queue length &lt; threshold: replay pending gates inline over the Pauli string</li>
+          <li>This avoids the O(n^2) cost of flushing the full tableau</li>
+          <li>Empirically, the queue between consecutive HIR ops is short (just the gates from the previous <code>localize_pauli</code>)</li>
+        </ul>
+        <p class="small dim">Eager flushing here regresses T-heavy circuits (QV-20) by ~40%.</p>
+      </div>
+      <div class="card">
+        <h4>map_noise_channel() -- Eager Flush</h4>
+        <ul class="small">
+          <li>Called once per noise channel (e.g., DEPOLARIZE2 has 15 channels)</li>
+          <li>Flushes the pending queue eagerly before mapping</li>
+          <li>Amortizes one O(n^2) flush over many channel mappings</li>
+          <li>QEC circuits have thousands of noise sites</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.3em;">
+      <p class="small"><strong>PendingGateType</strong>: <code>CNOT</code>, <code>CZ</code>, <code>S</code>, <code>H</code>, <code>SWAP</code>. Each gate is replayed over a <code>(MutableMaskView x, MutableMaskView z, bool& sign)</code> triple using explicit bit manipulation (not Stim calls).</p>
+    </div>
+  </section>
+
+  <!-- 6.4: HIR Op to Bytecode Mapping -->
+  <section>
+    <h2>HIR Op &rarr; Bytecode Mapping</h2>
+    <table>
+      <tr><th>HIR OpType</th><th>Bytecode Instruction(s)</th><th>Notes</th></tr>
+      <tr>
+        <td><code>T_GATE</code></td>
+        <td><code>OP_EXPAND</code> (if dormant)<br>+ <code>OP_ARRAY_T</code> / <code>OP_ARRAY_T_DAG</code></td>
+        <td class="small">Or fused: <code>OP_EXPAND_T</code>. Localized pivot axis.</td>
+      </tr>
+      <tr>
+        <td><code>MEASURE</code></td>
+        <td>One of:<br><code>OP_MEAS_DORMANT_STATIC</code><br><code>OP_MEAS_DORMANT_RANDOM</code><br><code>OP_MEAS_ACTIVE_DIAGONAL</code><br><code>OP_MEAS_ACTIVE_INTERFERE</code></td>
+        <td class="small">Choice depends on active/dormant status and basis (Z or X).</td>
+      </tr>
+      <tr>
+        <td><code>CONDITIONAL_PAULI</code></td>
+        <td><code>OP_APPLY_PAULI</code></td>
+        <td class="small">Full N-bit mask stored in <code>ConstantPool::pauli_masks</code>.</td>
+      </tr>
+      <tr>
+        <td><code>NOISE</code></td>
+        <td><code>OP_NOISE</code></td>
+        <td class="small">References noise site in ConstantPool. Channels remapped through VirtualFrame.</td>
+      </tr>
+      <tr>
+        <td><code>READOUT_NOISE</code></td>
+        <td><code>OP_READOUT_NOISE</code></td>
+        <td class="small">Classical bit-flip. 1:1 mapping.</td>
+      </tr>
+      <tr>
+        <td><code>PHASE_ROTATION</code></td>
+        <td><code>OP_EXPAND</code> + <code>OP_ARRAY_ROT</code></td>
+        <td class="small">Or fused: <code>OP_EXPAND_ROT</code>. Carries <code>(cos(alpha*pi), sin(alpha*pi))</code>.</td>
+      </tr>
+      <tr>
+        <td><code>DETECTOR</code></td>
+        <td><code>OP_DETECTOR</code> or <code>OP_POSTSELECT</code></td>
+        <td class="small">Post-select if <code>postselection_mask[det_idx] != 0</code>.</td>
+      </tr>
+      <tr>
+        <td><code>OBSERVABLE</code></td>
+        <td><code>OP_OBSERVABLE</code></td>
+        <td class="small">1:1 mapping with target list.</td>
+      </tr>
+      <tr>
+        <td><code>EXP_VAL</code></td>
+        <td><code>OP_EXP_VAL</code></td>
+        <td class="small">Mask stored in <code>ConstantPool::exp_val_masks</code> (separate arena).</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 6.5: VirtualRegisterManager -->
+  <section>
+    <h2>Active / Dormant Partition</h2>
+    <pre><code class="language-cpp">class VirtualRegisterManager {
+    uint32_t num_qubits_;   // Total n
+    uint32_t active_k_;     // Current active count
+    uint32_t peak_k_ = 0;  // Maximum k ever reached
+
+    bool is_active(uint16_t axis)  const { return axis < active_k_; }
+    bool is_dormant(uint16_t axis) const { return axis >= active_k_; }
+    void activate();    // k -> k+1 (axis k becomes active)
+    void deactivate();  // k -> k-1 (axis k-1 becomes dormant)
+};</code></pre>
+    <div style="text-align: center; margin: 0.6em 0;">
+      <div class="mem-row" style="justify-content: center;">
+        <span class="mem-label">Axes</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">0</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">1</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">...</span>
+        <span class="mem-cell mem-accent" style="min-width:3em;">k-1</span>
+        <span class="mem-cell mem-dim" style="min-width:3em;">k</span>
+        <span class="mem-cell mem-dim" style="min-width:3em;">k+1</span>
+        <span class="mem-cell mem-dim" style="min-width:3em;">...</span>
+        <span class="mem-cell mem-dim" style="min-width:3em;">n-1</span>
+      </div>
+      <div class="mem-row" style="justify-content: center;">
+        <span class="mem-label"></span>
+        <span style="text-align: center; color: var(--accent); font-size: 0.7em; min-width: 12em;">&larr; Active (touch v[2^k]) &rarr;</span>
+        <span style="text-align: center; color: var(--dim); font-size: 0.7em; min-width: 12em;">&larr; Dormant (frame-only, O(1)) &rarr;</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 0.3em;">
+      <ul class="small">
+        <li><strong>OP_EXPAND</strong>: activates axis k (k &rarr; k+1). Must SWAP pivot to boundary first.</li>
+        <li><strong>Active measurement</strong>: deactivates highest axis (k &rarr; k-1).</li>
+        <li><strong>peak_rank</strong>: maximum k ever reached. Determines the CompiledModule's array size: <code>2^peak_rank</code>.</li>
+        <li>Safety check: <code>validate_peak_rank(peak)</code> rejects if peak &ge; 63 (undefined behavior in <code>1ULL << k</code> shifts).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6.6: SourceMap -->
+  <section>
+    <h2>SourceMap: Bytecode to Source Lines</h2>
+    <pre><code class="language-cpp">class SourceMap {
+    // CSR (Compressed Sparse Row) format
+    std::vector&lt;uint32_t&gt; data_;      // Flattened source line numbers
+    std::vector&lt;uint32_t&gt; offsets_;   // data_[offsets_[i]..offsets_[i+1])
+    std::vector&lt;uint32_t&gt; active_k_;  // Per-instruction active dimension
+
+    // Builder API
+    void append(std::span&lt;const uint32_t&gt; lines, uint32_t active_k);
+    void copy_entry(const SourceMap& src, size_t i);
+    void merge_entries(const SourceMap& src, size_t begin, size_t end);
+
+    // Query API
+    std::span&lt;const uint32_t&gt; lines_for(size_t i) const;
+    uint32_t active_k_at(size_t i) const;
+};</code></pre>
+    <div class="card" style="margin-top: 0.5em;">
+      <h4>CSR Layout Example</h4>
+      <div style="font-family: monospace; font-size: 0.65em; line-height: 1.8;">
+        <div><span class="hl">data_[]</span>:    <span class="dim">[</span><span class="accent">3</span>, <span class="accent">5</span><span class="dim">, </span><span class="hl">7</span><span class="dim">, </span><span class="success">3</span>, <span class="success">8</span>, <span class="success">12</span><span class="dim">]</span></div>
+        <div><span class="hl">offsets_[]</span>: <span class="dim">[</span>0, <span class="accent">2</span>, <span class="hl">3</span>, <span class="success">6</span><span class="dim">]</span></div>
+        <div><span class="hl">active_k_[]</span>: <span class="dim">[</span>0, 1, 1<span class="dim">]</span></div>
+      </div>
+      <p class="small dim">Instruction 0: source lines {3, 5}, k=0. Instruction 1: source line {7}, k=1. Instruction 2: source lines {3, 8, 12}, k=1.</p>
+      <p class="small">Optimizer passes use <code>copy_entry()</code> for 1:1 rewrites and <code>merge_entries()</code> when fusing instructions. The CSR contiguity enables zero-copy merges.</p>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: CONSTANT POOL                                      -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 7</h1>
+    <p>The Constant Pool</p>
+  </section>
+
+  <!-- 7.1: ConstantPool contents -->
+  <section>
+    <h2>ConstantPool: Heavy Data Storage</h2>
+    <pre><code class="language-cpp">struct ConstantPool {
+    // Clifford state
+    std::optional&lt;stim::Tableau&lt;kStimWidth&gt;&gt; final_tableau;
+    std::complex&lt;double&gt; global_weight = {1.0, 0.0};
+
+    // Pauli mask arenas (re-mapped through VirtualFrame)
+    PauliMaskArena pauli_masks;        // For OP_APPLY_PAULI
+    PauliMaskArena exp_val_masks;      // For OP_EXP_VAL (separate to avoid collisions)
+
+    // Noise data
+    std::vector&lt;NoiseSite&gt; noise_sites;       // For OP_NOISE
+    PauliMaskArena noise_channel_masks;        // Channel masks (virtual-frame-mapped)
+    std::vector&lt;ReadoutNoiseEntry&gt; readout_noise;
+
+    // QEC data
+    std::vector&lt;std::vector&lt;uint32_t&gt;&gt; detector_targets;
+    std::vector&lt;std::vector&lt;uint32_t&gt;&gt; observable_targets;
+
+    // Performance structures
+    std::vector&lt;double&gt; noise_hazards;          // Cumulative hazard table
+    std::vector&lt;FusedU2Node&gt; fused_u2_nodes;    // Single-axis 2x2 unitaries
+    std::vector&lt;FusedU4Node&gt; fused_u4_nodes;    // Two-axis 4x4 unitaries
+};</code></pre>
+  </section>
+
+  <!-- 7.2: Noise Hazards -->
+  <section>
+    <h2>Noise Hazard Table and Fused Unitaries</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h4>Cumulative Hazard Table</h4>
+        <pre><code class="language-cpp">// noise_hazards[i] = sum of
+//   -log(1 - prob_sum_j)
+// for noise sites j = 0..i</code></pre>
+        <p class="small">Enables <strong>O(1) skip</strong> of silent noise sites via exponential gap sampling. Instead of rolling the RNG for every noise site, the SVM draws from an exponential distribution and binary-searches the hazard table to find the next site that fires.</p>
+        <p class="small dim">On QEC circuits with thousands of noise sites but low error rates, this can skip hundreds of silent sites per gap.</p>
+      </div>
+      <div class="card">
+        <h4>Fused Unitary Nodes</h4>
+        <pre><code class="language-cpp">struct FusedU2Node {
+  // For each of 4 Pauli frame states
+  // ((p_z<<1)|p_x: 0=I, 1=X, 2=Z, 3=Y)
+  complex&lt;double&gt; matrices[4][4];
+  complex&lt;double&gt; gamma_multipliers[4];
+  uint8_t out_states[4];
+};
+
+struct FusedU4Node {
+  struct Entry {
+    complex&lt;double&gt; matrix[4][4];
+    complex&lt;double&gt; gamma_multiplier;
+    uint8_t out_state;
+  };
+  Entry entries[16]; // 4-bit frame state
+};</code></pre>
+        <p class="small dim">Created by the optimizer's SingleAxisFusion and TileAxisFusion passes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7.3: How Instructions Reference the Pool -->
+  <section>
+    <h2>Bytecode &harr; Constant Pool References</h2>
+    <div style="text-align: center; margin: 0.5em 0;">
+      <div style="display: flex; justify-content: center; gap: 2em; align-items: flex-start;">
+        <div>
+          <div class="diagram-box box-purple" style="margin-bottom: 0.3em;">Bytecode (32B Instructions)</div>
+          <div class="card" style="font-size: 0.65em; text-align: left; font-family: monospace; line-height: 1.8;">
+            <div>OP_APPLY_PAULI &rarr; <span class="accent">pauli.cp_mask_idx = 3</span></div>
+            <div>OP_NOISE &rarr; <span class="warn">pauli.cp_mask_idx = 7</span></div>
+            <div>OP_EXP_VAL &rarr; <span class="hl">exp_val.cp_exp_val_idx = 0</span></div>
+            <div>OP_ARRAY_U2 &rarr; <span class="success">u2.cp_idx = 2</span></div>
+            <div>OP_ARRAY_U4 &rarr; <span class="success">u4.cp_idx = 0</span></div>
+            <div>OP_DETECTOR &rarr; classical.classical_idx = 5</div>
+          </div>
+        </div>
+        <div style="font-size: 2em; color: var(--dim); align-self: center;">&harr;</div>
+        <div>
+          <div class="diagram-box box-primary" style="margin-bottom: 0.3em;">ConstantPool</div>
+          <div class="card" style="font-size: 0.65em; text-align: left; font-family: monospace; line-height: 1.8;">
+            <div><span class="accent">pauli_masks[3]</span> &rarr; (X[], Z[], sign)</div>
+            <div><span class="warn">noise_sites[7]</span> &rarr; channels[]</div>
+            <div><span class="hl">exp_val_masks[0]</span> &rarr; (X[], Z[], sign)</div>
+            <div><span class="success">fused_u2_nodes[2]</span> &rarr; matrices[4][4]</div>
+            <div><span class="success">fused_u4_nodes[0]</span> &rarr; entries[16]</div>
+            <div>detector_targets[5] &rarr; [rec_idx...]</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.5em;">
+      <p class="small"><strong>Separation principle</strong>: 32-byte instructions stay small and cache-friendly. Variable-size data (Pauli masks spanning ceil(n/64) words, noise channels, U2/U4 matrices) lives in the constant pool, referenced by integer index. Two instructions fit per 64-byte cache line.</p>
+    </div>
+  </section>
+
+  <!-- 7.4: Instruction Layout -->
+  <section>
+    <h2>Instruction: 32-Byte VM Bytecode</h2>
+    <pre><code class="language-cpp">struct alignas(32) Instruction {       // Exactly 32 bytes
+    Opcode opcode;      // 1 byte   (offset 0)
+    uint8_t _reserved;  // 1 byte   (offset 1)
+    uint8_t flags;      // 1 byte   (offset 2)
+    uint8_t _pad;       // 1 byte   (offset 3)
+    uint16_t axis_1;    // 2 bytes  (offset 4) -- virtual axis target/control
+    uint16_t axis_2;    // 2 bytes  (offset 6) -- virtual axis target 2
+    union { ... };      // 24 bytes (offset 8..31)
+};
+static_assert(sizeof(Instruction) == 32);</code></pre>
+    <div class="mem-row" style="margin-top: 0.5em;">
+      <span class="mem-label">Bytes</span>
+      <span class="mem-cell mem-accent" style="min-width:3em;">0</span>
+      <span class="mem-cell mem-dim" style="min-width:3em;">1</span>
+      <span class="mem-cell mem-accent" style="min-width:3em;">2</span>
+      <span class="mem-cell mem-dim" style="min-width:3em;">3</span>
+      <span class="mem-cell mem-hl" style="min-width:6em;">4-5</span>
+      <span class="mem-cell mem-hl" style="min-width:6em;">6-7</span>
+      <span class="mem-cell mem-success" style="min-width:24em;">8 - 31 (payload union)</span>
+    </div>
+    <div class="mem-row">
+      <span class="mem-label">Field</span>
+      <span class="mem-cell mem-accent" style="min-width:3em;">opcode</span>
+      <span class="mem-cell mem-dim" style="min-width:3em;">rsv</span>
+      <span class="mem-cell mem-accent" style="min-width:3em;">flags</span>
+      <span class="mem-cell mem-dim" style="min-width:3em;">pad</span>
+      <span class="mem-cell mem-hl" style="min-width:6em;">axis_1</span>
+      <span class="mem-cell mem-hl" style="min-width:6em;">axis_2</span>
+      <span class="mem-cell mem-success" style="min-width:24em;">math / classical / pauli / multi_gate / u2 / u4 / exp_val</span>
+    </div>
+    <p class="small dim" style="margin-top: 0.3em;">Flags: <code>FLAG_SIGN (0x01)</code> -- measurement sign; <code>FLAG_HIDDEN (0x02)</code> -- hidden measurement; <code>FLAG_IDENTITY (0x04)</code> -- identity measurement; <code>FLAG_EXPECTED_ONE (0x08)</code> -- noiseless reference parity.</p>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: WORKED EXAMPLES                                    -->
+<!-- ============================================================ -->
+<section>
+  <section class="section-title">
+    <h1>Section 8</h1>
+    <p>Worked Examples</p>
+  </section>
+
+  <!-- 8.1: Bell State -->
+  <section>
+    <h2>Example 1: Bell State (Pure Clifford)</h2>
+    <pre><code>H 0
+CNOT 0 1
+M 0 1</code></pre>
+    <div class="grid-2">
+      <div>
+        <h4>Frontend Trace</h4>
+        <table>
+          <tr><th>Gate</th><th>Action</th><th>HIR Output</th></tr>
+          <tr><td><code>H 0</code></td><td class="success">Absorbed</td><td class="dim">(none)</td></tr>
+          <tr><td><code>CNOT 0 1</code></td><td class="success">Absorbed</td><td class="dim">(none)</td></tr>
+          <tr><td><code>M 0</code></td><td class="accent">Emit</td><td><code>MEASURE</code> mask: X&otimes;X<br>meas_idx=0</td></tr>
+          <tr><td><code>M 1</code></td><td class="accent">Emit</td><td><code>MEASURE</code> mask: Z&otimes;Z<br>meas_idx=1</td></tr>
+        </table>
+      </div>
+      <div>
+        <h4>Backend Lowering</h4>
+        <table>
+          <tr><th>HIR Op</th><th>Bytecode</th></tr>
+          <tr><td><code>MEASURE</code> X&otimes;X</td><td class="small"><code>OP_FRAME_CNOT(0,1)</code><br><code>OP_FRAME_H(0)</code><br><code>OP_MEAS_DORMANT_RANDOM(0,idx=0)</code></td></tr>
+          <tr><td><code>MEASURE</code> Z&otimes;Z</td><td class="small"><code>OP_FRAME_CZ(0,1)</code><br><code>OP_MEAS_DORMANT_RANDOM(0,idx=1)</code></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card card-hl" style="margin-top: 0.4em;">
+      <p class="small"><strong>peak_rank = 0</strong>. No T gates means no subspace expansion. All measurements are dormant (frame-only). The amplitude array <code>v[]</code> is never allocated -- pure Clifford simulation runs as a single complex scalar <code>gamma</code>.</p>
+    </div>
+  </section>
+
+  <!-- 8.2: T-gate Circuit -->
+  <section>
+    <h2>Example 2: T-Gate Circuit</h2>
+    <pre><code>H 0
+T 0
+M 0</code></pre>
+    <div class="grid-2">
+      <div>
+        <h4>Frontend Trace</h4>
+        <table>
+          <tr><th>Gate</th><th>Action</th><th>HIR Output</th></tr>
+          <tr><td><code>H 0</code></td><td class="success">Absorbed</td><td class="dim">(none)</td></tr>
+          <tr><td><code>T 0</code></td><td class="accent">Rewound</td><td><code>T_GATE</code> mask: X<br>(Z_0 rewound through H = X_0)</td></tr>
+          <tr><td><code>M 0</code></td><td class="accent">Emit</td><td><code>MEASURE</code> mask: X<br>meas_idx=0</td></tr>
+        </table>
+      </div>
+      <div>
+        <h4>Backend Lowering</h4>
+        <table>
+          <tr><th>HIR Op</th><th>Bytecode</th></tr>
+          <tr><td><code>T_GATE</code> X</td><td class="small">Localize X &rarr; pivot=0, X_BASIS<br><code>OP_FRAME_H(0)</code> (now Z)<br><code>OP_EXPAND(0)</code> &rarr; k: 0&rarr;1<br><code>OP_ARRAY_T(0)</code></td></tr>
+          <tr><td><code>MEASURE</code> X</td><td class="small">Localize X &rarr; pivot=0<br>Active + X-basis:<br><code>OP_MEAS_ACTIVE_INTERFERE(0,idx=0)</code><br>k: 1&rarr;0</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card card-accent" style="margin-top: 0.4em;">
+      <p class="small"><strong>peak_rank = 1</strong>. The T gate forces qubit 0 from dormant to active. The amplitude array grows to <code>v[2^1] = v[2]</code>. The measurement in X-basis uses <code>OP_MEAS_ACTIVE_INTERFERE</code> which folds the array (k: 1 &rarr; 0), halving it back.</p>
+    </div>
+  </section>
+
+  <!-- 8.3: QEC Snippet -->
+  <section>
+    <h2>Example 3: QEC-Style Snippet</h2>
+    <pre><code>R 0 1 2 3 4          # Reset data + ancilla qubits
+DEPOLARIZE1(0.001) 0 1 2 3 4
+H 3 4                # Ancilla preparation
+CNOT 3 0             # Syndrome extraction
+CNOT 3 1
+CNOT 4 1
+CNOT 4 2
+H 3 4                # Ancilla basis change
+M 3 4                # Measure ancillae
+DETECTOR rec[-1] rec[-2]
+OBSERVABLE_INCLUDE(0) rec[-1]
+CX rec[-1] 0         # Pauli feedback</code></pre>
+    <div class="card" style="margin-top: 0.3em;">
+      <h4>HIR Ops Produced</h4>
+      <table>
+        <tr><th>#</th><th>OpType</th><th>Details</th></tr>
+        <tr><td>1-5</td><td><code>MEASURE</code> (hidden)</td><td class="small">From R 0..4. FLAG_HIDDEN set. Identity masks (deterministic |0>).</td></tr>
+        <tr><td>6-10</td><td><code>CONDITIONAL_PAULI</code></td><td class="small">Feedback from hidden measurements. Reset corrections.</td></tr>
+        <tr><td>11-15</td><td><code>NOISE</code></td><td class="small">DEPOLARIZE1(0.001). Each qubit gets a NoiseSite with 3 channels (X/Y/Z at p/3).</td></tr>
+        <tr><td>16</td><td><code>MEASURE</code></td><td class="small">M 3. Rewound through all Cliffords (H, CNOT chain). Multi-qubit Pauli mask.</td></tr>
+        <tr><td>17</td><td><code>MEASURE</code></td><td class="small">M 4. Similarly rewound.</td></tr>
+        <tr><td>18</td><td><code>DETECTOR</code></td><td class="small">Parity check over rec[-1], rec[-2]. References detector_targets[].</td></tr>
+        <tr><td>19</td><td><code>OBSERVABLE</code></td><td class="small">Observable 0 accumulates rec[-1].</td></tr>
+        <tr><td>20</td><td><code>CONDITIONAL_PAULI</code></td><td class="small">CX rec[-1] 0. Apply X_0 (rewound) if measurement 3 was 1.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 8.4: Complete Transformation Diagram -->
+  <section>
+    <h2>Complete Pipeline: Stim &rarr; Bytecode</h2>
+    <div class="flow-col" style="gap: 0.3em;">
+      <div class="diagram-box box-dim" style="width: 80%;">
+        <strong>Stim Text</strong>: <code>H 0; T 0; CNOT 0 1; M 0 1</code>
+      </div>
+      <div class="arrow-down">&darr; <span class="small dim">parse()</span></div>
+      <div class="diagram-box box-primary" style="width: 80%;">
+        <strong>Circuit AST</strong>: 4 AstNodes [H(0), T(0), CX(0,1), M(0), M(1)]
+      </div>
+      <div class="arrow-down">&darr; <span class="small dim">trace()</span></div>
+      <div class="card card-accent" style="width: 80%; margin: 0 auto;">
+        <strong style="color:var(--accent)">HirModule</strong> (3 ops, peak: 1 T gate)
+        <div class="small" style="font-family: monospace; margin-top: 0.3em;">
+          <div>[0] T_GATE mask: X&otimes;X (Z_0 rewound through H+CNOT)</div>
+          <div>[1] MEASURE mask: X&otimes;X (meas_idx=0)</div>
+          <div>[2] MEASURE mask: Z&otimes;Z (meas_idx=1)</div>
+        </div>
+      </div>
+      <div class="arrow-down">&darr; <span class="small dim">lower()</span></div>
+      <div class="card card-hl" style="width: 80%; margin: 0 auto;">
+        <strong style="color:var(--highlight)">CompiledModule</strong> (bytecode, peak_rank=1)
+        <div class="small" style="font-family: monospace; margin-top: 0.3em;">
+          <div>[0] OP_FRAME_CNOT(0, 1)&ensp;&ensp;  <span class="dim">// localize X&otimes;X &rarr; X_0</span></div>
+          <div>[1] OP_FRAME_H(0)&ensp;&ensp;&ensp;&ensp;&ensp;&ensp;&ensp;<span class="dim">// X_0 &rarr; Z_0</span></div>
+          <div>[2] OP_EXPAND_T(0)&ensp;&ensp;&ensp;&ensp;&ensp;&ensp;<span class="dim">// k: 0&rarr;1, fused expand+T</span></div>
+          <div>[3] OP_FRAME_CNOT(0, 1)&ensp;&ensp;  <span class="dim">// localize for M 0</span></div>
+          <div>[4] OP_MEAS_ACTIVE_INTERFERE(0, idx=0)&ensp;<span class="dim">// k: 1&rarr;0</span></div>
+          <div>[5] OP_MEAS_DORMANT_RANDOM(1, idx=1)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8.5: Opcode Categories Overview -->
+  <section>
+    <h2>Opcode Categories at a Glance</h2>
+    <div class="grid-3">
+      <div class="card" style="border-color: var(--dim);">
+        <h4 style="color: var(--dim);">Frame Opcodes</h4>
+        <p class="small dim">O(1) per qubit. Update only p_x/p_z.</p>
+        <ul class="small">
+          <li><code>OP_FRAME_CNOT</code></li>
+          <li><code>OP_FRAME_CZ</code></li>
+          <li><code>OP_FRAME_H</code></li>
+          <li><code>OP_FRAME_S / S_DAG</code></li>
+          <li><code>OP_FRAME_SWAP</code></li>
+        </ul>
+      </div>
+      <div class="card" style="border-color: var(--accent);">
+        <h4 style="color: var(--accent);">Array Opcodes</h4>
+        <p class="small" style="color:var(--accent)">O(2^k) sweep over v[].</p>
+        <ul class="small">
+          <li><code>OP_ARRAY_T / T_DAG</code></li>
+          <li><code>OP_ARRAY_CNOT / CZ</code></li>
+          <li><code>OP_ARRAY_H / S / S_DAG</code></li>
+          <li><code>OP_ARRAY_MULTI_CNOT</code></li>
+          <li><code>OP_ARRAY_ROT</code></li>
+          <li><code>OP_ARRAY_U2 / U4</code></li>
+        </ul>
+      </div>
+      <div class="card" style="border-color: var(--success);">
+        <h4 style="color: var(--success);">Expansion</h4>
+        <p class="small" style="color:var(--success)">k &rarr; k+1, doubles array.</p>
+        <ul class="small">
+          <li><code>OP_EXPAND</code></li>
+          <li><code>OP_EXPAND_T / T_DAG</code></li>
+          <li><code>OP_EXPAND_ROT</code></li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 0.5em;">
+      <div class="card" style="border-color: var(--highlight);">
+        <h4 style="color: var(--highlight);">Measurement</h4>
+        <ul class="small">
+          <li><code>OP_MEAS_DORMANT_STATIC</code> -- deterministic from p_x</li>
+          <li><code>OP_MEAS_DORMANT_RANDOM</code> -- coin flip, phase to gamma</li>
+          <li><code>OP_MEAS_ACTIVE_DIAGONAL</code> -- Z-basis filter, k&rarr;k-1</li>
+          <li><code>OP_MEAS_ACTIVE_INTERFERE</code> -- X-basis fold, k&rarr;k-1</li>
+          <li><code>OP_SWAP_MEAS_INTERFERE</code> -- fused swap + measure</li>
+          <li>Each has a <code>_FORCED</code> variant for importance sampling</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color: var(--warn);">
+        <h4 style="color: var(--warn);">Classical / Noise</h4>
+        <ul class="small">
+          <li><code>OP_APPLY_PAULI</code> -- XOR N-bit mask into frame</li>
+          <li><code>OP_NOISE / NOISE_BLOCK</code> -- stochastic Pauli</li>
+          <li><code>OP_READOUT_NOISE</code> -- classical bit-flip</li>
+          <li><code>OP_DETECTOR / POSTSELECT</code> -- parity checks</li>
+          <li><code>OP_OBSERVABLE</code> -- logical observable</li>
+          <li><code>OP_EXP_VAL</code> -- expectation value probe</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SUMMARY SLIDE                                                 -->
+<!-- ============================================================ -->
+<section>
+  <h2>Summary: The HIR at a Glance</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Key Design Principles</h4>
+      <ul>
+        <li><strong>Heisenberg picture</strong> -- Clifford gates are absorbed, only non-Clifford + measurements survive</li>
+        <li><strong>Arena-based Pauli masks</strong> -- fixed-capacity, zero-copy views, cache-friendly parallel x/z layout</li>
+        <li><strong>16-byte HeisenbergOp</strong> -- 4 per cache line, tagged union payload, type-safe indices</li>
+        <li><strong>Side-tables</strong> for variable-length data -- noise channels, detector targets, observable targets</li>
+        <li><strong>Source mapping</strong> -- every HIR op traces back to the original Stim source line</li>
+      </ul>
+    </div>
+    <div>
+      <h4>By the Numbers</h4>
+      <table>
+        <tr><td><code>HeisenbergOp</code></td><td>16 bytes</td></tr>
+        <tr><td><code>Instruction</code></td><td>32 bytes</td></tr>
+        <tr><td><code>OpType</code> variants</td><td>9 + sentinel</td></tr>
+        <tr><td><code>Opcode</code> variants</td><td>~35 + sentinel</td></tr>
+        <tr><td>Clifford gate types</td><td>45 (all absorbed)</td></tr>
+        <tr><td>Max qubits</td><td>65,536 (uint16_t axes)</td></tr>
+        <tr><td>Max peak_rank</td><td>62 (1ULL << k safety)</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="flow-row" style="margin-top: 0.8em;">
+    <span class="diagram-box box-dim">Stim</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-primary">Circuit</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-accent" style="border-width:3px;"><strong>HIR</strong></span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-purple">Bytecode</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-success">SVM</span>
+    <span class="arrow">&rarr;</span>
+    <span class="diagram-box box-dim">Results</span>
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  width: 1280,
+  height: 720,
+  margin: 0.04,
+  transition: 'slide',
+  plugins: [RevealHighlight]
+});
+</script>
+</body>
+</html>

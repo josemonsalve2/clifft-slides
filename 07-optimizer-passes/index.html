@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft Deep Dive: Optimizer Passes</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/black.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai.min.css">
+<style>
+    /* font-size-override-applied */
+    .reveal { font-size: 24px !important; }
+    .reveal h1 { font-size: 1.8em !important; }
+    .reveal h2 { font-size: 1.4em !important; }
+    .reveal h3 { font-size: 1.1em !important; }
+    .reveal h4 { font-size: 0.9em !important; }
+    .reveal p, .reveal li, .reveal td, .reveal th { font-size: 0.85em !important; }
+    .reveal pre { font-size: 0.75em !important; }
+    .reveal code { font-size: 0.85em !important; }
+    .reveal .small { font-size: 0.7em !important; }
+    .reveal table { font-size: 0.8em !important; }
+
+    :root {
+        --bg-primary: #1a1a2e;
+        --accent: #e94560;
+        --secondary: #0f3460;
+        --highlight: #53d8fb;
+    }
+    .reveal { background: var(--bg-primary); color: #e0e0e0; }
+    .reveal h1, .reveal h2, .reveal h3 { color: var(--accent); text-transform: none; }
+    .reveal h4 { color: var(--highlight); text-transform: none; }
+
+    .accent { color: var(--accent); }
+    .highlight { color: var(--highlight); }
+    .secondary { color: #6a9fd8; }
+    .green { color: #4ade80; }
+    .yellow { color: #fbbf24; }
+    .orange { color: #fb923c; }
+    .dim { color: #888; }
+
+    .reveal pre { background: #0d0d1a; border: 1px solid #333; border-radius: 6px; }
+    .reveal code { background: #0d0d1a; padding: 2px 6px; border-radius: 3px; }
+    .reveal pre code { background: transparent; padding: 0; }
+
+    .reveal table { border-collapse: collapse; margin: 0 auto; }
+    .reveal th { background: var(--secondary); color: var(--highlight); border: 1px solid #444; padding: 6px 10px; }
+    .reveal td { border: 1px solid #333; padding: 5px 10px; }
+    .reveal tr:nth-child(even) td { background: rgba(15, 52, 96, 0.15); }
+
+    .reveal .slide-number { color: var(--highlight); }
+    .reveal .progress span { background: var(--accent); }
+    .reveal .controls button { color: var(--accent); }
+
+    .box { background: rgba(15, 52, 96, 0.3); border: 1px solid var(--secondary); border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-accent { background: rgba(233, 69, 96, 0.1); border: 1px solid var(--accent); border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .box-green { background: rgba(74, 222, 128, 0.08); border: 1px solid #4ade80; border-radius: 8px; padding: 15px; margin: 10px 0; }
+
+    .cols { display: flex; gap: 20px; align-items: flex-start; }
+    .col { flex: 1; }
+
+    .diagram-box { background: #0d0d1a; border: 2px solid var(--secondary); border-radius: 8px; padding: 15px; margin: 10px auto; font-family: monospace; font-size: 0.75em !important; line-height: 1.5; }
+    .diagram-box .accent { color: var(--accent); }
+    .diagram-box .highlight { color: var(--highlight); }
+    .diagram-box .green { color: #4ade80; }
+    .diagram-box .dim { color: #666; }
+
+    .pipeline-arrow { color: var(--accent); font-size: 1.2em; }
+    .pass-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75em !important; margin: 2px; }
+    .badge-hir { background: rgba(233, 69, 96, 0.25); border: 1px solid var(--accent); color: var(--accent); }
+    .badge-bc { background: rgba(83, 216, 251, 0.15); border: 1px solid var(--highlight); color: var(--highlight); }
+    .badge-off { background: rgba(136, 136, 136, 0.15); border: 1px solid #666; color: #888; }
+
+    .arrow-right { color: var(--accent); margin: 0 8px; }
+    .arrow-down { color: var(--accent); display: block; text-align: center; margin: 5px 0; }
+
+    .fragment.current-fragment { opacity: 1; }
+
+    .section-divider { text-align: center; }
+    .section-divider h2 { font-size: 2em !important; margin-bottom: 20px; }
+    .section-number { font-size: 3em !important; color: var(--highlight); opacity: 0.3; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ================================================================== -->
+<!-- TITLE SLIDE                                                        -->
+<!-- ================================================================== -->
+<section>
+    <h1>Clifft Optimizer Passes</h1>
+    <h3 style="color: var(--highlight)">Deep Dive into the 11-Pass Optimization Pipeline</h3>
+    <p class="dim" style="margin-top: 30px;">HIR Passes &bull; Bytecode Passes &bull; Peephole Fusion &bull; Statevector Squeeze<br>
+    MultiGate &bull; TileAxisFusion &bull; SingleAxisFusion &bull; and more</p>
+    <p class="small dim" style="margin-top: 40px;">Built from actual source: <code>src/clifft/optimizer/</code></p>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 1: OPTIMIZER OVERVIEW                                      -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">01</div>
+    <h2>Optimizer Overview</h2>
+    <p>Two tiers, eleven passes, one goal: minimize <code>O(2^k)</code> runtime</p>
+</section>
+
+<section>
+    <h2>Two-Tier Architecture</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>HIR Passes (Pre-Lowering)</h4>
+                <p>Operate on <code>HirModule</code> -- the high-level Heisenberg IR</p>
+                <ul>
+                    <li>Algebraic: cancel/fuse T gates</li>
+                    <li>Scheduling: reorder ops to minimize peak <code>k</code></li>
+                    <li>Filtering: strip noise or non-unitary ops</li>
+                </ul>
+                <pre><code class="language-cpp">class HirPass {
+  public:
+    virtual void run(HirModule& hir) = 0;
+    virtual ~HirPass() = default;
+};</code></pre>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Bytecode Passes (Post-Lowering)</h4>
+                <p>Operate on <code>CompiledModule</code> -- the finalized 32-byte instruction stream</p>
+                <ul>
+                    <li>Instruction fusion: merge adjacent ops</li>
+                    <li>CISC synthesis: precompute fused matrices</li>
+                    <li>Reduce array sweeps (each costs <code>O(2^k)</code>)</li>
+                </ul>
+                <pre><code class="language-cpp">class BytecodePass {
+  public:
+    virtual void run(CompiledModule& module) = 0;
+    virtual ~BytecodePass() = default;
+};</code></pre>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Full Pipeline: Where Each Pass Runs</h2>
+    <div class="diagram-box">
+<pre style="text-align:center; font-size:0.85em;">
+<span class="accent">Stim Text</span>  -->  <span class="dim">Parser</span>  -->  <span class="dim">Frontend trace()</span>  -->  <span class="accent">HirModule</span>
+                                                          |
+                       +----------------------------------+
+                       |
+        <span class="accent">HIR PASSES</span>     v
+        +-------------------------------------------------+
+        | <span class="green">1. PeepholeFusionPass</span>   T/T_dag cancel + fuse    |
+        | <span class="green">2. StatevectorSqueezePass</span> Minimize peak rank k   |
+        | <span class="dim">   RemoveNoisePass</span>        (off by default)        |
+        | <span class="dim">   DropNonUnitaryPass</span>      (off by default)        |
+        +-------------------------------------------------+
+                       |
+                       v
+              <span class="highlight">Backend lower()</span>  -->  <span class="accent">CompiledModule</span>
+                       |
+        <span class="accent">BYTECODE PASSES</span>   v
+        +-------------------------------------------------+
+        | <span class="highlight">3. NoiseBlockPass</span>          Coalesce OP_NOISE      |
+        | <span class="highlight">4. MultiGatePass</span>           Fuse star-graph CNOT/CZ|
+        | <span class="highlight">5. ExpandTPass</span>             EXPAND + T --> EXPAND_T |
+        | <span class="highlight">6. ExpandRotPass</span>           EXPAND + ROT-> EXPAND_R|
+        | <span class="highlight">7. SwapMeasPass</span>            SWAP + MEAS --> fused   |
+        | <span class="highlight">8. TileAxisFusionPass</span>      2Q tiles --> U4         |
+        | <span class="highlight">9. SingleAxisFusionPass</span>    1Q chains --> U2        |
+        +-------------------------------------------------+
+                       |
+                       v
+                   <span class="accent">SVM execute()</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>Pass Registry: Single Source of Truth</h2>
+    <p><code>pass_registry.h</code> -- <code>kRegisteredPasses[]</code> defines every pass</p>
+    <pre><code class="language-cpp">inline const PassInfo kRegisteredPasses[] = {
+    // HIR passes
+    {.name = "PeepholeFusionPass",     .kind = PassKind::HIR,
+     .default_enabled = true,  .make_hir = make_hir&lt;PeepholeFusionPass&gt;},
+    {.name = "StatevectorSqueezePass", .kind = PassKind::HIR,
+     .default_enabled = true,  .make_hir = make_hir&lt;StatevectorSqueezePass&gt;},
+    {.name = "RemoveNoisePass",        .kind = PassKind::HIR,
+     .default_enabled = false, .make_hir = make_hir&lt;RemoveNoisePass&gt;},
+    {.name = "DropNonUnitaryPass",     .kind = PassKind::HIR,
+     .default_enabled = false, .make_hir = make_hir&lt;DropNonUnitaryPass&gt;},
+    // Bytecode passes
+    {.name = "NoiseBlockPass",         .kind = PassKind::Bytecode,
+     .default_enabled = true,  .make_bc = make_bc&lt;NoiseBlockPass&gt;},
+    {.name = "MultiGatePass",          ...true...},
+    {.name = "ExpandTPass",            ...true...},
+    {.name = "ExpandRotPass",          ...true...},
+    {.name = "SwapMeasPass",           ...true...},
+    {.name = "TileAxisFusionPass",     ...true...},
+    {.name = "SingleAxisFusionPass",   ...true...},
+};</code></pre>
+    <div class="box" style="margin-top: 10px;">
+        <h4>Factory API (<code>pass_factory.h</code>)</h4>
+        <p><code>make_hir_pass("PeepholeFusionPass")</code> -- create by name &bull;
+        <code>default_hir_pass_manager()</code> -- all default-on HIR passes &bull;
+        <code>pass_registry_json()</code> -- JSON list for Python introspection</p>
+    </div>
+</section>
+
+<section>
+    <h2>Pass Manager Execution Model</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box">
+                <h4>HirPassManager</h4>
+                <pre><code class="language-cpp">class HirPassManager {
+  public:
+    void add_pass(std::unique_ptr&lt;HirPass&gt; pass);
+    void run(HirModule& hir);
+    // Passes execute in insertion order.
+    // Each pass mutates the HirModule
+    // seen by subsequent passes.
+  private:
+    std::vector&lt;std::unique_ptr&lt;HirPass&gt;&gt;
+      passes_;
+};</code></pre>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>BytecodePassManager</h4>
+                <pre><code class="language-cpp">class BytecodePassManager {
+  public:
+    void add_pass(
+      std::unique_ptr&lt;BytecodePass&gt; pass);
+    void run(CompiledModule& module);
+    // Same sequential model.
+    // Rewrite bytecode + constant pool.
+  private:
+    std::vector&lt;std::unique_ptr&lt;BytecodePass&gt;&gt;
+      passes_;
+};</code></pre>
+            </div>
+        </div>
+    </div>
+    <div class="box-accent" style="margin-top: 10px;">
+        <h4>Python API Control</h4>
+        <p><code>pass_registry_json()</code> is exposed via nanobind. Users can inspect which passes are available,
+        and the Python <code>compile()</code> API uses <code>default_hir_pass_manager()</code> / <code>default_bytecode_pass_manager()</code>
+        unless overridden. Individual passes can be enabled/disabled by name.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 2: PEEPHOLE FUSION PASS                                    -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">02</div>
+    <h2>PeepholeFusionPass</h2>
+    <p><span class="pass-badge badge-hir">HIR</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Algebraic T/T_dag cancellation and fusion via symplectic commutation</p>
+</section>
+
+<section>
+    <h2>Peephole: What It Does</h2>
+    <div class="box">
+        <h4>Purpose</h4>
+        <p>Scans the HIR for pairs of T/T_dag gates and PHASE_ROTATION ops acting on the
+        <em>same virtual Pauli axis</em>. Uses the <span class="highlight">symplectic inner product</span>
+        to commute past non-interfering operations and find matchable pairs.</p>
+    </div>
+    <div class="cols" style="margin-top: 15px;">
+        <div class="col">
+            <div class="box-accent">
+                <h4>Three Transformations</h4>
+                <ol>
+                    <li><span class="green">Cancellation:</span> T(P) + T_dag(P) = Identity -- delete both</li>
+                    <li><span class="green">S-Absorption:</span> T(P) + T(P) = S(P) -- absorb into tableau</li>
+                    <li><span class="green">Rotation Folding:</span> ROT(P, a) + ROT(P, b) = ROT(P, a+b)</li>
+                </ol>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Why This Matters</h4>
+                <p>Every surviving T gate forces k -> k+1 (doubles the amplitude array).
+                Cancelling even one T gate halves peak memory and runtime.</p>
+                <p class="small dim">Reports stats: <code>cancellations()</code> and <code>fusions()</code></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Peephole: T + T_dag Cancellation</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">BEFORE:</span>  HIR Operation Stream
++-------+-------+-------+-------+-------+-------+
+| T(P1) | M(Q)  | N(R)  | T_dag | M(S)  | T(P2) |
+|       | commu-| commu-| (P1)  |       |       |
+|       | tes   | tes   |       |       |       |
++-------+-------+-------+-------+-------+-------+
+         ^       ^
+         |       |
+    Both <span class="highlight">commute</span> with P1 (symplectic inner product = 0)
+    so the peephole can "see through" them
+
+<span class="green">AFTER:</span>   T + T_dag on same axis P1 --> Identity (cancelled)
++-------+-------+-------+-------+
+| M(Q)  | N(R)  | M(S)  | T(P2) |
++-------+-------+-------+-------+
+
+<span class="yellow">Result:</span> k reduced by 1.  If k was 3, runtime drops from O(8) to O(4)
+</pre>
+    </div>
+    <div class="box" style="margin-top:10px;">
+        <h4>Commutation Check (<code>commutation.h</code>)</h4>
+        <pre><code class="language-cpp">inline bool anti_commute(MaskView x1, MaskView z1, MaskView x2, MaskView z2) {
+    int parity = 0;
+    for (uint32_t i = 0; i < x1.num_words(); ++i)
+        parity += std::popcount((x1.words[i] & z2.words[i]) ^
+                                (z1.words[i] & x2.words[i]));
+    return (parity & 1) != 0;  // true = anti-commutes = BLOCKED
+}</code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>Peephole: T + T Fusion (S-Absorption)</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">BEFORE:</span>                                 <span class="green">AFTER:</span>
++-------+-------+-------+             +-------+-------+
+| T(P1) | M(Q)  | T(P1) |             | M(Q') |  ...  |
+|       | commu-|       |             |       |       |
+|       | tes   |       |             |       |       |
++-------+-------+-------+             +-------+-------+
+
+T + T = S gate on axis P1
+S is Clifford --> absorbed into the Stim Tableau, <span class="highlight">never appears in bytecode</span>
+
+The S-absorption propagates through ALL downstream ops:
+  - Conjugates their Pauli masks: Q' = S_dag * Q * S
+  - Updates the final tableau: U_C' = U_C * S_P
+  - Corrects global_weight with s_absorption_phase()
+</pre>
+    </div>
+    <pre><code class="language-cpp">// From peephole.cc -- the fusion branch
+if (total == 0) {           // T + T_dag = identity cancellation
+    deleted[i] = deleted[j] = true;  ++cancellations_;
+} else {                    // |total| == 2: fuse into S, absorb downstream
+    bool s_is_dagger = (total == -2);
+    deleted[i] = deleted[j] = true;
+    apply_virtual_s_downstream(hir, j + 1, destab_i, stab_i,
+                               false, s_is_dagger, deleted);
+    ++fusions_;
+}</code></pre>
+</section>
+
+<section>
+    <h2>Peephole: Rotation Folding</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">BEFORE:</span>  Two arbitrary-angle rotations on same Pauli axis
++------------------+-------+------------------+
+| PHASE_ROT(P, 0.3)| M(Q)  | PHASE_ROT(P, 0.2)|
+|  alpha = 0.3 * pi| commu-|  alpha = 0.2 * pi|
+|                  | tes   |                  |
++------------------+-------+------------------+
+
+<span class="green">AFTER:</span>   Fused into single rotation
++-------+------------------+
+| M(Q)  | PHASE_ROT(P, 0.5)|
+|       |  alpha = 0.5 * pi|
++-------+------------------+
+
+Special cases detected automatically:
+  <span class="highlight">a+b = 0.0</span>  --> Identity (delete both)        <span class="dim">++cancellations_</span>
+  <span class="highlight">a+b = 0.5</span>  --> S gate (absorb downstream)    <span class="dim">++fusions_</span>
+  <span class="highlight">a+b = 1.5</span>  --> S_dag gate (absorb downstream) <span class="dim">++fusions_</span>
+  <span class="highlight">a+b = 0.25</span> --> T gate (demote to cheaper T)   <span class="dim">++fusions_</span>
+  <span class="highlight">a+b = 1.75</span> --> T_dag gate (demote)             <span class="dim">++fusions_</span>
+  <span class="highlight">otherwise</span>  --> Keep as PHASE_ROT(a+b)          <span class="dim">++fusions_</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>Peephole: Fixed-Point Iteration & Sign Normalization</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>Fixed-Point Loop</h4>
+                <pre><code class="language-cpp">bool changed = true;
+while (changed) {
+    changed = false;
+    // 1) Scan for T gate pairs
+    // 2) Scan for PHASE_ROT pairs
+    // 3) Demote standalone
+    //    PHASE_ROTs at Clifford/T angles
+    // 4) Compact: erase deleted ops
+}
+// Repeats until no more
+// cancellations/fusions found</code></pre>
+                <p class="small">A fusion may expose new cancellations -- e.g., after an S-absorption conjugates downstream
+                T gates, a previously blocked pair may now match.</p>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>T Gate Sign Normalization</h4>
+                <pre><code class="language-cpp">// T(-P) = exp(+i*pi/4) * T_dag(+P)
+// T_dag(-P) = exp(-i*pi/4) * T(+P)
+inline void normalize_t_sign(
+    HirModule& hir, HeisenbergOp& op,
+    std::complex&lt;double&gt;& global_weight)
+{
+    if (op.op_type() == OpType::T_GATE
+        && hir.sign(op)) {
+        global_weight *=
+          op.is_dagger()
+            ? kExpMinusIPiOver4
+            : kExpIPiOver4;
+        op.set_dagger(!op.is_dagger());
+        hir.set_sign(op, false);
+    }
+}</code></pre>
+                <p class="small">All T gates are normalized to sign=false before comparison.
+                The phase difference is absorbed into <code>global_weight</code>.</p>
+            </div>
+        </div>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 3: STATEVECTOR SQUEEZE                                     -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">03</div>
+    <h2>StatevectorSqueezePass</h2>
+    <p><span class="pass-badge badge-hir">HIR</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>THE most important pass for performance: minimize peak active dimension k</p>
+</section>
+
+<section>
+    <h2>Squeeze: Why Peak Rank Matters</h2>
+    <div class="box-accent">
+        <h4>The Central Insight</h4>
+        <p>Every array operation costs <code>O(2^k)</code>. Peak rank <code>k</code> determines the
+        <strong>worst-case memory and runtime</strong> for the entire simulation.
+        Reducing k by just 1 gives a <span class="accent">2x speedup</span>. Reducing by 3 gives <span class="accent">8x</span>.</p>
+    </div>
+    <div class="cols" style="margin-top: 15px;">
+        <div class="col">
+            <div class="box">
+                <h4>What Changes k?</h4>
+                <table>
+                    <tr><th>Operation</th><th>Effect on k</th></tr>
+                    <tr><td><code>T_GATE</code>, <code>PHASE_ROT</code></td><td>k -> k+1 (expand)</td></tr>
+                    <tr><td><code>MEASURE</code> (active qubit)</td><td>k -> k-1 (contract)</td></tr>
+                    <tr><td>Clifford gates</td><td>No change (O(1))</td></tr>
+                </table>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>The Strategy</h4>
+                <ol>
+                    <li><span class="green">Sweep 1 (leftward):</span> Bubble MEASUREs as early as possible --> free active dimensions sooner</li>
+                    <li><span class="green">Sweep 2 (rightward):</span> Bubble T_GATEs and PHASE_ROTs as late as possible --> defer expansions</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Squeeze: The Two-Sweep Algorithm</h2>
+    <pre><code class="language-cpp">void StatevectorSqueezePass::run(HirModule& hir) {
+    // Sweep 1: Eager Compaction (leftward bubble of MEASUREs)
+    for (size_t i = 1; i < hir.ops.size(); ++i) {
+        if (hir.ops[i].op_type() != OpType::MEASURE) continue;
+        size_t curr = i;
+        while (curr > 0 && can_swap(hir.ops[curr - 1], hir.ops[curr], hir)) {
+            std::swap(hir.ops[curr - 1], hir.ops[curr]);
+            --curr;                     // bubble left as far as possible
+        }
+    }
+
+    // Sweep 2: Lazy Expansion (rightward bubble of non-Clifford gates)
+    if (hir.ops.size() >= 2) {
+        for (size_t i = hir.ops.size() - 2;; --i) {
+            auto t = hir.ops[i].op_type();
+            if (t == OpType::T_GATE || t == OpType::PHASE_ROTATION) {
+                size_t curr = i;
+                while (curr < hir.ops.size() - 1
+                       && can_swap(hir.ops[curr], hir.ops[curr + 1], hir)) {
+                    auto nt = hir.ops[curr + 1].op_type();
+                    if (nt == OpType::T_GATE || nt == OpType::PHASE_ROTATION)
+                        break;          // don't swap two expanding gates
+                    std::swap(hir.ops[curr], hir.ops[curr + 1]);
+                    ++curr;             // bubble right
+                }
+            }
+            if (i == 0) break;
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>Squeeze: Before vs After -- k Trajectory</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">BEFORE optimization:</span>  T1 T2 M1 T3 M2 M3 T4 M4
+
+ k   4 |            <span class="accent">*</span>
+     3 |      <span class="accent">*---*</span>   <span class="accent">*</span>
+     2 |   <span class="accent">*--</span>      <span class="accent">*</span>   <span class="accent">*</span>
+     1 | <span class="accent">*</span>               <span class="accent">*</span>
+     0 |<span class="accent">*</span>                  <span class="accent">*</span>
+       +-------------------------------> time
+       T1 T2 M1 T3 M2 M3 T4 M4
+                  <span class="yellow">peak k = 4  -->  memory = 2^4 = 16 amplitudes</span>
+
+<span class="green">AFTER optimization:</span>   M1 M2 T1 T2 M3 T3 T4 M4
+   (Measures moved left, T gates moved right)
+
+ k   4 |
+     3 |
+     2 |            <span class="green">*---*</span>      <span class="green">*</span>
+     1 |         <span class="green">*--</span>      <span class="green">*--*</span>
+     0 |<span class="green">*---*---*</span>               <span class="green">*</span>
+       +-------------------------------> time
+       M1 M2 T1 T2 M3 T3 T4 M4
+                  <span class="green">peak k = 2  -->  memory = 2^2 = 4 amplitudes</span>
+                  <span class="yellow">4x speedup, 4x less memory!</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>Squeeze: Commutation Safety via <code>can_swap()</code></h2>
+    <div class="box">
+        <h4>The <code>can_swap()</code> Function (<code>commutation.cc</code>)</h4>
+        <p>Checks three independent conditions -- ALL must pass:</p>
+    </div>
+    <div class="cols" style="margin-top:10px;">
+        <div class="col">
+            <div class="box">
+                <h4>1. Classical Dataflow</h4>
+                <pre><code class="language-cpp">// Block if one op writes
+// a measurement index that
+// the other op reads
+auto left_write =
+  get_written_meas_idx(left, hir);
+if (left_write.has_value()
+    && accesses_classical_index(
+         right, *left_write, hir))
+    return false;</code></pre>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>2. EXP_VAL Barrier</h4>
+                <pre><code class="language-cpp">// EXP_VAL is a positional probe:
+// user expects the expectation
+// value at an exact circuit point
+if (lt == OpType::EXP_VAL
+    || rt == OpType::EXP_VAL)
+    return false;</code></pre>
+            </div>
+        </div>
+    </div>
+    <div class="box" style="margin-top:10px;">
+        <h4>3. Quantum Commutativity (Symplectic Inner Product)</h4>
+        <pre><code class="language-cpp">// Standard case: if Pauli operators anti-commute, ops cannot be swapped
+return !anti_commute(hir.destab_mask(left), hir.stab_mask(left),
+                     hir.destab_mask(right), hir.stab_mask(right));
+// Special handling for NOISE ops: check all channels via noise_sites_anti_commute()</code></pre>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 4: REMOVE NOISE PASS                                       -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">04</div>
+    <h2>RemoveNoisePass</h2>
+    <p><span class="pass-badge badge-hir">HIR</span> <span class="pass-badge badge-off">OFF by default</span></p>
+    <p>Strip all stochastic noise for clean reference-shot extraction</p>
+</section>
+
+<section>
+    <h2>RemoveNoisePass: Clean & Simple</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>Purpose</h4>
+                <p>Removes <strong>all</strong> <code>NOISE</code> and <code>READOUT_NOISE</code> operations from the HIR,
+                producing a clean noiseless circuit.</p>
+                <p style="margin-top:10px;"><strong>Used internally</strong> by <code>compute_reference_syndrome()</code>
+                to extract noiseless reference detector parities for syndrome normalization.</p>
+            </div>
+            <div class="box" style="margin-top:10px;">
+                <h4>When to Use</h4>
+                <ul>
+                    <li>Computing reference syndromes (noiseless parity)</li>
+                    <li>Testing gate correctness without noise</li>
+                    <li>Benchmarking pure gate performance</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Implementation (entire pass)</h4>
+                <pre><code class="language-cpp">void RemoveNoisePass::run(HirModule& hir) {
+    // Remove all noise ops
+    std::erase_if(hir.ops, [](const HeisenbergOp& op) {
+        return op.op_type() == OpType::NOISE
+            || op.op_type() == OpType::READOUT_NOISE;
+    });
+
+    // Clear side tables
+    hir.noise_sites.clear();
+    hir.readout_noise.clear();
+
+    // Replace arena (fixed-capacity)
+    hir.noise_channel_masks = PauliMaskArena{};
+    hir.source_map.clear();
+}</code></pre>
+            </div>
+            <div class="diagram-box" style="margin-top:10px;">
+<pre>
+<span class="accent">BEFORE:</span> T M <span class="yellow">N</span> M <span class="yellow">N N</span> T <span class="yellow">RN</span> M
+<span class="green">AFTER:</span>  T M   M      T    M
+
+<span class="yellow">N</span>  = NOISE op     (stochastic Pauli channel)
+<span class="yellow">RN</span> = READOUT_NOISE (classical bit-flip)
+</pre>
+            </div>
+        </div>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 5: DROP NON-UNITARY PASS                                   -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">05</div>
+    <h2>DropNonUnitaryPass</h2>
+    <p><span class="pass-badge badge-hir">HIR</span> <span class="pass-badge badge-off">OFF by default</span></p>
+    <p>Extract the pure unitary skeleton for probability computation</p>
+</section>
+
+<section>
+    <h2>DropNonUnitaryPass: Unitary Skeleton</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>Purpose</h4>
+                <p>Drops ALL non-evolution operations, leaving only
+                <code>T_GATE</code> and <code>PHASE_ROTATION</code> -- the pure unitary part of the circuit.</p>
+                <p style="margin-top:8px;"><span class="accent">Not semantics-preserving!</span> Only valid for computing exact
+                <code>basis_probabilities()</code> where no measurements or noise are needed.</p>
+            </div>
+            <div class="box" style="margin-top:10px;">
+                <h4>What Gets Dropped</h4>
+                <table>
+                    <tr><th>Dropped</th><th>Kept</th></tr>
+                    <tr><td>MEASURE</td><td>T_GATE</td></tr>
+                    <tr><td>CONDITIONAL_PAULI</td><td>PHASE_ROTATION</td></tr>
+                    <tr><td>NOISE, READOUT_NOISE</td><td></td></tr>
+                    <tr><td>DETECTOR, OBSERVABLE</td><td></td></tr>
+                    <tr><td>EXP_VAL</td><td></td></tr>
+                </table>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Implementation</h4>
+                <pre><code class="language-cpp">void DropNonUnitaryPass::run(HirModule& hir) {
+    std::erase_if(hir.ops, [](const HeisenbergOp& op) {
+        switch (op.op_type()) {
+            case OpType::T_GATE:
+            case OpType::PHASE_ROTATION:
+                return false;   // KEEP
+            default:
+                return true;    // DROP
+        }
+    });
+
+    // Clear all side tables
+    hir.noise_sites.clear();
+    hir.readout_noise.clear();
+    hir.detector_targets.clear();
+    hir.observable_targets.clear();
+    hir.noise_channel_masks = PauliMaskArena{};
+    hir.num_measurements = 0;
+    hir.num_hidden_measurements = 0;
+    hir.num_detectors = 0;
+    hir.num_observables = 0;
+    hir.num_exp_vals = 0;
+    hir.source_map.clear();
+}</code></pre>
+            </div>
+            <p class="small dim" style="margin-top:5px;">
+                The <code>static_assert</code> on <code>NUM_OP_TYPES == 9</code> ensures this pass is updated
+                whenever a new OpType is added to the HIR.
+            </p>
+        </div>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 6: NOISE BLOCK PASS                                        -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">06</div>
+    <h2>NoiseBlockPass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Coalesce contiguous OP_NOISE into OP_NOISE_BLOCK for O(1) skip-ahead</p>
+</section>
+
+<section>
+    <h2>NoiseBlock: Reducing Dispatch Overhead</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>The Problem</h4>
+                <p>QEC circuits emit <strong>hundreds</strong> of consecutive <code>OP_NOISE</code> instructions
+                (one per physical qubit per error round). Each OP_NOISE has its own
+                instruction fetch, decode, and dispatch overhead.</p>
+                <p style="margin-top:8px;">The SVM's gap-based noise sampler can skip silent sites in O(1),
+                but still pays per-instruction dispatch cost.</p>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box-green">
+                <h4>The Solution</h4>
+                <p>Replace runs of consecutive <code>OP_NOISE(site_i)</code>, <code>OP_NOISE(site_i+1)</code>, ...
+                with a single <code>OP_NOISE_BLOCK(start, count)</code>.</p>
+                <p style="margin-top:8px;">The VM processes the entire block in one dispatch cycle using
+                exponential gap sampling over the cumulative hazard table.</p>
+            </div>
+        </div>
+    </div>
+    <div class="diagram-box" style="margin-top:15px;">
+<pre>
+<span class="accent">BEFORE:</span>  50 individual noise instructions
++----------+----------+----------+     +----------+
+| OP_NOISE | OP_NOISE | OP_NOISE | ... | OP_NOISE |
+| site=0   | site=1   | site=2   |     | site=49  |
++----------+----------+----------+     +----------+
+  <span class="dim">50 instruction fetches, 50 decodes, 50 dispatches</span>
+
+<span class="green">AFTER:</span>   1 block instruction
++-----------------------+
+| OP_NOISE_BLOCK        |
+| start=0, count=50     |
++-----------------------+
+  <span class="green">1 fetch, 1 decode, O(1) skip-ahead per silent site</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>NoiseBlock: The Algorithm</h2>
+    <pre><code class="language-cpp">void NoiseBlockPass::run(CompiledModule& module) {
+    auto& old_bc = module.bytecode;
+    std::vector&lt;Instruction&gt; new_bc;
+    new_bc.reserve(old_bc.size());
+
+    size_t i = 0;
+    while (i < old_bc.size()) {
+        if (old_bc[i].opcode != Opcode::OP_NOISE) {
+            new_bc.push_back(old_bc[i]);
+            ++i;
+            continue;
+        }
+
+        // Found OP_NOISE -- scan for consecutive site indices
+        uint32_t start_site = old_bc[i].pauli.cp_mask_idx;
+        size_t run_len = 1;
+        while (i + run_len < old_bc.size()
+               && old_bc[i + run_len].opcode == Opcode::OP_NOISE
+               && old_bc[i + run_len].pauli.cp_mask_idx == start_site + run_len) {
+            ++run_len;
+        }
+
+        if (run_len == 1) {
+            new_bc.push_back(old_bc[i]);  // Keep singleton as-is
+        } else {
+            new_bc.push_back(make_noise_block(start_site, run_len));  // Coalesce!
+        }
+        i += run_len;
+    }
+    old_bc = std::move(new_bc);
+}</code></pre>
+    <div class="box" style="margin-top:10px;">
+        <h4>Key Requirement: Consecutive Site Indices</h4>
+        <p>Sites must be numbered <code>start, start+1, start+2, ...</code> for the gap sampler to
+        use the cumulative hazard table as a contiguous range. Non-consecutive sites break the run.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 7: MULTI-GATE PASS                                         -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">07</div>
+    <h2>MultiGatePass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Fuse star-graph CNOT/CZ chains into bitmask-driven multi-gate instructions</p>
+</section>
+
+<section>
+    <h2>MultiGate: Star-Graph Fusion</h2>
+    <div class="box">
+        <h4>Origin: The Pauli Localizer</h4>
+        <p>The backend's <code>localize_pauli()</code> reduces multi-qubit Pauli strings by emitting
+        sequences of CNOT/CZ gates that all share a common pivot qubit. This creates
+        <em>star-graph</em> patterns in the bytecode.</p>
+    </div>
+    <div class="diagram-box" style="margin-top:15px;">
+<pre>
+<span class="accent">BEFORE:</span>  Star-graph CNOTs sharing target axis 3
++-------------------+-------------------+-------------------+-------------------+
+| OP_ARRAY_CNOT     | OP_ARRAY_CNOT     | OP_ARRAY_CNOT     | OP_ARRAY_CNOT     |
+| ctrl=0, tgt=3     | ctrl=1, tgt=3     | ctrl=4, tgt=3     | ctrl=5, tgt=3     |
++-------------------+-------------------+-------------------+-------------------+
+  <span class="dim">4 separate O(2^k) array sweeps</span>
+
+<span class="green">AFTER:</span>   Single multi-gate instruction
++-----------------------------------+
+| OP_ARRAY_MULTI_CNOT               |
+| target=3, mask=0b00110011         |
+|          bits: 5 4 _ _ 1 0       |
++-----------------------------------+
+  <span class="green">1 array sweep with popcount-based parity check</span>
+</pre>
+    </div>
+    <div class="cols" style="margin-top:10px;">
+        <div class="col">
+            <div class="box">
+                <h4>CNOT Pattern</h4>
+                <p>Multiple <code>ARRAY_CNOT(ctrl_i, target)</code> sharing the <strong>same target</strong> axis
+                --> <code>ARRAY_MULTI_CNOT(target, ctrl_mask)</code></p>
+                <p>Bitmask: bit <code>i</code> set = axis <code>i</code> is a control</p>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>CZ Pattern</h4>
+                <p>Multiple <code>ARRAY_CZ(ctrl, tgt_i)</code> sharing the <strong>same control</strong> axis
+                --> <code>ARRAY_MULTI_CZ(ctrl, target_mask)</code></p>
+                <p>Bitmask: bit <code>i</code> set = axis <code>i</code> is a target</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>MultiGate: Bitmask Encoding & Self-Cancellation</h2>
+    <pre><code class="language-cpp">// CNOT fusion with XOR-based self-cancellation detection
+while (i < old_bc.size() && old_bc[i].opcode == Opcode::OP_ARRAY_CNOT
+       && old_bc[i].axis_2 == shared_target) {
+    ctrl_mask ^= 1ULL << old_bc[i].axis_1;  // XOR: pairs cancel!
+    ++run_len; ++i;
+}
+
+if (ctrl_mask == 0) {
+    // All gates cancelled (even number of same-axis CNOTs = identity)
+} else if (run_len >= 2 && std::popcount(ctrl_mask) >= 2) {
+    new_bc.push_back(make_array_multi_cnot(shared_target, ctrl_mask));
+} else {
+    // Single surviving gate: emit as plain CNOT
+    uint16_t ctrl_axis = static_cast&lt;uint16_t&gt;(std::countr_zero(ctrl_mask));
+    new_bc.push_back(make_array_cnot(ctrl_axis, shared_target));
+}</code></pre>
+    <div class="box-accent" style="margin-top:10px;">
+        <h4>Elegant XOR Trick</h4>
+        <p>Because CNOT is self-inverse, XOR-ing the bitmask automatically detects and cancels pairs.
+        If two CNOTs with the same control axis appear, they cancel to identity. The final bitmask
+        contains only the <em>surviving</em> controls.</p>
+    </div>
+    <div class="box" style="margin-top:10px;">
+        <h4>VM Execution</h4>
+        <p>The VM computes parity via <code>popcount(index & mask) & 1</code> in the inner loop --
+        O(1) per amplitude entry. One sweep replaces N separate sweeps.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 8: EXPAND-T PASS                                           -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">08</div>
+    <h2>ExpandTPass & ExpandRotPass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Fuse OP_EXPAND + OP_ARRAY_T/ROT into single-pass instructions</p>
+</section>
+
+<section>
+    <h2>ExpandT: Eliminating a Redundant Array Pass</h2>
+    <div class="box">
+        <h4>The Pattern</h4>
+        <p>Every T-gate injection requires: (1) <code>OP_EXPAND</code> to activate a dormant axis (k -> k+1, doubles array),
+        then (2) <code>OP_ARRAY_T</code> to apply the T-phase on that axis. That is two separate O(2^k) sweeps.</p>
+    </div>
+    <div class="diagram-box" style="margin-top:15px;">
+<pre>
+<span class="accent">BEFORE:</span>  Two instructions, two array sweeps
++-----------------------------+-----------------------------+
+| OP_EXPAND(axis=5)           | OP_ARRAY_T(axis=5)          |
+|                             |                             |
+| for i in 0..2^k:            | for i in 0..2^(k+1):        |
+|   v[i + 2^k] = v[i]        |   if bit(i, axis_5):        |
+|   gamma /= sqrt(2)         |     v[i] *= exp(i*pi/4)     |
++-----------------------------+-----------------------------+
+ <span class="dim">Sweep 1: copy+expand           Sweep 2: phase multiply</span>
+
+<span class="green">AFTER:</span>   One fused instruction, one array sweep
++----------------------------------------------+
+| OP_EXPAND_T(axis=5)                          |
+|                                              |
+| for i in 0..2^k:                              |
+|   v[i + 2^k] = v[i] * exp(i*pi/4)           |
+|   gamma /= sqrt(2)                          |
++----------------------------------------------+
+ <span class="green">Single sweep: copy and phase in one iteration</span>
+ <span class="yellow">Saves one full O(2^k) memory traversal</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>ExpandT & ExpandRot: Implementation</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box">
+                <h4>ExpandTPass</h4>
+                <pre><code class="language-cpp">void ExpandTPass::run(CompiledModule& mod) {
+    size_t i = 0;
+    while (i < old_bc.size()) {
+        if (i + 1 < old_bc.size()
+            && old_bc[i].opcode == OP_EXPAND) {
+            uint16_t axis = old_bc[i].axis_1;
+            Opcode next = old_bc[i+1].opcode;
+
+            if ((next == OP_ARRAY_T
+                 || next == OP_ARRAY_T_DAG)
+                && old_bc[i+1].axis_1 == axis) {
+                // Fuse!
+                Opcode fused = (next == OP_ARRAY_T)
+                    ? OP_EXPAND_T : OP_EXPAND_T_DAG;
+                Instruction f{};
+                f.opcode = fused;
+                f.axis_1 = axis;
+                new_bc.push_back(f);
+                i += 2; continue;
+            }
+        }
+        new_bc.push_back(old_bc[i]); ++i;
+    }
+}</code></pre>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>ExpandRotPass</h4>
+                <pre><code class="language-cpp">void ExpandRotPass::run(CompiledModule& mod) {
+    size_t i = 0;
+    while (i < old_bc.size()) {
+        if (i + 1 < old_bc.size()
+            && old_bc[i].opcode == OP_EXPAND) {
+            uint16_t axis = old_bc[i].axis_1;
+
+            if (old_bc[i+1].opcode == OP_ARRAY_ROT
+                && old_bc[i+1].axis_1 == axis) {
+                // Fuse with rotation angle
+                new_bc.push_back(
+                    make_expand_rot(axis,
+                        old_bc[i+1].math.weight_re,
+                        old_bc[i+1].math.weight_im
+                    ));
+                i += 2; continue;
+            }
+        }
+        new_bc.push_back(old_bc[i]); ++i;
+    }
+}</code></pre>
+            </div>
+        </div>
+    </div>
+    <div class="box-accent" style="margin-top:10px;">
+        <h4>Impact</h4>
+        <p>Every T gate in the circuit benefits. In a distance-5 surface code with 50 T gates,
+        this eliminates 50 separate O(2^k) array copies. The fused kernel
+        <code>arr[i + half] = arr[i] * exp(+-i*pi/4)</code> runs in a single pass.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 9: SWAP MEAS PASS                                          -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">09</div>
+    <h2>SwapMeasPass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Fuse OP_ARRAY_SWAP + OP_MEAS_ACTIVE_INTERFERE into a single dispatch</p>
+</section>
+
+<section>
+    <h2>SwapMeas: Eliminating the Pre-Measurement Swap</h2>
+    <div class="box">
+        <h4>Why the Backend Emits SWAP + MEAS</h4>
+        <p>Active X-basis measurement requires the measurement axis to be at position <code>k-1</code>
+        (the highest active axis) for contiguous array compaction. The backend emits an
+        <code>OP_ARRAY_SWAP</code> to route the axis there, followed by <code>OP_MEAS_ACTIVE_INTERFERE</code>.</p>
+    </div>
+    <div class="diagram-box" style="margin-top:15px;">
+<pre>
+<span class="accent">BEFORE:</span>  Two instructions, two O(2^k) sweeps
++-------------------------------+-------------------------------+
+| OP_ARRAY_SWAP(axis=2, axis=4) | OP_MEAS_ACTIVE_INTERFERE      |
+|                               | axis=4, classical_idx=7       |
+| for i in 0..2^k:              | for i in 0..2^(k-1):          |
+|   swap bit 2 and bit 4 pairs |   v[i] += v[i + 2^(k-1)]     |
+|   in the index                |   (fold + halve array)        |
++-------------------------------+-------------------------------+
+ <span class="dim">Sweep 1: reindex all pairs       Sweep 2: fold+halve</span>
+
+<span class="green">AFTER:</span>   One fused instruction
++----------------------------------------------------+
+| OP_SWAP_MEAS_INTERFERE                             |
+| swap_from=2, swap_to=4, classical_idx=7            |
+|                                                    |
+| for i in 0..2^(k-1):                               |
+|   reindex(i, axis_2, axis_4) then fold+halve      |
++----------------------------------------------------+
+ <span class="green">Single sweep: reindex and fold in one pass</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>SwapMeas: Implementation</h2>
+    <pre><code class="language-cpp">void SwapMeasPass::run(CompiledModule& module) {
+    auto& old_bc = module.bytecode;
+    std::vector&lt;Instruction&gt; new_bc;
+    new_bc.reserve(old_bc.size());
+
+    size_t i = 0;
+    while (i < old_bc.size()) {
+        if (i + 1 < old_bc.size()
+            && old_bc[i].opcode == Opcode::OP_ARRAY_SWAP
+            && old_bc[i + 1].opcode == Opcode::OP_MEAS_ACTIVE_INTERFERE
+            && old_bc[i + 1].axis_1 == old_bc[i].axis_2) {
+
+            new_bc.push_back(make_swap_meas_interfere(
+                old_bc[i].axis_1,                      // swap_from
+                old_bc[i].axis_2,                      // swap_to (= meas axis)
+                old_bc[i + 1].classical.classical_idx, // measurement record slot
+                (old_bc[i + 1].flags & Instruction::FLAG_SIGN) != 0
+            ));
+            i += 2;
+            continue;
+        }
+        new_bc.push_back(old_bc[i]);
+        ++i;
+    }
+    old_bc = std::move(new_bc);
+}</code></pre>
+    <div class="box" style="margin-top:10px;">
+        <h4>Pattern Match Condition</h4>
+        <p>The SWAP's <code>axis_2</code> (destination) must equal the MEAS's <code>axis_1</code> (measurement target).
+        This confirms the swap was routing the qubit to position k-1 for measurement.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 10: TILE AXIS FUSION PASS                                  -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">10</div>
+    <h2>TileAxisFusionPass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Fuse 2-qubit tile sequences into precomputed 4x4 unitary matrices</p>
+</section>
+
+<section>
+    <h2>TileAxisFusion: The Idea</h2>
+    <div class="box-accent">
+        <h4>Core Concept</h4>
+        <p>When a sequence of gates all operate on the same pair of axes <code>{a, b}</code>,
+        their combined effect is a single 4x4 unitary matrix. Instead of
+        N separate O(2^k) array sweeps, apply one 4x4 matrix in a single sweep.</p>
+    </div>
+    <div class="cols" style="margin-top:15px;">
+        <div class="col">
+            <div class="box">
+                <h4>What Can Participate</h4>
+                <table>
+                    <tr><th>1Q Array Ops</th><th>2Q Array Ops</th></tr>
+                    <tr><td>ARRAY_H</td><td>ARRAY_CNOT</td></tr>
+                    <tr><td>ARRAY_S / S_DAG</td><td>ARRAY_CZ</td></tr>
+                    <tr><td>ARRAY_T / T_DAG</td><td>ARRAY_SWAP</td></tr>
+                    <tr><td>ARRAY_ROT</td><td></td></tr>
+                </table>
+                <p class="small dim" style="margin-top:5px;">Frame-only ops (FRAME_H, FRAME_S, FRAME_CNOT, etc.) are also absorbed into the fused matrix.</p>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Run Terminators</h4>
+                <ul>
+                    <li>Instruction touching a <em>different</em> axis</li>
+                    <li>OP_EXPAND (changes array dimension)</li>
+                    <li>Measurement, noise, or classical op</li>
+                    <li>Frame op that mixes tile axis with external axis</li>
+                </ul>
+                <p class="small dim" style="margin-top:5px;">Minimum 3 array-touching ops to justify the 4x4 matrix overhead.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>TileAxisFusion: Before/After</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">BEFORE:</span>  5 instructions on axes {0, 1}  (5 separate O(2^k) sweeps)
++------------------+------------------+------------------+------------------+------------------+
+| OP_ARRAY_CNOT    | OP_ARRAY_S       | OP_ARRAY_CZ      | OP_ARRAY_H       | OP_ARRAY_T       |
+| ctrl=0, tgt=1    | axis=0           | a=0, b=1         | axis=1           | axis=0           |
++------------------+------------------+------------------+------------------+------------------+
+
+<span class="green">AFTER:</span>   1 fused U4 instruction  (1 sweep with 4x4 matrix lookup)
++----------------------------------------------+
+| OP_ARRAY_U4                                  |
+| axis_lo=0, axis_hi=1, cp_idx=0              |
+|                                              |
+| ConstantPool.fused_u4_nodes[0]:             |
+|   16 entries (one per input frame state)     |
+|   Each entry: 4x4 matrix + gamma + out_state |
++----------------------------------------------+
+  <span class="green">5 sweeps --> 1 sweep   (5x fewer memory passes)</span>
+</pre>
+    </div>
+    <div class="box" style="margin-top:10px;">
+        <h4>The FusedU4Node Structure</h4>
+        <pre><code class="language-cpp">struct FusedU4Node {
+    struct Entry {
+        std::complex&lt;double&gt; matrix[4][4]; // Row-major 4x4 unitary
+        std::complex&lt;double&gt; gamma_multiplier;  // Accumulated global phase
+        uint8_t out_state;  // Resulting 4-bit frame: (pz_hi<<3)|(px_hi<<2)|(pz_lo<<1)|px_lo
+    };
+    Entry entries[16];  // Indexed by 4-bit incoming frame state
+};
+// 16 states = all combinations of (px_lo, pz_lo, px_hi, pz_hi)</code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>TileAxisFusion: How U4 Nodes Are Built</h2>
+    <pre><code class="language-cpp">FusedU4Node build_fused_u4_node(const std::vector&lt;Instruction&gt;& bytecode,
+                                size_t start, size_t end,
+                                uint16_t tile_lo, uint16_t tile_hi) {
+    FusedU4Node node{};
+    for (uint8_t in_state = 0; in_state < 16; ++in_state) {
+        Mat4 M = kIdentity4;            // Start with 4x4 identity
+        std::complex&lt;double&gt; gamma = {1.0, 0.0};
+        uint8_t px_lo = in_state & 1;
+        uint8_t pz_lo = (in_state >> 1) & 1;
+        uint8_t px_hi = (in_state >> 2) & 1;
+        uint8_t pz_hi = (in_state >> 3) & 1;
+
+        for (size_t i = start; i < end; ++i) {
+            simulate_tile_instruction(bytecode[i],
+                px_lo, pz_lo, px_hi, pz_hi,
+                M, gamma, tile_lo, tile_hi);
+        }
+        // Store the accumulated matrix, phase, and output frame state
+        auto& entry = node.entries[in_state];
+        for (int r = 0; r < 4; ++r)
+            for (int c = 0; c < 4; ++c)
+                entry.matrix[r][c] = M[r * 4 + c];
+        entry.gamma_multiplier = gamma;
+        entry.out_state = (pz_hi << 3) | (px_hi << 2) | (pz_lo << 1) | px_lo;
+    }
+    return node;
+}</code></pre>
+    <p class="small dim" style="margin-top:5px;">Each of 16 input frame states produces a different 4x4 matrix and phase. The VM reads <code>(pz_hi, px_hi, pz_lo, px_lo)</code>
+    at runtime, looks up the precomputed entry, and applies a single 4x4 matrix multiply.</p>
+</section>
+
+<section>
+    <h2>TileAxisFusion: Instruction Simulation Detail</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box">
+                <h4>1Q Ops: Kronecker Product</h4>
+                <pre><code class="language-cpp">// 1Q gate on lo axis:
+// 4x4 = I_2 (x) U_2
+Mat4 kron_lo(const Mat2& u) {
+    Mat4 m = {};
+    for (int bh = 0; bh < 2; ++bh)
+      for (int r = 0; r < 2; ++r)
+        for (int c = 0; c < 2; ++c)
+          m[(bh*2+r)*4 + (bh*2+c)] = u[r*2+c];
+    return m;
+}
+// 1Q gate on hi axis:
+// 4x4 = U_2 (x) I_2
+Mat4 kron_hi(const Mat2& u) { ... }</code></pre>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>2Q Ops: Direct 4x4</h4>
+                <pre><code class="language-cpp">// CNOT: ctrl is hi, target is lo
+// |00>->|00>, |01>->|01>
+// |10>->|11>, |11>->|10>
+Mat4 make_cnot_4x4(ctrl, tgt,
+                   tile_lo, tile_hi);
+
+// CZ: diag(1, 1, 1, -1)
+Mat4 make_cz_4x4();
+
+// SWAP: |01> <-> |10>
+Mat4 make_swap_4x4();</code></pre>
+            </div>
+        </div>
+    </div>
+    <div class="box-accent" style="margin-top:10px;">
+        <h4>Ordering Constraint</h4>
+        <p><strong>TileAxisFusionPass MUST run BEFORE SingleAxisFusionPass.</strong>
+        TileAxisFusion needs to see the raw primitive opcodes (ARRAY_CNOT, ARRAY_S, etc.).
+        SingleAxisFusion then cleans up any leftover 1Q chains that were not part of a tile.</p>
+    </div>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 11: SINGLE AXIS FUSION PASS                                -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">11</div>
+    <h2>SingleAxisFusionPass</h2>
+    <p><span class="pass-badge badge-bc">BYTECODE</span> <span class="pass-badge" style="background:rgba(74,222,128,0.15);border-color:#4ade80;color:#4ade80;">DEFAULT ON</span></p>
+    <p>Fuse single-axis gate chains into precomputed 2x2 unitary matrices</p>
+</section>
+
+<section>
+    <h2>SingleAxisFusion: 1Q Chains to U2</h2>
+    <div class="box">
+        <h4>Core Concept</h4>
+        <p>When a sequence of gates all operate on the <em>same single axis</em>, their combined
+        effect is a 2x2 unitary. The pass precomputes this matrix for all 4 possible
+        Pauli frame states and stores it in the ConstantPool.</p>
+    </div>
+    <div class="diagram-box" style="margin-top:15px;">
+<pre>
+<span class="accent">BEFORE:</span>  4 instructions on axis 2  (4 separate O(2^k) sweeps)
++------------------+------------------+------------------+------------------+
+| OP_ARRAY_H       | OP_ARRAY_T       | OP_ARRAY_S       | OP_ARRAY_H       |
+| axis=2           | axis=2           | axis=2           | axis=2           |
++------------------+------------------+------------------+------------------+
+
+<span class="green">AFTER:</span>   1 fused U2 instruction  (1 sweep with 2x2 matrix)
++----------------------------------------------+
+| OP_ARRAY_U2                                  |
+| axis=2, cp_idx=0                             |
+|                                              |
+| ConstantPool.fused_u2_nodes[0]:             |
+|   4 entries (one per input frame state)      |
+|   Each: 2x2 matrix + gamma + out_state       |
++----------------------------------------------+
+  <span class="green">4 sweeps --> 1 sweep   (4x fewer memory passes)</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>SingleAxisFusion: Fusible Operations & Thresholds</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box">
+                <h4>Fusible Opcodes</h4>
+                <table>
+                    <tr><th>Array Ops (touch v[])</th><th>Frame Ops (frame only)</th></tr>
+                    <tr><td>OP_ARRAY_H</td><td>OP_FRAME_H</td></tr>
+                    <tr><td>OP_ARRAY_S / S_DAG</td><td>OP_FRAME_S / S_DAG</td></tr>
+                    <tr><td>OP_ARRAY_T / T_DAG</td><td></td></tr>
+                    <tr><td>OP_ARRAY_ROT</td><td></td></tr>
+                </table>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box">
+                <h4>Fusion Thresholds</h4>
+                <pre><code class="language-cpp">// Only fuse if we save at least
+// two array passes, OR if the run
+// contains a continuous rotation.
+if (array_op_count >= 3
+    || (array_op_count >= 2 && has_rot))
+{
+    // Fuse into U2
+} else {
+    // Emit unfused -- e.g., H+T
+    // is cheaper as 2 lightweight
+    // ops than a dense 2x2 sweep
+}</code></pre>
+                <p class="small">Continuous rotations (OP_ARRAY_ROT) always use a dense multiply,
+                so fusing at count=2 is already net-positive.</p>
+            </div>
+        </div>
+    </div>
+    <div class="box" style="margin-top:10px;">
+        <h4>The FusedU2Node Structure</h4>
+        <pre><code class="language-cpp">struct FusedU2Node {
+    std::complex&lt;double&gt; matrices[4][4]; // [frame_state][row-major 2x2]
+    std::complex&lt;double&gt; gamma_multipliers[4]; // Global phase per state
+    uint8_t out_states[4]; // Output frame: (pz << 1) | px
+};
+// 4 states = (px, pz): I=00, X=01, Z=10, Y=11</code></pre>
+    </div>
+</section>
+
+<section>
+    <h2>SingleAxisFusion: Building FusedU2Nodes</h2>
+    <pre><code class="language-cpp">FusedU2Node build_fused_node(const std::vector&lt;Instruction&gt;& bytecode,
+                             size_t start, size_t end) {
+    FusedU2Node node{};
+    for (uint8_t in_state = 0; in_state < 4; ++in_state) {
+        Mat2 M = {1.0, 0.0, 0.0, 1.0};  // 2x2 identity
+        std::complex&lt;double&gt; gamma = {1.0, 0.0};
+        uint8_t px = in_state & 1;       // X bit of Pauli frame
+        uint8_t pz = (in_state >> 1) & 1; // Z bit of Pauli frame
+
+        for (size_t i = start; i < end; ++i) {
+            simulate_instruction(bytecode[i], px, pz, M, gamma);
+        }
+
+        for (int j = 0; j < 4; ++j)
+            node.matrices[in_state][j] = M[j];
+        node.gamma_multipliers[in_state] = gamma;
+        node.out_states[in_state] = (pz << 1) | px;
+    }
+    return node;
+}</code></pre>
+    <div class="box-accent" style="margin-top:10px;">
+        <h4>Frame-Aware Simulation</h4>
+        <p>Each gate's action depends on the current Pauli frame. For example:</p>
+        <ul>
+            <li><code>ARRAY_T</code> with <code>px=0</code>: matrix <code>diag(1, exp(i*pi/4))</code></li>
+            <li><code>ARRAY_T</code> with <code>px=1</code>: matrix <code>diag(1, exp(-i*pi/4))</code>, plus <code>gamma *= exp(i*pi/4)</code></li>
+        </ul>
+        <p>This is why we need 4 separate precomputed matrices -- the effective unitary changes based on the runtime frame state.</p>
+    </div>
+</section>
+
+<section>
+    <h2>SingleAxisFusion: Gate Simulation Details</h2>
+    <pre><code class="language-cpp">void simulate_instruction(const Instruction& inst,
+                          uint8_t& px, uint8_t& pz,
+                          Mat2& M, std::complex&lt;double&gt;& gamma) {
+    Mat2 U = {1.0, 0.0, 0.0, 1.0};  // identity
+
+    switch (inst.opcode) {
+        case OP_ARRAY_H:
+            U = {kInvSqrt2, kInvSqrt2, kInvSqrt2, -kInvSqrt2};
+            if (px && pz) gamma *= {-1.0, 0.0};  // Y -> -Y under H
+            std::swap(px, pz);                    // H swaps X<->Z frame bits
+            break;
+        case OP_ARRAY_S:
+            U = {1.0, 0.0, 0.0, kI};
+            if (px) gamma *= kI;                  // X -> Y, pick up i phase
+            pz ^= px;                             // S maps X -> Y (XOR Z with X)
+            break;
+        case OP_ARRAY_T:
+            if (px) { U[3] = kExpMinusIPiOver4; gamma *= kExpIPiOver4; }
+            else    { U[3] = kExpIPiOver4; }
+            break;
+        // ... FRAME_H, FRAME_S: update frame + gamma only (no matrix)
+        case OP_FRAME_H:
+            if (px && pz) gamma *= {-1.0, 0.0};
+            std::swap(px, pz);
+            return;  // no matrix multiply
+    }
+    mat_mul_left(M, U);
+}</code></pre>
+</section>
+</section>
+
+<!-- ================================================================== -->
+<!-- SECTION 12: SUMMARY & IMPACT                                       -->
+<!-- ================================================================== -->
+<section>
+<section class="section-divider">
+    <div class="section-number">12</div>
+    <h2>Summary & Impact</h2>
+    <p>The complete optimizer: 11 passes, two tiers, massive gains</p>
+</section>
+
+<section>
+    <h2>All Passes at a Glance</h2>
+    <table>
+        <thead>
+            <tr><th>Pass</th><th>Tier</th><th>Default</th><th>Transformation</th><th>Key Impact</th></tr>
+        </thead>
+        <tbody>
+            <tr><td class="accent">PeepholeFusionPass</td><td><span class="pass-badge badge-hir" style="font-size:0.65em!important;">HIR</span></td><td class="green">ON</td>
+                <td>Cancel/fuse T gates via symplectic commutation</td><td>Reduces peak k</td></tr>
+            <tr><td class="accent">StatevectorSqueezePass</td><td><span class="pass-badge badge-hir" style="font-size:0.65em!important;">HIR</span></td><td class="green">ON</td>
+                <td>Bubble MEAS left, T right</td><td>Minimizes peak k</td></tr>
+            <tr><td class="dim">RemoveNoisePass</td><td><span class="pass-badge badge-hir" style="font-size:0.65em!important;">HIR</span></td><td class="dim">OFF</td>
+                <td>Strip NOISE + READOUT_NOISE</td><td>Reference syndromes</td></tr>
+            <tr><td class="dim">DropNonUnitaryPass</td><td><span class="pass-badge badge-hir" style="font-size:0.65em!important;">HIR</span></td><td class="dim">OFF</td>
+                <td>Keep only T_GATE + PHASE_ROT</td><td>Unitary skeleton</td></tr>
+            <tr><td class="highlight">NoiseBlockPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>Coalesce OP_NOISE runs</td><td>Reduces dispatch</td></tr>
+            <tr><td class="highlight">MultiGatePass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>Star-graph CNOT/CZ --> MULTI</td><td>N sweeps --> 1</td></tr>
+            <tr><td class="highlight">ExpandTPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>EXPAND + T --> EXPAND_T</td><td>2 sweeps --> 1</td></tr>
+            <tr><td class="highlight">ExpandRotPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>EXPAND + ROT --> EXPAND_ROT</td><td>2 sweeps --> 1</td></tr>
+            <tr><td class="highlight">SwapMeasPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>SWAP + MEAS --> fused</td><td>2 sweeps --> 1</td></tr>
+            <tr><td class="highlight">TileAxisFusionPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>2Q tile --> precomputed U4</td><td>N sweeps --> 1</td></tr>
+            <tr><td class="highlight">SingleAxisFusionPass</td><td><span class="pass-badge badge-bc" style="font-size:0.65em!important;">BC</span></td><td class="green">ON</td>
+                <td>1Q chain --> precomputed U2</td><td>N sweeps --> 1</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Impact: Instruction Count Reduction</h2>
+    <div class="diagram-box">
+<pre>
+<span class="accent">Typical QEC Surface Code Circuit (distance-5, 100 rounds)</span>
+
+  Input HIR:        ~500 ops  (T gates + measures + noise + detectors)
+       |
+       v
+  <span class="green">PeepholeFusion</span>     ~470 ops   (T/T_dag cancellations)
+       |
+  <span class="green">StatevectorSqueeze</span> ~470 ops   (reordered, peak k reduced by 1-2)
+       |
+       v
+  Backend lower():  ~800 bytecode instructions
+       |
+       v
+  <span class="highlight">NoiseBlockPass</span>     ~550 instr  (noise runs coalesced)
+       |
+  <span class="highlight">MultiGatePass</span>      ~450 instr  (star-graph CNOT/CZ fused)
+       |
+  <span class="highlight">ExpandT/RotPass</span>    ~400 instr  (EXPAND+T/ROT fused)
+       |
+  <span class="highlight">SwapMeasPass</span>       ~370 instr  (SWAP+MEAS fused)
+       |
+  <span class="highlight">TileAxisFusion</span>     ~280 instr  (2Q tiles fused into U4)
+       |
+  <span class="highlight">SingleAxisFusion</span>   <span class="green">~220 instr</span>  (remaining 1Q chains fused into U2)
+
+  <span class="yellow">Net: ~800 -> ~220 instructions  (3.6x reduction)</span>
+  <span class="yellow">Array sweeps reduced even more: each fused op saves multiple O(2^k) passes</span>
+</pre>
+    </div>
+</section>
+
+<section>
+    <h2>The Optimizer Makes Clifft Competitive</h2>
+    <div class="cols">
+        <div class="col">
+            <div class="box-accent">
+                <h4>Without the Optimizer</h4>
+                <ul>
+                    <li><span class="accent">peak_rank</span> would be 1-3 higher (T gates not cancelled)</li>
+                    <li>Each extra k means <span class="accent">2-8x more memory and time</span></li>
+                    <li>Hundreds of redundant O(2^k) array sweeps</li>
+                    <li>Per-instruction dispatch overhead on noise</li>
+                </ul>
+            </div>
+        </div>
+        <div class="col">
+            <div class="box-green">
+                <h4>With the Optimizer</h4>
+                <ul>
+                    <li><span class="green">peak_rank</span> minimized by Peephole + Squeeze</li>
+                    <li>Array sweeps reduced by <span class="green">3-5x</span> via fusion passes</li>
+                    <li>Noise dispatch coalesced into blocks</li>
+                    <li>Precomputed matrices avoid redundant gate logic</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="box" style="margin-top:15px;">
+        <h4>Architecture Key Points</h4>
+        <ul>
+            <li><strong>Order matters:</strong> PeepholeFusion before Squeeze (reduces ops that Squeeze would re-arrange).
+            TileAxisFusion before SingleAxisFusion (tile pass sees raw opcodes).</li>
+            <li><strong>All passes are independent modules</strong> -- each can be enabled/disabled independently via the pass registry.</li>
+            <li><strong>Source map preserved:</strong> Every pass maintains the bytecode-to-source-line mapping through merging and copying.</li>
+            <li><strong>Fixed infrastructure:</strong> HirPass + BytecodePass base classes, PassManager chains, PassFactory for named construction.</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>Architecture: Pass Class Hierarchy</h2>
+    <div class="diagram-box">
+<pre style="text-align:center;">
+                 <span class="accent">HirPass</span>                              <span class="highlight">BytecodePass</span>
+           (virtual run(HirModule&))             (virtual run(CompiledModule&))
+                    |                                        |
+       +------------+------------+              +------------+------------+--------+--------+
+       |            |            |              |            |            |        |        |
+  <span class="green">Peephole</span>   <span class="green">Squeeze</span>   <span class="dim">RemoveNoise</span>   <span class="green">NoiseBlock</span>  <span class="green">MultiGate</span>  <span class="green">ExpandT</span>  <span class="green">SwapMeas</span>   ...
+  <span class="green">Fusion</span>     <span class="green">Pass</span>      <span class="dim">DropNonUnit.</span>     <span class="green">Pass</span>        <span class="green">Pass</span>      <span class="green">Pass</span>     <span class="green">Pass</span>
+       |            |                           |            |
+       v            v                           v            v
+  <span class="accent">HirPassManager</span>                        <span class="highlight">BytecodePassManager</span>
+  (vector of unique_ptr&lt;HirPass&gt;)      (vector of unique_ptr&lt;BytecodePass&gt;)
+  run() iterates in insertion order     run() iterates in insertion order
+       |                                        |
+       +------------ <span class="yellow">PassFactory</span> ---------------+
+                 make_hir_pass("name")
+                 make_bytecode_pass("name")
+                 default_hir_pass_manager()
+                 default_bytecode_pass_manager()
+                 pass_registry_json()
+</pre>
+    </div>
+    <p class="small dim" style="text-align:center; margin-top:10px;">
+        <code>kRegisteredPasses[]</code> in <code>pass_registry.h</code> is the single source of truth.
+        All factory functions iterate this array to create pass instances by name.
+    </p>
+</section>
+</section>
+
+<!-- END -->
+<section>
+    <h1>End of Deep Dive</h1>
+    <h3 style="color: var(--highlight);">Clifft Optimizer Passes</h3>
+    <p style="margin-top: 30px;">11 passes &bull; 2 tiers &bull; 4 HIR + 7 Bytecode</p>
+    <p class="dim">Source: <code>src/clifft/optimizer/</code></p>
+</section>
+
+</div><!-- slides -->
+</div><!-- reveal -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/plugin/highlight/highlight.min.js"></script>
+<script>
+Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    width: 1400,
+    height: 900,
+    margin: 0.04,
+    transition: 'slide',
+    transitionSpeed: 'default',
+    plugins: [RevealHighlight],
+    highlight: { highlightOnLoad: true }
+});
+</script>
+</body>
+</html>
