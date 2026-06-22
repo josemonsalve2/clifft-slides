@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft Technical Slide Decks</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; padding: 40px 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { color: #53d8fb; font-size: 2em; text-align: center; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #888; font-size: 0.95em; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .card {
+    background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 20px;
+    text-decoration: none; color: inherit; transition: all 0.2s;
+    display: block;
+  }
+  .card:hover { border-color: #53d8fb; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(83,216,251,0.15); }
+  .card-num { color: #e94560; font-size: 0.8em; font-weight: 700; letter-spacing: 0.1em; }
+  .card-title { color: #53d8fb; font-size: 1.15em; font-weight: 700; margin: 4px 0 8px; }
+  .card-desc { color: #999; font-size: 0.85em; line-height: 1.5; }
+  .card-meta { color: #555; font-size: 0.75em; margin-top: 10px; }
+  .extra { margin-top: 16px; }
+  .extra .card { border-color: #333; }
+  .extra .card-title { color: #c084fc; }
+  hr { border: none; border-top: 1px solid #333; margin: 24px 0; }
+  .footer { text-align: center; color: #555; font-size: 0.8em; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Clifft Technical Slide Decks</h1>
+  <p class="subtitle">Near-Clifford Quantum Circuit Simulator &mdash; Deep Technical Analysis</p>
+
+  <div class="grid">
+    <a class="card" href="01-overview/">
+      <div class="card-num">DECK 01</div>
+      <div class="card-title">Architecture Overview</div>
+      <div class="card-desc">Full pipeline from .stim file to results. Three repos, compilation pipeline, SVM, GPU backends, QEC workflow, performance.</div>
+      <div class="card-meta">~25 slides &bull; 74 KB</div>
+    </a>
+    <a class="card" href="02-virtual-machine/">
+      <div class="card-num">DECK 02</div>
+      <div class="card-title">Schr&ouml;dinger Virtual Machine</div>
+      <div class="card-desc">Factored state representation, bytecode opcodes, execution loop, ISA dispatch, sampling modes, PRNG, noise handling, memory management.</div>
+      <div class="card-meta">~40 slides &bull; 106 KB</div>
+    </a>
+    <a class="card" href="03-io-formats/">
+      <div class="card-num">DECK 03</div>
+      <div class="card-title">I/O Formats</div>
+      <div class="card-desc">Stim circuit format deep dive, Python API (input & output), GPU CLI (run_msc_cuda/hip), JSON output, introspection API.</div>
+      <div class="card-meta">~25 slides &bull; 65 KB</div>
+    </a>
+    <a class="card" href="04-quantum-concepts/">
+      <div class="card-num">DECK 04</div>
+      <div class="card-title">Quantum Computing Concepts</div>
+      <div class="card-desc">ELI5 to expert: qubits, gates, Clifford group, stabilizer formalism, QEC, surface codes, magic states, noise models, Stim.</div>
+      <div class="card-meta">~50 slides &bull; 112 KB</div>
+    </a>
+    <a class="card" href="05-gpu-comparison/">
+      <div class="card-num">DECK 05</div>
+      <div class="card-title">CUDA vs HIP GPU Comparison</div>
+      <div class="card-desc">Three kernel modes (thread/shared/global), work distribution, API mapping, build system, performance analysis, optimization opportunities.</div>
+      <div class="card-meta">~35 slides &bull; 77 KB</div>
+    </a>
+    <a class="card" href="06-hir-deep-dive/">
+      <div class="card-num">DECK 06</div>
+      <div class="card-title">HIR Deep Dive</div>
+      <div class="card-desc">Heisenberg IR data structures, frontend tracing, Pauli mask system, backend lowering, constant pool, worked examples.</div>
+      <div class="card-meta">~39 slides &bull; 88 KB</div>
+    </a>
+    <a class="card" href="07-optimizer-passes/">
+      <div class="card-num">DECK 07</div>
+      <div class="card-title">Optimizer Passes</div>
+      <div class="card-desc">All 11 passes explained: Peephole, StatevectorSqueeze, NoiseBlock, MultiGate, ExpandT, SwapMeas, TileAxisFusion, SingleAxisFusion, and more.</div>
+      <div class="card-meta">~35 slides &bull; 72 KB</div>
+    </a>
+    <a class="card" href="08-stim-tableau/">
+      <div class="card-num">DECK 08</div>
+      <div class="card-title">Stim Tableau</div>
+      <div class="card-desc">Stabilizer tableau theory, gate simulation, .stim format, compiled vs interpreted, Pauli frame as runtime successor.</div>
+      <div class="card-meta">~32 slides &bull; 87 KB</div>
+    </a>
+  </div>
+
+  <div class="extra">
+    <div class="grid">
+      <a class="card" href="06-hir-deep-dive/absorption-visual.html">
+        <div class="card-num">BONUS</div>
+        <div class="card-title">Clifford Gate Absorption Visual</div>
+        <div class="card-desc">Side-by-side visualization of how the Stim tableau absorbs Clifford gates during compilation, with step-by-step tableau evolution.</div>
+        <div class="card-meta">Single-page visual &bull; 31 KB</div>
+      </a>
+    </div>
+  </div>
+
+  <hr>
+  <div class="footer">
+    Clifft &mdash; Unitary Foundation &bull; Analysis for AMD/Riverlane QEC benchmark collaboration
+  </div>
+</div>
+</body>
+</html>
