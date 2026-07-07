@@ -484,6 +484,100 @@
 </section>
 
 <section>
+  <h2>What Is the Amplitude Vector?</h2>
+  <div class="grid-2">
+    <div>
+      <h4>The problem T gates create</h4>
+      <p>Clifford gates keep the state in the stabilizer formalism &mdash; binary, compact, no floating point. A T gate rotates the state to a point <em>between</em> stabilizer states that can&rsquo;t be described with bits alone.</p>
+
+      <div class="card card-accent" style="margin-top:0.3em;">
+        <h4>Superposition of stabilizer branches</h4>
+        <p style="margin:0;">After a T gate, the state becomes a weighted sum of two stabilizer-describable states. You need <strong>complex numbers</strong> (amplitudes) to track the weights.</p>
+      </div>
+
+      <div style="margin-top:0.5em;">
+        <h4>The amplitude vector v[2<sup>k</sup>]</h4>
+        <p>An array of <code>complex&lt;double&gt;</code> values, one per branch:</p>
+      </div>
+      <table style="font-size:0.68em; margin-top:0.2em;">
+        <tr><th>T gates active (k)</th><th>Branches</th><th>v[] size</th><th>Memory</th></tr>
+        <tr><td>0</td><td>1</td><td style="color:var(--success);">v[1]</td><td>16 bytes</td></tr>
+        <tr><td>1</td><td>2</td><td style="color:var(--highlight);">v[2]</td><td>32 bytes</td></tr>
+        <tr><td>2</td><td>4</td><td style="color:var(--highlight);">v[4]</td><td>64 bytes</td></tr>
+        <tr><td>3</td><td>8</td><td style="color:var(--warn);">v[8]</td><td>128 bytes</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>Visual: how T gates grow v[]</h4>
+
+      <!-- k=0: single state -->
+      <svg viewBox="0 0 400 320" style="width:100%; max-width:400px; display:block; margin:0 auto;">
+        <!-- k=0 row -->
+        <text x="0" y="20" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">k = 0</text>
+        <text x="0" y="34" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">pure Clifford</text>
+        <rect x="100" y="8" width="80" height="32" rx="6" fill="rgba(63,185,80,0.15)" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="140" y="28" fill="#3fb950" font-size="11" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v = [1]</text>
+        <text x="200" y="28" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">&larr; just a scalar, no real work</text>
+
+        <!-- T gate arrow -->
+        <line x1="140" y1="44" x2="140" y2="62" stroke="#e94560" stroke-width="2"/>
+        <polygon points="134,60 146,60 140,70" fill="#e94560"/>
+        <text x="155" y="58" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">T gate</text>
+
+        <!-- k=1 row: two branches -->
+        <text x="0" y="90" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">k = 1</text>
+        <text x="0" y="104" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">1 non-Clifford</text>
+        <rect x="80" y="78" width="55" height="32" rx="6" fill="rgba(83,216,251,0.12)" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="107" y="98" fill="#53d8fb" font-size="10" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[0]</text>
+        <rect x="145" y="78" width="55" height="32" rx="6" fill="rgba(83,216,251,0.12)" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="172" y="98" fill="#53d8fb" font-size="10" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[1]</text>
+        <text x="215" y="98" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">&larr; 2 complex doubles</text>
+        <!-- branch labels -->
+        <text x="107" y="122" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans" text-anchor="middle">branch 0</text>
+        <text x="172" y="122" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans" text-anchor="middle">branch 1</text>
+
+        <!-- T gate arrow -->
+        <line x1="140" y1="128" x2="140" y2="146" stroke="#e94560" stroke-width="2"/>
+        <polygon points="134,144 146,144 140,154" fill="#e94560"/>
+        <text x="155" y="142" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">T gate</text>
+
+        <!-- k=2 row: four branches -->
+        <text x="0" y="174" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">k = 2</text>
+        <text x="0" y="188" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">2 non-Clifford</text>
+        <rect x="68" y="162" width="42" height="32" rx="6" fill="rgba(210,153,34,0.12)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="89" y="182" fill="#d29922" font-size="9" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[0]</text>
+        <rect x="116" y="162" width="42" height="32" rx="6" fill="rgba(210,153,34,0.12)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="137" y="182" fill="#d29922" font-size="9" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[1]</text>
+        <rect x="164" y="162" width="42" height="32" rx="6" fill="rgba(210,153,34,0.12)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="185" y="182" fill="#d29922" font-size="9" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[2]</text>
+        <rect x="212" y="162" width="42" height="32" rx="6" fill="rgba(210,153,34,0.12)" stroke="#d29922" stroke-width="1.5"/>
+        <text x="233" y="182" fill="#d29922" font-size="9" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[3]</text>
+        <text x="268" y="182" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">&larr; 4 complex doubles</text>
+
+        <!-- measurement arrow -->
+        <line x1="140" y1="198" x2="140" y2="216" stroke="#bc8cff" stroke-width="2"/>
+        <polygon points="134,214 146,214 140,224" fill="#bc8cff"/>
+        <text x="155" y="212" fill="#bc8cff" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">Measure</text>
+
+        <!-- k=1 after collapse -->
+        <text x="0" y="244" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">k = 1</text>
+        <text x="0" y="258" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">collapsed</text>
+        <rect x="80" y="232" width="55" height="32" rx="6" fill="rgba(83,216,251,0.12)" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="107" y="252" fill="#53d8fb" font-size="10" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[0]</text>
+        <rect x="145" y="232" width="55" height="32" rx="6" fill="rgba(83,216,251,0.12)" stroke="#53d8fb" stroke-width="1.5"/>
+        <text x="172" y="252" fill="#53d8fb" font-size="10" font-family="JetBrains Mono" font-weight="700" text-anchor="middle">v[1]</text>
+        <text x="215" y="252" fill="#bc8cff" font-size="9" font-family="Plus Jakarta Sans">&larr; back to 2 (branch eliminated)</text>
+
+        <!-- What each entry IS -->
+        <rect x="0" y="280" width="395" height="36" rx="6" fill="rgba(233,69,96,0.06)" stroke="rgba(233,69,96,0.2)" stroke-width="1"/>
+        <text x="10" y="296" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">Each v[i] is a complex&lt;double&gt;: 16 bytes.</text>
+        <text x="10" y="310" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">|v[i]|&sup2; = probability of branch i. The Pauli mask tells the SVM which branch maps to which qubits.</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section>
   <h2>Active Rank <em>k</em> &mdash; Why QEC Is Cheap</h2>
   <div class="grid-2">
     <div>
