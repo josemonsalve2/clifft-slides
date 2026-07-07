@@ -612,65 +612,95 @@
     </div>
     <div>
       <h4>On the Bloch sphere</h4>
-      <svg viewBox="0 0 300 300" style="width:100%; max-width:290px; display:block; margin:0 auto;">
-        <!-- sphere -->
-        <ellipse cx="150" cy="150" rx="115" ry="115" fill="none" stroke="#30363d" stroke-width="1.2"/>
-        <ellipse cx="150" cy="150" rx="115" ry="34" fill="none" stroke="#30363d" stroke-width="0.6" stroke-dasharray="4,3"/>
-        <!-- axes -->
-        <line x1="150" y1="35" x2="150" y2="265" stroke="#484f58" stroke-width="0.7"/>
-        <line x1="35" y1="150" x2="265" y2="150" stroke="#484f58" stroke-width="0.7"/>
-        <line x1="72" y1="186" x2="228" y2="114" stroke="#484f58" stroke-width="0.7"/>
-        <!-- labels -->
-        <text x="150" y="25" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" text-anchor="middle">|0⟩</text>
-        <text x="150" y="283" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" text-anchor="middle">|1⟩</text>
-        <text x="270" y="154" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans">X |+⟩</text>
-        <text x="232" y="108" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans">Y |i⟩</text>
+      <!-- 3/4 front view: X toward viewer-right, Y into page-right, Z up -->
+      <!-- Projection: azimuth ~30°, elevation ~20° — X points front-right, Y back-right -->
+      <svg viewBox="0 0 310 310" style="width:100%; max-width:290px; display:block; margin:0 auto;">
+        <defs>
+          <radialGradient id="sph" cx="40%" cy="35%"><stop offset="0%" stop-color="#1a2744" stop-opacity="0.3"/><stop offset="100%" stop-color="#0d1117" stop-opacity="0"/></radialGradient>
+        </defs>
+        <!-- sphere fill + outline -->
+        <circle cx="155" cy="155" r="120" fill="url(#sph)" stroke="#30363d" stroke-width="1.2"/>
+        <!-- equator ellipse (tilted ~20° toward viewer) -->
+        <ellipse cx="155" cy="168" rx="120" ry="42" fill="none" stroke="#30363d" stroke-width="0.7" stroke-dasharray="4,3"/>
 
-        <!-- Step 1: |0⟩ at north pole -->
-        <circle cx="150" cy="35" r="7" fill="#3fb950"/>
-        <text x="168" y="38" fill="#3fb950" font-size="10" font-family="Plus Jakarta Sans" font-weight="700">|0⟩</text>
-        <text x="168" y="50" fill="#3fb950" font-size="8" font-family="Plus Jakarta Sans">start</text>
+        <!-- Z axis (vertical) -->
+        <line x1="155" y1="30" x2="155" y2="280" stroke="#484f58" stroke-width="0.7"/>
+        <!-- X axis (front-right toward viewer) -->
+        <line x1="45" y1="200" x2="265" y2="136" stroke="#484f58" stroke-width="0.7"/>
+        <!-- Y axis (back-right, foreshortened) -->
+        <line x1="80" y1="110" x2="230" y2="226" stroke="#484f58" stroke-width="0.7"/>
 
-        <!-- Step 2: H → |+⟩ on equator +X axis -->
-        <circle cx="265" cy="150" r="7" fill="#53d8fb"/>
-        <text x="248" y="170" fill="#53d8fb" font-size="10" font-family="Plus Jakarta Sans" font-weight="700">|+⟩</text>
-        <text x="240" y="182" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans">after H</text>
-        <!-- arrow from |0⟩ to |+⟩ -->
-        <path d="M 157 42 Q 220 60 258 143" fill="none" stroke="#3fb950" stroke-width="1.2" stroke-dasharray="4,3"/>
-        <polygon points="256,139 262,146 254,147" fill="#3fb950"/>
+        <!-- Axis labels -->
+        <text x="155" y="22" fill="#53d8fb" font-size="12" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">|0⟩</text>
+        <text x="155" y="296" fill="#53d8fb" font-size="11" font-family="Plus Jakarta Sans" text-anchor="middle">|1⟩</text>
+        <text x="272" y="132" fill="#53d8fb" font-size="11" font-family="Plus Jakarta Sans" font-weight="600">+X</text>
+        <text x="236" y="234" fill="#53d8fb" font-size="11" font-family="Plus Jakarta Sans" font-weight="600">+Y</text>
+        <text x="30" y="206" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">&minus;X</text>
+        <text x="64" y="106" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">&minus;Y</text>
 
-        <!-- Step 3: T → rotate 45° from +X toward +Y on equator -->
-        <!-- T|+⟩ is at 45° between X and Y on equator: x=cos(45°)≈0.707 of X-radius, y component toward +Y -->
-        <circle cx="247" cy="138" r="8" fill="#e94560"/>
-        <text x="247" y="126" fill="#e94560" font-size="10" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">T|+⟩</text>
-        <text x="247" y="116" fill="#e94560" font-size="8" font-family="Plus Jakarta Sans" text-anchor="middle">after T</text>
-        <!-- arrow from |+⟩ to T|+⟩ -->
-        <path d="M 262 146 A 115 34 0 0 0 250 138" fill="none" stroke="#e94560" stroke-width="2"/>
+        <!-- Stabilizer octahedron: faint edges connecting ±X, ±Y, ±Z -->
+        <!-- equator square -->
+        <polygon points="265,136 230,226 45,200 80,110" fill="none" stroke="#3fb950" stroke-width="0.7" opacity="0.25"/>
+        <!-- top edges to |0⟩ -->
+        <line x1="265" y1="136" x2="155" y2="35" stroke="#3fb950" stroke-width="0.7" opacity="0.25"/>
+        <line x1="230" y1="226" x2="155" y2="35" stroke="#3fb950" stroke-width="0.7" opacity="0.25"/>
+        <line x1="45" y1="200" x2="155" y2="35" stroke="#3fb950" stroke-width="0.7" opacity="0.25"/>
+        <line x1="80" y1="110" x2="155" y2="35" stroke="#3fb950" stroke-width="0.7" opacity="0.25"/>
+        <!-- bottom edges to |1⟩ -->
+        <line x1="265" y1="136" x2="155" y2="280" stroke="#3fb950" stroke-width="0.7" opacity="0.2"/>
+        <line x1="230" y1="226" x2="155" y2="280" stroke="#3fb950" stroke-width="0.7" opacity="0.2"/>
+        <line x1="45" y1="200" x2="155" y2="280" stroke="#3fb950" stroke-width="0.7" opacity="0.2"/>
+        <line x1="80" y1="110" x2="155" y2="280" stroke="#3fb950" stroke-width="0.7" opacity="0.2"/>
+        <!-- octahedron vertex dots -->
+        <circle cx="265" cy="136" r="4" fill="#3fb950" opacity="0.35"/>
+        <circle cx="45" cy="200" r="4" fill="#3fb950" opacity="0.35"/>
+        <circle cx="230" cy="226" r="4" fill="#3fb950" opacity="0.35"/>
+        <circle cx="80" cy="110" r="4" fill="#3fb950" opacity="0.35"/>
+        <circle cx="155" cy="35" r="4" fill="#3fb950" opacity="0.35"/>
+        <circle cx="155" cy="280" r="4" fill="#3fb950" opacity="0.35"/>
 
-        <!-- 45° arc annotation -->
-        <path d="M 240 150 A 90 27 0 0 0 230 137" fill="none" stroke="#e94560" stroke-width="1" stroke-dasharray="2,2"/>
-        <text x="218" y="148" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">45°</text>
+        <!-- ① |0⟩ at north pole (start) -->
+        <circle cx="155" cy="35" r="8" fill="#3fb950"/>
+        <text x="175" y="35" fill="#3fb950" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">❶ |0⟩</text>
+        <text x="175" y="48" fill="#3fb950" font-size="8" font-family="Plus Jakarta Sans">start, k=0</text>
 
-        <!-- stabilizer octahedron edges on equator -->
-        <line x1="265" y1="150" x2="215" y2="118" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
-        <line x1="215" y1="118" x2="35" y2="150" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
-        <line x1="35" y1="150" x2="85" y2="182" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
-        <line x1="85" y1="182" x2="265" y2="150" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
-        <!-- octahedron vertices -->
-        <circle cx="265" cy="150" r="3" fill="#3fb950" opacity="0.4"/>
-        <circle cx="35" cy="150" r="3" fill="#3fb950" opacity="0.4"/>
-        <circle cx="215" cy="118" r="3" fill="#3fb950" opacity="0.4"/>
-        <circle cx="85" cy="182" r="3" fill="#3fb950" opacity="0.4"/>
-        <circle cx="150" cy="35" r="3" fill="#3fb950" opacity="0.4"/>
-        <circle cx="150" cy="265" r="3" fill="#3fb950" opacity="0.4"/>
+        <!-- dashed arc from |0⟩ down to |+⟩ -->
+        <path d="M 160 43 Q 225 70 262 130" fill="none" stroke="#53d8fb" stroke-width="1.3" stroke-dasharray="5,3"/>
+        <polygon points="259,126 267,133 258,134" fill="#53d8fb"/>
+        <text x="222" y="76" fill="#53d8fb" font-size="9" font-family="Plus Jakarta Sans" font-weight="600">H (absorbed)</text>
+
+        <!-- ② |+⟩ on +X axis (after H) -->
+        <circle cx="265" cy="136" r="8" fill="#53d8fb"/>
+        <text x="244" y="120" fill="#53d8fb" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">❷ |+⟩</text>
+        <text x="244" y="108" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans">after H, k=0</text>
+
+        <!-- 45° arc from |+⟩ toward |i⟩ (+Y direction) on the equator -->
+        <!-- |+⟩ is at (265,136), |i⟩ is at (230,226). T|+⟩ is 45° between them -->
+        <!-- Midpoint along equator between +X and +Y: roughly (260, 175) -->
+        <path d="M 261 140 Q 268 170 258 180" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="254,177 262,183 256,185" fill="#e94560"/>
+
+        <!-- 45° angle annotation -->
+        <path d="M 245 145 Q 250 155 247 165" fill="none" stroke="#e94560" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="230" y="160" fill="#e94560" font-size="10" font-family="Plus Jakarta Sans" font-weight="800">45°</text>
+
+        <!-- ③ T|+⟩ between +X and +Y (after T) — the magic state -->
+        <circle cx="256" cy="182" r="9" fill="#e94560"/>
+        <line x1="155" y1="168" x2="256" y2="182" stroke="#e94560" stroke-width="1.5" opacity="0.6"/>
+        <text x="225" y="202" fill="#e94560" font-size="11" font-family="Plus Jakarta Sans" font-weight="700">❸ T|+⟩</text>
+        <text x="218" y="215" fill="#e94560" font-size="8" font-family="Plus Jakarta Sans">after T, k=1</text>
+        <text x="218" y="227" fill="#e94560" font-size="8" font-family="Plus Jakarta Sans">v=[1, e<tspan baseline-shift="super" font-size="6">iπ/4</tspan>]</text>
+
+        <!-- label the |i⟩ vertex for reference -->
+        <text x="234" y="242" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans" opacity="0.6">|i⟩ (+Y)</text>
+
+        <!-- "outside octahedron" annotation -->
+        <rect x="5" y="252" width="300" height="28" rx="5" fill="rgba(233,69,96,0.06)" stroke="rgba(233,69,96,0.2)" stroke-width="0.8"/>
+        <text x="155" y="268" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="600" text-anchor="middle">T|+⟩ sits outside the octahedron &mdash; needs amplitude vector v[2]</text>
+        <text x="155" y="280" fill="#7d8590" font-size="8" font-family="Plus Jakarta Sans" text-anchor="middle">|+⟩ and |i⟩ are on the octahedron (stabilizer states, no v[] needed)</text>
       </svg>
-      <div style="font-size:0.62em; color:var(--dim); text-align:center; margin-top:0.2em;">
-        <span style="color:var(--success);">|0⟩</span> &rarr;
-        <span style="color:var(--highlight);">H</span> rotates to |+⟩ (on octahedron) &rarr;
-        <span style="color:var(--accent);">T</span> rotates 45&deg; off the octahedron
-      </div>
-      <div class="insight" style="margin-top:0.3em; font-size:0.68em;">
-        The H is absorbed &mdash; Clifft never applies it numerically. But the T gate pushes the state <em>off</em> the stabilizer octahedron. That&rsquo;s the moment Clifft needs v[]: two complex amplitudes to track where between |+⟩ and |i⟩ the state actually sits.
+      <div class="insight" style="margin-top:0.2em; font-size:0.66em;">
+        <span style="color:var(--success);">❶</span> Start at |0⟩. <span style="color:var(--highlight);">❷</span> H rotates to |+⟩ &mdash; still on the octahedron, absorbed for free. <span style="color:var(--accent);">❸</span> T rotates 45&deg; toward |i⟩ &mdash; now <em>between</em> two stabilizer states. Clifft needs v[2] = two complex amplitudes to describe this point.
       </div>
     </div>
   </div>
