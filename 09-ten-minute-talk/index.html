@@ -578,6 +578,105 @@
 </section>
 
 <section>
+  <h2>Example: H &rarr; T on One Qubit</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Circuit</h4>
+      <svg viewBox="0 0 280 50" style="width:100%; max-width:260px; display:block; margin:0.2em auto;">
+        <text x="0" y="30" fill="#7d8590" font-size="12" font-family="Plus Jakarta Sans" font-weight="600">q0</text>
+        <line x1="28" y1="26" x2="270" y2="26" stroke="#484f58" stroke-width="1.5"/>
+        <rect x="45" y="10" width="32" height="32" rx="4" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="61" y="31" fill="#3fb950" font-size="13" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">H</text>
+        <rect x="110" y="10" width="32" height="32" rx="4" fill="none" stroke="#e94560" stroke-width="2"/>
+        <text x="126" y="31" fill="#e94560" font-size="13" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">T</text>
+        <rect x="180" y="10" width="32" height="32" rx="4" fill="none" stroke="#7d8590" stroke-width="1.5"/>
+        <path d="M 188 34 Q 196 20 204 34" fill="none" stroke="#7d8590" stroke-width="1"/>
+        <line x1="196" y1="32" x2="201" y2="18" stroke="#7d8590" stroke-width="1"/>
+        <text x="45" y="48" fill="#3fb950" font-size="7" font-family="Plus Jakarta Sans">absorbed</text>
+        <text x="110" y="48" fill="#e94560" font-size="7" font-family="Plus Jakarta Sans">amplitude op</text>
+      </svg>
+
+      <h4 style="margin-top:0.4em;">Step by step</h4>
+      <div style="font-family:'JetBrains Mono',monospace; font-size:0.62em; line-height:1.8; background:var(--bg-card); padding:0.6em; border-radius:8px; border:1px solid var(--border);">
+        <span style="color:var(--dim);">Start:</span> |0⟩ &nbsp; k=0, v=[<span style="color:var(--success);">1</span>]<br><br>
+        <span style="color:var(--dim);">After</span> <span style="color:var(--success);">H</span>: |+⟩ = (|0⟩+|1⟩)/&radic;2<br>
+        &nbsp;&nbsp;<span style="color:var(--dim);">(absorbed &mdash; no v[] change)</span><br><br>
+        <span style="color:var(--dim);">After</span> <span style="color:var(--accent);">T</span>: expand k: 0&rarr;1<br>
+        &nbsp;&nbsp;&gamma;: 1 &rarr; 1/&radic;2<br>
+        &nbsp;&nbsp;v: [1] &rarr; [<span style="color:var(--highlight);">1</span>, <span style="color:var(--highlight);">e<sup>i&pi;/4</sup></span>]<br><br>
+        <span style="color:var(--dim);">True state =</span> &gamma;&middot;v:<br>
+        &nbsp;&nbsp;[<span style="color:var(--highlight);">1/&radic;2</span> , <span style="color:var(--highlight);">e<sup>i&pi;/4</sup>/&radic;2</span>]<br>
+        &nbsp;&nbsp;= [<span style="color:var(--highlight);">0.707</span> , <span style="color:var(--highlight);">0.500+0.500i</span>]<br><br>
+        <span style="color:var(--dim);">Measure:</span> P(0) = 0.5, P(1) = 0.5
+      </div>
+    </div>
+    <div>
+      <h4>On the Bloch sphere</h4>
+      <svg viewBox="0 0 300 300" style="width:100%; max-width:290px; display:block; margin:0 auto;">
+        <!-- sphere -->
+        <ellipse cx="150" cy="150" rx="115" ry="115" fill="none" stroke="#30363d" stroke-width="1.2"/>
+        <ellipse cx="150" cy="150" rx="115" ry="34" fill="none" stroke="#30363d" stroke-width="0.6" stroke-dasharray="4,3"/>
+        <!-- axes -->
+        <line x1="150" y1="35" x2="150" y2="265" stroke="#484f58" stroke-width="0.7"/>
+        <line x1="35" y1="150" x2="265" y2="150" stroke="#484f58" stroke-width="0.7"/>
+        <line x1="72" y1="186" x2="228" y2="114" stroke="#484f58" stroke-width="0.7"/>
+        <!-- labels -->
+        <text x="150" y="25" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" text-anchor="middle">|0⟩</text>
+        <text x="150" y="283" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans" text-anchor="middle">|1⟩</text>
+        <text x="270" y="154" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans">X |+⟩</text>
+        <text x="232" y="108" fill="#7d8590" font-size="11" font-family="Plus Jakarta Sans">Y |i⟩</text>
+
+        <!-- Step 1: |0⟩ at north pole -->
+        <circle cx="150" cy="35" r="7" fill="#3fb950"/>
+        <text x="168" y="38" fill="#3fb950" font-size="10" font-family="Plus Jakarta Sans" font-weight="700">|0⟩</text>
+        <text x="168" y="50" fill="#3fb950" font-size="8" font-family="Plus Jakarta Sans">start</text>
+
+        <!-- Step 2: H → |+⟩ on equator +X axis -->
+        <circle cx="265" cy="150" r="7" fill="#53d8fb"/>
+        <text x="248" y="170" fill="#53d8fb" font-size="10" font-family="Plus Jakarta Sans" font-weight="700">|+⟩</text>
+        <text x="240" y="182" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans">after H</text>
+        <!-- arrow from |0⟩ to |+⟩ -->
+        <path d="M 157 42 Q 220 60 258 143" fill="none" stroke="#3fb950" stroke-width="1.2" stroke-dasharray="4,3"/>
+        <polygon points="256,139 262,146 254,147" fill="#3fb950"/>
+
+        <!-- Step 3: T → rotate 45° from +X toward +Y on equator -->
+        <!-- T|+⟩ is at 45° between X and Y on equator: x=cos(45°)≈0.707 of X-radius, y component toward +Y -->
+        <circle cx="247" cy="138" r="8" fill="#e94560"/>
+        <text x="247" y="126" fill="#e94560" font-size="10" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">T|+⟩</text>
+        <text x="247" y="116" fill="#e94560" font-size="8" font-family="Plus Jakarta Sans" text-anchor="middle">after T</text>
+        <!-- arrow from |+⟩ to T|+⟩ -->
+        <path d="M 262 146 A 115 34 0 0 0 250 138" fill="none" stroke="#e94560" stroke-width="2"/>
+
+        <!-- 45° arc annotation -->
+        <path d="M 240 150 A 90 27 0 0 0 230 137" fill="none" stroke="#e94560" stroke-width="1" stroke-dasharray="2,2"/>
+        <text x="218" y="148" fill="#e94560" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">45°</text>
+
+        <!-- stabilizer octahedron edges on equator -->
+        <line x1="265" y1="150" x2="215" y2="118" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
+        <line x1="215" y1="118" x2="35" y2="150" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
+        <line x1="35" y1="150" x2="85" y2="182" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
+        <line x1="85" y1="182" x2="265" y2="150" stroke="#3fb950" stroke-width="0.8" opacity="0.3"/>
+        <!-- octahedron vertices -->
+        <circle cx="265" cy="150" r="3" fill="#3fb950" opacity="0.4"/>
+        <circle cx="35" cy="150" r="3" fill="#3fb950" opacity="0.4"/>
+        <circle cx="215" cy="118" r="3" fill="#3fb950" opacity="0.4"/>
+        <circle cx="85" cy="182" r="3" fill="#3fb950" opacity="0.4"/>
+        <circle cx="150" cy="35" r="3" fill="#3fb950" opacity="0.4"/>
+        <circle cx="150" cy="265" r="3" fill="#3fb950" opacity="0.4"/>
+      </svg>
+      <div style="font-size:0.62em; color:var(--dim); text-align:center; margin-top:0.2em;">
+        <span style="color:var(--success);">|0⟩</span> &rarr;
+        <span style="color:var(--highlight);">H</span> rotates to |+⟩ (on octahedron) &rarr;
+        <span style="color:var(--accent);">T</span> rotates 45&deg; off the octahedron
+      </div>
+      <div class="insight" style="margin-top:0.3em; font-size:0.68em;">
+        The H is absorbed &mdash; Clifft never applies it numerically. But the T gate pushes the state <em>off</em> the stabilizer octahedron. That&rsquo;s the moment Clifft needs v[]: two complex amplitudes to track where between |+⟩ and |i⟩ the state actually sits.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
   <h2>Active Rank <em>k</em> &mdash; Why QEC Is Cheap</h2>
   <div class="grid-2">
     <div>
