@@ -354,13 +354,61 @@
     <div>
       <h4>Traditional Simulator</h4>
       <p>Every gate updates the full 2<sup>n</sup> statevector:</p>
-      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em; margin: 0.4em 0; border: 1px solid var(--border);">
-        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.65em; line-height: 1.8; text-align: center;">
-          <span style="color:var(--dim);">q0</span> &mdash;[<span style="color:var(--highlight);">H</span>]&mdash;[<span style="color:var(--highlight);">CNOT</span>]&mdash;[<span style="color:var(--accent);">T</span>]&mdash;[<span style="color:var(--highlight);">H</span>]&mdash;[<span style="color:var(--highlight);">S</span>]&mdash;M<br>
-          <span style="color:var(--dim);">q1</span> &mdash;&mdash;&mdash;&mdash;[<span style="color:var(--highlight);">CNOT</span>]&mdash;&mdash;&mdash;[<span style="color:var(--highlight);">CZ</span>]&mdash;&mdash;&mdash;M
-        </div>
-        <div style="text-align:center; font-size:0.6em; color:var(--dim); margin-top:0.3em;">
-          <strong>6 operations</strong> on 2<sup>n</sup> statevector
+      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.4em 0; border: 1px solid var(--border);">
+        <svg viewBox="0 0 480 100" style="width:100%; display:block;">
+          <!-- qubit labels -->
+          <text x="0" y="30" fill="#7d8590" font-size="13" font-family="Plus Jakarta Sans" font-weight="600">q0</text>
+          <text x="0" y="78" fill="#7d8590" font-size="13" font-family="Plus Jakarta Sans" font-weight="600">q1</text>
+          <!-- qubit wires -->
+          <line x1="28" y1="26" x2="470" y2="26" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="28" y1="74" x2="470" y2="74" stroke="#484f58" stroke-width="1.5"/>
+
+          <!-- H gate on q0 -->
+          <rect x="50" y="10" width="32" height="32" rx="4" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+          <text x="66" y="31" fill="#53d8fb" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">H</text>
+
+          <!-- CNOT: control on q0, target on q1 -->
+          <circle cx="120" cy="26" r="5" fill="#53d8fb"/>
+          <line x1="120" y1="31" x2="120" y2="64" stroke="#53d8fb" stroke-width="1.5"/>
+          <circle cx="120" cy="74" r="10" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+          <line x1="110" y1="74" x2="130" y2="74" stroke="#53d8fb" stroke-width="1.5"/>
+          <line x1="120" y1="64" x2="120" y2="84" stroke="#53d8fb" stroke-width="1.5"/>
+
+          <!-- T gate on q0 -->
+          <rect x="168" y="10" width="32" height="32" rx="4" fill="none" stroke="#e94560" stroke-width="2"/>
+          <text x="184" y="31" fill="#e94560" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">T</text>
+
+          <!-- H gate on q0 -->
+          <rect x="238" y="10" width="32" height="32" rx="4" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+          <text x="254" y="31" fill="#53d8fb" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">H</text>
+
+          <!-- S gate on q0 -->
+          <rect x="298" y="10" width="32" height="32" rx="4" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+          <text x="314" y="31" fill="#53d8fb" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle">S</text>
+
+          <!-- CZ: control on q0, control on q1 (both dots) -->
+          <circle cx="370" cy="26" r="5" fill="#53d8fb"/>
+          <line x1="370" y1="31" x2="370" y2="69" stroke="#53d8fb" stroke-width="1.5"/>
+          <circle cx="370" cy="74" r="5" fill="#53d8fb"/>
+
+          <!-- Measure q0 -->
+          <rect x="418" y="10" width="32" height="32" rx="4" fill="none" stroke="#7d8590" stroke-width="1.5"/>
+          <path d="M 426 34 Q 434 18 442 34" fill="none" stroke="#7d8590" stroke-width="1.2"/>
+          <line x1="434" y1="32" x2="440" y2="16" stroke="#7d8590" stroke-width="1.2"/>
+
+          <!-- Measure q1 -->
+          <rect x="418" y="58" width="32" height="32" rx="4" fill="none" stroke="#7d8590" stroke-width="1.5"/>
+          <path d="M 426 82 Q 434 66 442 82" fill="none" stroke="#7d8590" stroke-width="1.2"/>
+          <line x1="434" y1="80" x2="440" y2="64" stroke="#7d8590" stroke-width="1.2"/>
+
+          <!-- gate color legend -->
+          <rect x="50" y="94" width="8" height="2" fill="#53d8fb"/>
+          <text x="62" y="97" fill="#53d8fb" font-size="8" font-family="Plus Jakarta Sans">Clifford</text>
+          <rect x="110" y="94" width="8" height="2" fill="#e94560"/>
+          <text x="122" y="97" fill="#e94560" font-size="8" font-family="Plus Jakarta Sans">Non-Clifford</text>
+        </svg>
+        <div style="text-align:center; font-size:0.6em; color:var(--dim); margin-top:0.2em;">
+          <strong>6 gate operations</strong> on 2<sup>n</sup> statevector
         </div>
       </div>
       <p style="font-size:0.72em; color:var(--dim); margin-top:0.3em;">Cost: O(2<sup>n</sup>) per gate &times; 6 gates</p>
@@ -368,13 +416,62 @@
     <div>
       <h4>Clifft&rsquo;s Approach</h4>
       <p>Cliffords absorbed into Stim tableau; only T gates touch amplitudes:</p>
-      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em; margin: 0.4em 0; border: 1px solid var(--border);">
-        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.65em; line-height: 1.8; text-align: center;">
-          <span style="color:var(--success);">[H, CNOT &rarr; tableau]</span><br>
-          <span style="color:var(--dim);">q0</span> &mdash;[<span style="color:var(--accent);">T</span>]&mdash;M<br>
-          <span style="color:var(--success);">[H, S, CZ &rarr; tableau]</span>
-        </div>
-        <div style="text-align:center; font-size:0.6em; color:var(--success); margin-top:0.3em;">
+      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.4em 0; border: 1px solid var(--border);">
+        <svg viewBox="0 0 480 120" style="width:100%; display:block;">
+          <!-- "absorbed" region: before T -->
+          <rect x="36" y="2" width="102" height="96" rx="6" fill="rgba(63,185,80,0.08)" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="87" y="115" fill="#3fb950" font-size="9" font-family="Plus Jakarta Sans" font-weight="600" text-anchor="middle">absorbed into tableau</text>
+
+          <!-- "absorbed" region: after T -->
+          <rect x="220" y="2" width="148" height="96" rx="6" fill="rgba(63,185,80,0.08)" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="294" y="115" fill="#3fb950" font-size="9" font-family="Plus Jakarta Sans" font-weight="600" text-anchor="middle">absorbed into tableau</text>
+
+          <!-- qubit labels -->
+          <text x="0" y="35" fill="#7d8590" font-size="13" font-family="Plus Jakarta Sans" font-weight="600">q0</text>
+          <text x="0" y="83" fill="#7d8590" font-size="13" font-family="Plus Jakarta Sans" font-weight="600">q1</text>
+          <!-- qubit wires -->
+          <line x1="28" y1="31" x2="470" y2="31" stroke="#484f58" stroke-width="1.5"/>
+          <line x1="28" y1="79" x2="470" y2="79" stroke="#484f58" stroke-width="1.5"/>
+
+          <!-- H gate on q0 (faded = absorbed) -->
+          <rect x="48" y="15" width="32" height="32" rx="4" fill="none" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <text x="64" y="36" fill="#3fb950" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle" opacity="0.5">H</text>
+
+          <!-- CNOT (faded = absorbed) -->
+          <circle cx="110" cy="31" r="4" fill="#3fb950" opacity="0.5"/>
+          <line x1="110" y1="35" x2="110" y2="69" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <circle cx="110" cy="79" r="8" fill="none" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <line x1="102" y1="79" x2="118" y2="79" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <line x1="110" y1="71" x2="110" y2="87" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+
+          <!-- T gate on q0 (SOLID — this one is real) -->
+          <rect x="160" y="15" width="38" height="32" rx="4" fill="rgba(233,69,96,0.15)" stroke="#e94560" stroke-width="2"/>
+          <text x="179" y="36" fill="#e94560" font-size="15" font-family="Plus Jakarta Sans" font-weight="800" text-anchor="middle">T</text>
+
+          <!-- H gate on q0 (faded = absorbed) -->
+          <rect x="232" y="15" width="32" height="32" rx="4" fill="none" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <text x="248" y="36" fill="#3fb950" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle" opacity="0.5">H</text>
+
+          <!-- S gate on q0 (faded = absorbed) -->
+          <rect x="282" y="15" width="32" height="32" rx="4" fill="none" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <text x="298" y="36" fill="#3fb950" font-size="14" font-family="Plus Jakarta Sans" font-weight="700" text-anchor="middle" opacity="0.5">S</text>
+
+          <!-- CZ (faded = absorbed) -->
+          <circle cx="340" cy="31" r="4" fill="#3fb950" opacity="0.5"/>
+          <line x1="340" y1="35" x2="340" y2="75" stroke="#3fb950" stroke-width="1.2" opacity="0.5"/>
+          <circle cx="340" cy="79" r="4" fill="#3fb950" opacity="0.5"/>
+
+          <!-- Measure q0 -->
+          <rect x="418" y="15" width="32" height="32" rx="4" fill="none" stroke="#7d8590" stroke-width="1.5"/>
+          <path d="M 426 39 Q 434 23 442 39" fill="none" stroke="#7d8590" stroke-width="1.2"/>
+          <line x1="434" y1="37" x2="440" y2="21" stroke="#7d8590" stroke-width="1.2"/>
+
+          <!-- Measure q1 -->
+          <rect x="418" y="63" width="32" height="32" rx="4" fill="none" stroke="#7d8590" stroke-width="1.5"/>
+          <path d="M 426 87 Q 434 71 442 87" fill="none" stroke="#7d8590" stroke-width="1.2"/>
+          <line x1="434" y1="85" x2="440" y2="69" stroke="#7d8590" stroke-width="1.2"/>
+        </svg>
+        <div style="text-align:center; font-size:0.6em; color:var(--success); margin-top:0.2em;">
           <strong>1 operation</strong> on v[2<sup>1</sup>] = 2 amplitudes
         </div>
       </div>
