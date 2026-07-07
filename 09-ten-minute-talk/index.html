@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clifft in 10 Minutes</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg-dark: #0d1117;
+    --bg-card: #161b22;
+    --accent: #e94560;
+    --secondary: #0f3460;
+    --highlight: #53d8fb;
+    --text: #e6edf3;
+    --dim: #7d8590;
+    --code-bg: #0d1117;
+    --success: #3fb950;
+    --warn: #d29922;
+    --purple: #bc8cff;
+    --amd-red: #ed1c24;
+    --border: #30363d;
+  }
+
+  .reveal {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 22px !important;
+    color: var(--text);
+  }
+  .reveal .slides { text-align: left; }
+  .reveal .slides section { background: var(--bg-dark); padding: 40px 50px; }
+
+  .reveal h1 { font-size: 2em !important; color: var(--accent); font-weight: 800; text-align: center; margin-bottom: 0.3em; letter-spacing: -0.02em; }
+  .reveal h2 { font-size: 1.45em !important; color: var(--highlight); font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 0.15em; margin-bottom: 0.5em; letter-spacing: -0.01em; }
+  .reveal h3 { font-size: 1.1em !important; color: var(--accent); font-weight: 700; margin-bottom: 0.3em; }
+  .reveal h4 { font-size: 0.92em !important; color: var(--highlight); font-weight: 600; margin-bottom: 0.2em; }
+
+  .reveal p, .reveal li { font-size: 0.82em !important; line-height: 1.6; }
+  .reveal ul { margin-left: 1.2em; }
+  .reveal li { margin-bottom: 0.25em; }
+  .reveal code { background: var(--bg-card); color: var(--highlight); padding: 0.15em 0.4em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+  .reveal pre { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.8em; margin: 0.5em 0; overflow-x: auto; }
+  .reveal pre code { background: transparent; padding: 0; font-size: 0.72em; line-height: 1.5; }
+  .reveal strong { color: var(--accent); font-weight: 700; }
+  .reveal em { color: var(--highlight); font-style: normal; }
+  .reveal hr { border: none; border-top: 1px solid var(--border); margin: 0.6em 0; }
+
+  .reveal table { font-size: 0.72em; border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+  .reveal th { background: var(--secondary); color: var(--highlight); padding: 0.45em 0.7em; border: 1px solid var(--border); text-align: left; font-weight: 700; }
+  .reveal td { padding: 0.4em 0.7em; border: 1px solid var(--border); }
+
+  /* ── title slide ── */
+  .title-slide { text-align: center !important; display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+  .title-slide h1 { font-size: 3.2em !important; margin-bottom: 0.05em; line-height: 1.1; }
+  .title-slide .subtitle { font-size: 1em; color: var(--highlight); margin-bottom: 1.8em; font-weight: 600; }
+  .title-slide .meta { font-size: 0.72em; color: var(--dim); line-height: 1.8; }
+  .title-slide .tagline { font-size: 0.68em; color: var(--dim); margin-top: 1.5em; border-top: 1px solid var(--border); padding-top: 0.8em; max-width: 500px; }
+
+  /* ── section divider ── */
+  .section-divider {
+    text-align: center !important;
+    display: flex !important; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .section-divider .section-num {
+    font-size: 5em; font-weight: 900; color: var(--secondary); opacity: 0.4;
+    margin-bottom: -0.25em; line-height: 1;
+  }
+  .section-divider h1 { font-size: 2.4em !important; margin-bottom: 0.15em; }
+  .section-divider .section-sub { font-size: 0.75em; color: var(--dim); max-width: 500px; }
+
+  /* ── layout helpers ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8em; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1em; }
+  .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 1em; }
+  .grid-60-40 { display: grid; grid-template-columns: 3fr 2fr; gap: 1em; }
+
+  /* ── card ── */
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.75em; margin: 0.3em 0;
+  }
+  .card-accent { border-left: 3px solid var(--accent); }
+  .card-hl { border-left: 3px solid var(--highlight); }
+  .card-success { border-left: 3px solid var(--success); }
+  .card-purple { border-left: 3px solid var(--purple); }
+  .card-amd { border-left: 3px solid var(--amd-red); }
+
+  /* ── diagram boxes ── */
+  .box {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.4em 0.85em; border-radius: 8px; font-size: 0.72em;
+    font-weight: 700; text-align: center; line-height: 1.3; white-space: nowrap;
+  }
+  .box-primary   { background: rgba(15,52,96,0.5); border: 2px solid var(--highlight); color: var(--highlight); }
+  .box-accent    { background: rgba(233,69,96,0.12); border: 2px solid var(--accent); color: var(--accent); }
+  .box-success   { background: rgba(63,185,80,0.1); border: 2px solid var(--success); color: var(--success); }
+  .box-warn      { background: rgba(210,153,34,0.1); border: 2px solid var(--warn); color: var(--warn); }
+  .box-purple    { background: rgba(188,140,255,0.1); border: 2px solid var(--purple); color: var(--purple); }
+  .box-gpu       { background: rgba(188,140,255,0.12); border: 2px solid var(--purple); color: var(--purple); }
+  .box-amd       { background: rgba(237,28,36,0.1); border: 2px solid var(--amd-red); color: var(--amd-red); }
+  .box-dim       { background: rgba(125,133,144,0.1); border: 2px solid var(--dim); color: var(--dim); }
+
+  .arrow { color: var(--dim); font-size: 1.3em; margin: 0 0.3em; display: inline-flex; align-items: center; }
+  .arrow-down { color: var(--dim); font-size: 1.2em; text-align: center; margin: 0.15em 0; }
+
+  .flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em; margin: 0.5em 0; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; gap: 0.15em; margin: 0.4em 0; }
+
+  /* ── state block ── */
+  .state-block {
+    display: flex; align-items: stretch; border: 2px solid var(--highlight);
+    border-radius: 10px; overflow: hidden; margin: 0.5em auto; max-width: 95%;
+  }
+  .state-seg {
+    padding: 0.5em 0.7em; text-align: center; font-size: 0.65em;
+    display: flex; flex-direction: column; justify-content: center;
+    border-right: 1px solid var(--border);
+  }
+  .state-seg:last-child { border-right: none; }
+  .state-seg .lbl { font-weight: 700; font-size: 1.1em; margin-bottom: 0.2em; }
+  .state-seg .det { font-size: 0.85em; color: var(--dim); }
+
+  /* ── big number ── */
+  .big-num { font-size: 2.5em; font-weight: 800; color: var(--accent); text-align: center; margin: 0.15em 0; line-height: 1; }
+  .big-label { font-size: 0.7em; color: var(--dim); text-align: center; }
+
+  /* ── insight callout ── */
+  .insight {
+    background: rgba(233,69,96,0.08); border: 1px solid rgba(233,69,96,0.3);
+    border-radius: 8px; padding: 0.55em 0.75em; margin: 0.5em 0;
+    font-size: 0.78em; line-height: 1.5;
+  }
+  .insight::before { content: "💡 "; }
+  .insight-blue {
+    background: rgba(83,216,251,0.06); border: 1px solid rgba(83,216,251,0.25);
+    border-radius: 8px; padding: 0.55em 0.75em; margin: 0.5em 0;
+    font-size: 0.78em; line-height: 1.5;
+  }
+
+  /* ── kernel mode card ── */
+  .mode-card {
+    background: var(--bg-card); border-radius: 10px; padding: 0.65em 0.8em;
+    border-left: 3px solid var(--highlight); margin: 0.3em 0;
+  }
+  .mode-card .mode-title { font-weight: 700; font-size: 0.82em; margin-bottom: 0.25em; }
+  .mode-card .mode-detail { font-size: 0.68em; color: var(--dim); line-height: 1.5; }
+  .mode-card.m1 { border-left-color: var(--success); }
+  .mode-card.m1 .mode-title { color: var(--success); }
+  .mode-card.m2 { border-left-color: var(--highlight); }
+  .mode-card.m2 .mode-title { color: var(--highlight); }
+  .mode-card.m3 { border-left-color: var(--purple); }
+  .mode-card.m3 .mode-title { color: var(--purple); }
+
+  /* ── GPU viz ── */
+  .gpu-block-grid {
+    display: grid; gap: 2px; margin: 0.3em auto;
+  }
+  .gpu-cell {
+    aspect-ratio: 1; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.42em; font-weight: 700;
+  }
+  .gpu-cell.active { background: var(--purple); color: #fff; }
+  .gpu-cell.idle { background: #21262d; color: #484f58; }
+  .gpu-cell.shared { background: var(--highlight); color: #000; }
+  .gpu-cell.amd { background: var(--amd-red); color: #fff; }
+
+  /* ── perf bar ── */
+  .perf-bar { margin: 0.35em 0; }
+  .perf-bar .label { font-size: 0.65em; color: var(--dim); margin-bottom: 0.1em; }
+  .perf-bar .track { background: #21262d; border-radius: 6px; height: 24px; position: relative; overflow: hidden; }
+  .perf-bar .fill {
+    height: 100%; border-radius: 6px; display: flex; align-items: center;
+    padding-left: 0.6em; font-size: 0.6em; font-weight: 700; color: #fff;
+  }
+
+  /* ── timeline ── */
+  .timeline { display: flex; align-items: center; gap: 0; margin: 0.4em 0; border-radius: 6px; overflow: hidden; height: 32px; }
+  .timeline .seg {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.55em; font-weight: 600; white-space: nowrap; padding: 0 0.5em;
+  }
+
+  /* ── wavefront viz ── */
+  .wavefront-row { display: flex; gap: 1px; margin: 0.15em 0; }
+  .wavefront-lane {
+    width: 8px; height: 18px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.3em; font-weight: 700;
+  }
+
+  /* ── summary grid ── */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6em; margin: 0.4em 0; }
+  .summary-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.65em 0.8em; text-align: center;
+  }
+  .summary-card .num { font-size: 1.8em; font-weight: 800; line-height: 1; margin-bottom: 0.1em; }
+  .summary-card .txt { font-size: 0.65em; color: var(--dim); }
+
+  /* ── footer line ── */
+  .slide-footer {
+    position: absolute; bottom: 12px; left: 50px; right: 50px;
+    font-size: 0.5em; color: #484f58; display: flex; justify-content: space-between;
+  }
+
+  /* ── comparison block ── */
+  .vs-block { display: flex; align-items: center; gap: 0.5em; margin: 0.4em 0; }
+  .vs-item { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6em; text-align: center; }
+  .vs-divider { font-size: 1.2em; font-weight: 800; color: var(--dim); }
+
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-2-1, .grid-1-2, .grid-60-40 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  TITLE                                                      ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="title-slide">
+  <h1>Clifft</h1>
+  <div class="subtitle">Near-Clifford Quantum Circuit Simulation<br>on AMD Instinct GPUs</div>
+  <div class="meta">
+    AMD &bull; Riverlane &bull; Unitary Foundation<br>
+    QEC Benchmark Collaboration
+  </div>
+  <div class="tagline">~10 min &mdash; Architecture, Execution Model &amp; GPU Parallelization</div>
+</section>
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §1 — WHAT IS CLIFFT?                                       ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">1</div>
+  <h1>What Is Clifft?</h1>
+  <div class="section-sub">A simulator that exploits the structure of real QEC circuits</div>
+</section>
+
+<section>
+  <h2>The Problem Clifft Solves</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Quantum Error Correction (QEC) circuits are huge</h4>
+      <ul>
+        <li>Surface codes: <strong>thousands of qubits</strong>, millions of gates</li>
+        <li>Brute-force statevector: 2<sup>n</sup> amplitudes &mdash; impossible beyond ~40 qubits</li>
+        <li>But &gt;90% of gates are <em>Clifford gates</em> (H, S, CNOT, CZ&hellip;)</li>
+      </ul>
+      <div class="insight">Clifford gates can be tracked in <strong>O(n&sup2;)</strong> using the stabilizer formalism &mdash; no exponential blowup.</div>
+    </div>
+    <div>
+      <h4>Clifft&rsquo;s Key Insight</h4>
+      <div class="card card-accent" style="margin-top:0.3em;">
+        <p style="margin:0;">Only <strong>non-Clifford gates</strong> (T gates, rotations) require amplitude vectors. QEC circuits typically have few of these active at any time.</p>
+      </div>
+      <div style="text-align:center; margin-top:0.8em;">
+        <div class="big-num">O(2<sup style="font-size:0.6em;">k</sup>)</div>
+        <div class="big-label">cost per sample, where <em>k</em> = active non-Clifford rank<br><em>k</em> ≈ 1&ndash;3 for typical QEC circuits (not <em>n</em> = 1000+)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Three Repositories</h2>
+  <div class="grid-3">
+    <div class="card card-hl">
+      <h4>clifft (upstream)</h4>
+      <p>Unitary Foundation<br>CPU-only reference<br>Python + C++</p>
+      <div style="font-size:0.65em; color:var(--dim); margin-top:0.3em;">
+        <code>pip install clifft</code>
+      </div>
+    </div>
+    <div class="card card-purple">
+      <h4>clifft-cuda</h4>
+      <p>NVIDIA GPU backend<br>CUDA kernels<br>CLI: <code>run_msc_cuda</code></p>
+      <div style="font-size:0.65em; color:var(--dim); margin-top:0.3em;">gfx90a / A100+</div>
+    </div>
+    <div class="card card-amd">
+      <h4>clifft-amd</h4>
+      <p>AMD GPU backend<br>HIP kernels<br>CLI: <code>run_msc_hip</code></p>
+      <div style="font-size:0.65em; color:var(--dim); margin-top:0.3em;">gfx942 / MI300X, MI355X</div>
+    </div>
+  </div>
+  <div class="flow-row" style="margin-top:0.6em;">
+    <span class="box box-primary">.stim file</span>
+    <span class="arrow">&rarr;</span>
+    <span class="box box-accent">Frontend (trace)</span>
+    <span class="arrow">&rarr;</span>
+    <span class="box box-warn">HIR</span>
+    <span class="arrow">&rarr;</span>
+    <span class="box box-success">Bytecode</span>
+    <span class="arrow">&rarr;</span>
+    <span class="box box-purple">SVM / GPU</span>
+    <span class="arrow">&rarr;</span>
+    <span class="box box-primary">Samples</span>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §2 — QUANTUM CONCEPTS                                      ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">2</div>
+  <h1>QEC Simulation Essentials</h1>
+  <div class="section-sub">Why QEC circuits have special structure Clifft exploits</div>
+</section>
+
+<section>
+  <h2>What Makes QEC Circuits Special</h2>
+  <div class="grid-2">
+    <div>
+      <h4>QEC Circuit Structure</h4>
+      <ul>
+        <li>Surface codes use <strong>thousands of qubits</strong>, millions of gates, repeated over many rounds</li>
+        <li>Goal: detect &amp; correct errors by measuring <em>stabilizers</em> (parity checks on qubit groups)</li>
+        <li>To benchmark a decoder, you need <strong>millions of Monte Carlo samples</strong> (shots) of the noisy circuit</li>
+      </ul>
+      <div class="insight" style="margin-top:0.4em;">
+        Brute-force statevector simulation costs O(2<sup>n</sup>) &mdash; impossible beyond ~40 qubits. But QEC circuits have exploitable structure.
+      </div>
+    </div>
+    <div>
+      <h4>The 90/10 Split</h4>
+      <p>QEC circuits are almost entirely <strong>Clifford gates</strong>:</p>
+      <div class="perf-bar" style="margin-top:0.3em;">
+        <div class="label">Clifford gates (H, S, CNOT, CZ, SWAP)</div>
+        <div class="track"><div class="fill" style="width:92%; background: var(--success);"><span style="padding-left:0.3em;">~92%</span></div></div>
+      </div>
+      <div class="perf-bar">
+        <div class="label">Non-Clifford (T gates, rotations)</div>
+        <div class="track"><div class="fill" style="width:8%; background: var(--accent);"><span style="padding-left:0.3em;">~8%</span></div></div>
+      </div>
+      <div class="card card-hl" style="margin-top:0.5em;">
+        <h4>Stabilizer Formalism</h4>
+        <p style="margin:0;">Clifford gates map Pauli operators to Pauli operators. Their entire effect can be tracked as an <strong>n&times;2n binary tableau</strong> &mdash; O(n&sup2;) memory, no exponential blowup. Google&rsquo;s <em>Stim</em> library implements this.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Clifford Absorption &mdash; The Key Trick</h2>
+  <div class="grid-2" style="align-items: start;">
+    <div>
+      <h4>Traditional Simulator</h4>
+      <p>Every gate updates the full 2<sup>n</sup> statevector:</p>
+      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em; margin: 0.4em 0; border: 1px solid var(--border);">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.65em; line-height: 1.8; text-align: center;">
+          <span style="color:var(--dim);">q0</span> &mdash;[<span style="color:var(--highlight);">H</span>]&mdash;[<span style="color:var(--highlight);">CNOT</span>]&mdash;[<span style="color:var(--accent);">T</span>]&mdash;[<span style="color:var(--highlight);">H</span>]&mdash;[<span style="color:var(--highlight);">S</span>]&mdash;M<br>
+          <span style="color:var(--dim);">q1</span> &mdash;&mdash;&mdash;&mdash;[<span style="color:var(--highlight);">CNOT</span>]&mdash;&mdash;&mdash;[<span style="color:var(--highlight);">CZ</span>]&mdash;&mdash;&mdash;M
+        </div>
+        <div style="text-align:center; font-size:0.6em; color:var(--dim); margin-top:0.3em;">
+          <strong>6 operations</strong> on 2<sup>n</sup> statevector
+        </div>
+      </div>
+      <p style="font-size:0.72em; color:var(--dim); margin-top:0.3em;">Cost: O(2<sup>n</sup>) per gate &times; 6 gates</p>
+    </div>
+    <div>
+      <h4>Clifft&rsquo;s Approach</h4>
+      <p>Cliffords absorbed into Stim tableau; only T gates touch amplitudes:</p>
+      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.6em; margin: 0.4em 0; border: 1px solid var(--border);">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.65em; line-height: 1.8; text-align: center;">
+          <span style="color:var(--success);">[H, CNOT &rarr; tableau]</span><br>
+          <span style="color:var(--dim);">q0</span> &mdash;[<span style="color:var(--accent);">T</span>]&mdash;M<br>
+          <span style="color:var(--success);">[H, S, CZ &rarr; tableau]</span>
+        </div>
+        <div style="text-align:center; font-size:0.6em; color:var(--success); margin-top:0.3em;">
+          <strong>1 operation</strong> on v[2<sup>1</sup>] = 2 amplitudes
+        </div>
+      </div>
+      <p style="font-size:0.72em; color:var(--success); margin-top:0.3em;">Cost: O(n&sup2;) tableau updates + O(2<sup>k</sup>) for 1 T gate, k=1</p>
+    </div>
+  </div>
+  <div class="insight" style="margin-top:0.5em;">
+    <strong>Heisenberg picture</strong>: instead of evolving the state forward, Clifft tracks how observables evolve backward through the Clifford tableau. Each non-Clifford op gets a <em>Pauli mask</em> extracted from the inverse tableau &mdash; telling the SVM exactly which amplitude indices to touch.
+  </div>
+</section>
+
+<section>
+  <h2>Active Rank <em>k</em> &mdash; Why QEC Is Cheap</h2>
+  <div class="grid-2">
+    <div>
+      <h4>The dimension that matters</h4>
+      <ul>
+        <li>Each T gate <em>expands</em> the amplitude vector: k &rarr; k+1, doubling its size</li>
+        <li>Each measurement on an active qubit <em>collapses</em>: k &rarr; k&minus;1</li>
+        <li>In QEC circuits, T gates are rare and measured quickly &rarr; <strong>k stays tiny</strong></li>
+      </ul>
+      <div class="card card-accent" style="margin-top:0.4em;">
+        <p style="margin:0;">A d=5 surface code has <strong>n &gt; 100 qubits</strong>, but peak <strong>k ≈ 1&ndash;3</strong>.<br>
+        Amplitude vector: 2&ndash;8 complex doubles = <strong>16&ndash;128 bytes</strong>.<br>
+        Compare brute-force: 2<sup>100</sup> &asymp; 10<sup>30</sup> amplitudes.</p>
+      </div>
+    </div>
+    <div>
+      <h4>k through a QEC round</h4>
+      <svg viewBox="0 0 340 200" style="width:100%; max-width:340px; margin:0 auto; display:block;">
+        <rect x="0" y="0" width="340" height="200" fill="none"/>
+        <!-- axes -->
+        <line x1="40" y1="170" x2="320" y2="170" stroke="#7d8590" stroke-width="1"/>
+        <line x1="40" y1="170" x2="40" y2="20" stroke="#7d8590" stroke-width="1"/>
+        <text x="15" y="170" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">0</text>
+        <text x="15" y="132" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">1</text>
+        <text x="15" y="95" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">2</text>
+        <text x="15" y="57" fill="#7d8590" font-size="10" font-family="Plus Jakarta Sans">3</text>
+        <text x="5" y="15" fill="#53d8fb" font-size="10" font-family="Plus Jakarta Sans" font-weight="700">k</text>
+        <text x="310" y="188" fill="#7d8590" font-size="9" font-family="Plus Jakarta Sans">time</text>
+        <!-- k=0 flat -->
+        <line x1="40" y1="170" x2="90" y2="170" stroke="#3fb950" stroke-width="2.5"/>
+        <!-- expand to k=1 -->
+        <line x1="90" y1="170" x2="95" y2="132" stroke="#e94560" stroke-width="2.5"/>
+        <circle cx="92" cy="151" r="3" fill="#e94560"/>
+        <text x="83" y="165" fill="#e94560" font-size="7" font-family="JetBrains Mono">T</text>
+        <!-- k=1 flat -->
+        <line x1="95" y1="132" x2="140" y2="132" stroke="#53d8fb" stroke-width="2.5"/>
+        <!-- expand to k=2 -->
+        <line x1="140" y1="132" x2="145" y2="95" stroke="#e94560" stroke-width="2.5"/>
+        <circle cx="142" cy="113" r="3" fill="#e94560"/>
+        <text x="133" y="127" fill="#e94560" font-size="7" font-family="JetBrains Mono">T</text>
+        <!-- k=2 flat -->
+        <line x1="145" y1="95" x2="180" y2="95" stroke="#53d8fb" stroke-width="2.5"/>
+        <!-- measure down to k=1 -->
+        <line x1="180" y1="95" x2="185" y2="132" stroke="#bc8cff" stroke-width="2.5"/>
+        <circle cx="182" cy="113" r="3" fill="#bc8cff"/>
+        <text x="175" y="90" fill="#bc8cff" font-size="7" font-family="JetBrains Mono">M</text>
+        <!-- k=1 flat -->
+        <line x1="185" y1="132" x2="220" y2="132" stroke="#53d8fb" stroke-width="2.5"/>
+        <!-- measure down to k=0 -->
+        <line x1="220" y1="132" x2="225" y2="170" stroke="#bc8cff" stroke-width="2.5"/>
+        <circle cx="222" cy="151" r="3" fill="#bc8cff"/>
+        <text x="215" y="127" fill="#bc8cff" font-size="7" font-family="JetBrains Mono">M</text>
+        <!-- k=0 flat -->
+        <line x1="225" y1="170" x2="310" y2="170" stroke="#3fb950" stroke-width="2.5"/>
+        <!-- labels -->
+        <text x="50" y="188" fill="#3fb950" font-size="8" font-family="Plus Jakarta Sans">Clifford</text>
+        <text x="255" y="188" fill="#3fb950" font-size="8" font-family="Plus Jakarta Sans">Clifford</text>
+        <!-- peak annotation -->
+        <line x1="145" y1="95" x2="145" y2="40" stroke="#7d8590" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <text x="150" y="38" fill="#d29922" font-size="9" font-family="Plus Jakarta Sans" font-weight="700">peak k = 2</text>
+        <text x="150" y="50" fill="#7d8590" font-size="8" font-family="Plus Jakarta Sans">v[4] = 64 bytes</text>
+      </svg>
+      <div style="text-align:center; font-size:0.58em; color:var(--dim); margin-top:0.15em;">
+        T gates raise k, measurements lower it &mdash; in QEC circuits, they stay close together
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §3 — ARCHITECTURE                                          ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">3</div>
+  <h1>Architecture</h1>
+  <div class="section-sub">From .stim circuit to sampling results</div>
+</section>
+
+<section>
+  <h2>Compilation Pipeline</h2>
+  <div class="flow-col">
+    <span class="box box-primary" style="width: 280px;">.stim circuit file</span>
+    <div class="arrow-down">▼</div>
+    <span class="box box-accent" style="width: 280px;">Frontend: trace()</span>
+    <div style="font-size:0.55em; color:var(--dim); margin: 0.1em 0;">Stim TableauSimulator absorbs Cliffords<br>Non-Cliffords → HeisenbergOps with PauliMasks</div>
+    <div class="arrow-down">▼</div>
+    <span class="box box-warn" style="width: 280px;">HIR (Heisenberg IR)</span>
+    <div style="font-size:0.55em; color:var(--dim); margin: 0.1em 0;">PeepholeFusion: T+T→S, T/T† cancel<br>StatevectorSqueeze: minimize peak_rank</div>
+    <div class="arrow-down">▼</div>
+    <span class="box box-success" style="width: 280px;">Backend: lower()</span>
+    <div style="font-size:0.55em; color:var(--dim); margin: 0.1em 0;">Pauli localization → bytecode ops<br>6 post-lowering optimizer passes</div>
+    <div class="arrow-down">▼</div>
+    <span class="box box-purple" style="width: 280px;">CompiledModule (bytecode + constants)</span>
+  </div>
+  <div style="text-align:center; margin-top:0.4em; font-size: 0.65em; color: var(--dim);">
+    Compiled once &bull; Executed millions of times (one execution per shot)
+  </div>
+</section>
+
+<section>
+  <h2>The Factored State</h2>
+  <p>Clifft&rsquo;s fundamental data structure &mdash; the <code>SchrodingerState</code>:</p>
+
+  <div class="state-block">
+    <div class="state-seg" style="background: rgba(233,69,96,0.1); flex:1.5;">
+      <div class="lbl" style="color:var(--accent);">γ</div>
+      <div class="det">global scalar<br>complex&lt;double&gt;</div>
+    </div>
+    <div class="state-seg" style="background: rgba(83,216,251,0.08); flex:2;">
+      <div class="lbl" style="color:var(--highlight);">U<sub>C</sub></div>
+      <div class="det">Clifford frame<br>(implicit in Stim tableau)</div>
+    </div>
+    <div class="state-seg" style="background: rgba(188,140,255,0.1); flex:2;">
+      <div class="lbl" style="color:var(--purple);">P</div>
+      <div class="det">Pauli frame<br>p_x[], p_z[] bitarrays</div>
+    </div>
+    <div class="state-seg" style="background: rgba(63,185,80,0.1); flex:3;">
+      <div class="lbl" style="color:var(--success);">v[2<sup>k</sup>]</div>
+      <div class="det">amplitude vector<br>complex&lt;double&gt;, 64B-aligned</div>
+    </div>
+  </div>
+
+  <div style="text-align:center; font-size:0.72em; margin-top:0.3em;">
+    |ψ⟩ = γ · U<sub>C</sub> · P · ( |φ⟩<sub>active</sub> ⊗ |0⟩<sub>dormant</sub> )
+  </div>
+
+  <div class="grid-2" style="margin-top:0.5em;">
+    <div class="card card-success">
+      <h4>Amplitude vector v[2<sup>k</sup>]</h4>
+      <p style="margin:0;">Only <em>k</em> = active non-Clifford rank matters.<br>
+        k=0 → 1 amplitude (pure Clifford)<br>
+        k=1 → 2 amplitudes, k=3 → 8 amplitudes</p>
+    </div>
+    <div class="card card-purple">
+      <h4>Pauli frame (p_x, p_z)</h4>
+      <p style="margin:0;">Bitarrays of ⌈n/64⌉ uint64 words.<br>
+        Frame ops (H, CNOT on dormant qubits) flip bits &mdash; <strong>O(1)</strong>, no amplitudes touched.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §4 — CPU EXECUTION                                         ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">4</div>
+  <h1>CPU Execution</h1>
+  <div class="section-sub">The Schrödinger Virtual Machine (SVM)</div>
+</section>
+
+<section>
+  <h2>SVM Bytecode Interpreter</h2>
+  <div class="grid-60-40">
+    <div>
+      <h4>Opcode Families</h4>
+      <table>
+        <tr><th>Family</th><th>Example</th><th>Cost</th></tr>
+        <tr><td style="color:var(--success);"><strong>Frame ops</strong></td><td><code>OP_FRAME_H</code>, <code>OP_FRAME_CNOT</code></td><td>O(1) &mdash; flip Pauli bits</td></tr>
+        <tr><td style="color:var(--highlight);"><strong>Array ops</strong></td><td><code>OP_ARRAY_T</code>, <code>OP_ARRAY_U4</code></td><td>O(2<sup>k</sup>) &mdash; sweep amplitudes</td></tr>
+        <tr><td style="color:var(--accent);"><strong>Expand</strong></td><td><code>OP_EXPAND_T</code></td><td>k → k+1, γ /= √2</td></tr>
+        <tr><td style="color:var(--purple);"><strong>Measure</strong></td><td><code>OP_MEAS_ACTIVE_*</code></td><td>k → k−1, collapse</td></tr>
+        <tr><td style="color:var(--warn);"><strong>Noise</strong></td><td><code>OP_NOISE_BLOCK</code></td><td>exponential skip-ahead</td></tr>
+        <tr><td style="color:var(--dim);"><strong>Classical</strong></td><td><code>OP_DETECTOR</code></td><td>record output bits</td></tr>
+      </table>
+
+      <div class="insight-blue" style="margin-top:0.4em;">
+        <strong>Dispatch</strong>: computed-goto (GCC label-as-value) for near-zero dispatch overhead between ops.
+      </div>
+    </div>
+    <div>
+      <h4>Execution Loop</h4>
+      <div style="background: var(--bg-card); border-radius: 8px; padding: 0.5em; border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 0.6em; line-height: 1.7;">
+        <span style="color:var(--dim);">for each</span> shot:<br>
+        &nbsp;&nbsp;reset state (k=0, v={1})<br>
+        &nbsp;&nbsp;<span style="color:var(--dim);">for each</span> instruction:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--highlight);">dispatch</span> opcode →<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--success);">FRAME_*</span>: flip p_x/p_z<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--highlight);">ARRAY_*</span>: sweep v[]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--accent);">EXPAND</span>: grow v[]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--purple);">MEAS</span>: collapse, k-=1<br>
+        &nbsp;&nbsp;collect detectors/obs
+      </div>
+      <div style="font-size:0.62em; color:var(--dim); margin-top:0.3em;">
+        OpenMP when k ≥ 18 (4 MB statevector)
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>CPU Performance Profile</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Why It&rsquo;s Fast on CPU</h4>
+      <ul>
+        <li><strong>k is tiny</strong>: for d=5 surface code, peak k ≈ 1&ndash;3</li>
+        <li>v[2<sup>3</sup>] = <strong>8 complex doubles = 128 bytes</strong> &mdash; fits in L1 cache</li>
+        <li>Frame ops are just <strong>XOR on uint64</strong></li>
+        <li>Noise uses <strong>exponential skip-ahead</strong> &mdash; jumps over silent rounds in O(1)</li>
+      </ul>
+      <div class="insight" style="margin-top:0.3em;">
+        Bottleneck is <strong>instruction dispatch</strong>, not math. Shots are embarrassingly parallel but each shot is so cheap (~μs) that threading overhead matters.
+      </div>
+    </div>
+    <div>
+      <h4>Typical QEC Cost Breakdown</h4>
+      <div class="perf-bar">
+        <div class="label">Frame ops (Clifford) — O(1) per op</div>
+        <div class="track"><div class="fill" style="width:70%; background: var(--success);">~70%</div></div>
+      </div>
+      <div class="perf-bar">
+        <div class="label">Measurement — collapse + record</div>
+        <div class="track"><div class="fill" style="width:15%; background: var(--purple);">~15%</div></div>
+      </div>
+      <div class="perf-bar">
+        <div class="label">Array ops (T gates) — O(2<sup>k</sup>)</div>
+        <div class="track"><div class="fill" style="width:10%; background: var(--accent);">~10%</div></div>
+      </div>
+      <div class="perf-bar">
+        <div class="label">Noise — skip-ahead sampling</div>
+        <div class="track"><div class="fill" style="width:5%; background: var(--warn);">~5%</div></div>
+      </div>
+      <div style="font-size:0.58em; color:var(--dim); margin-top:0.3em; text-align:center;">
+        For d=5 surface code, ~10<sup>6</sup> shots/sec on a single CPU core
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §5 — AMD GPU                                               ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">5</div>
+  <h1>AMD GPU Execution</h1>
+  <div class="section-sub">HIP backend on MI300X / MI355X</div>
+</section>
+
+<section>
+  <h2>Three-Tier Kernel Strategy</h2>
+  <p>The GPU kernel is selected at launch based on <code>peak_rank</code> &mdash; the maximum <em>k</em> in the bytecode:</p>
+
+  <div class="mode-card m1">
+    <div class="mode-title">Mode 1: Thread-Private &nbsp;(peak_rank ≤ 4)</div>
+    <div class="mode-detail">
+      <strong>One thread = one shot.</strong> Amplitude array v[≤16] lives entirely in <strong>registers</strong>.<br>
+      Grid: ⌈shots/256⌉ blocks × 256 threads. Maximum throughput — no synchronization at all.
+    </div>
+  </div>
+
+  <div class="mode-card m2">
+    <div class="mode-title">Mode 2: Shared-Memory Cooperative &nbsp;(peak_rank 5–10)</div>
+    <div class="mode-detail">
+      <strong>One block = one shot.</strong> Amplitude array v[≤1024] in <strong>shared memory</strong> (LDS on AMD).<br>
+      Grid: shots blocks × 256 threads. Threads cooperate within a block; <code>__syncthreads()</code> barriers.
+    </div>
+  </div>
+
+  <div class="mode-card m3">
+    <div class="mode-title">Mode 3: Global-Memory Cooperative &nbsp;(peak_rank 11–19)</div>
+    <div class="mode-detail">
+      <strong>Persistent kernel.</strong> Amplitude array v[≤524K] in <strong>global memory (HBM)</strong>.<br>
+      Grid: 2 × CU_count blocks × 256 threads. Work-stealing via <code>atomicAdd</code> on global shot counter.
+    </div>
+  </div>
+
+  <div class="insight" style="margin-top:0.4em;">
+    <strong>For QEC workloads</strong>, peak_rank ≈ 1&ndash;3 → <strong>Mode 1 always</strong>. This is the fastest path: each thread carries its own tiny amplitude array in registers, processing thousands of bytecode instructions independently.
+  </div>
+</section>
+
+<section>
+  <h2>GPU Data Flow</h2>
+
+  <div class="flow-col" style="margin-bottom: 0.3em;">
+    <div class="flow-row">
+      <span class="box box-primary">Host: compile()</span>
+      <span class="arrow">&rarr;</span>
+      <span class="box box-warn">GpuProgram</span>
+      <span class="arrow">&rarr;</span>
+      <span class="box box-amd">hipMemcpy H→D</span>
+    </div>
+    <div class="arrow-down">▼</div>
+    <div class="flow-row">
+      <span class="box box-amd" style="width:350px;">GPU: sample_kernel &lt;&lt;&lt;grid, 256&gt;&gt;&gt;</span>
+    </div>
+    <div class="arrow-down">▼</div>
+    <div class="flow-row">
+      <span class="box box-amd">hipMemcpy D→H</span>
+      <span class="arrow">&rarr;</span>
+      <span class="box box-primary">SampleResult (detectors, observables)</span>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:0.4em;">
+    <div class="card card-amd">
+      <h4>Per-Thread State (Mode 1)</h4>
+      <pre style="margin:0.2em 0;"><code>struct ShotState {
+  uint64 px[2], pz[2];  // Pauli frame
+  complex  v[16];       // amplitudes (registers)
+  uint64 meas[1024];    // measurement record
+  uint64 obs[8];        // observable flips
+  int    active_k;      // current rank
+};</code></pre>
+    </div>
+    <div class="card card-amd">
+      <h4>GPU Program</h4>
+      <pre style="margin:0.2em 0;"><code>struct GpuInstr {
+  uint8  opcode, flags;
+  uint16 axis_1, axis_2;
+  double a, b;           // gate params
+  uint64 mask;           // Pauli mask
+  double weight_re, weight_im;
+};</code></pre>
+      <p style="margin:0; font-size:0.65em; color:var(--dim);">Flattened bytecode + constant pool, memcpy&rsquo;d once</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  §6 — PARALLELIZATION STRATEGY                              ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section class="section-divider">
+  <div class="section-num">6</div>
+  <h1>Parallelization Strategy</h1>
+  <div class="section-sub">Mapping shots to threads, blocks, and wavefronts</div>
+</section>
+
+<section>
+  <h2>The Parallelism Model</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Shot-Level Parallelism</h4>
+      <p>Each shot is an independent Monte Carlo sample. No inter-shot communication needed.</p>
+      <div class="card card-success" style="margin-top:0.3em;">
+        <p style="margin:0;"><strong>Embarrassingly parallel</strong> &mdash; the ideal GPU workload. Each thread runs the full bytecode program independently with its own RNG seed.</p>
+      </div>
+      <h4 style="margin-top:0.5em;">RNG Independence</h4>
+      <p>Each thread seeds its Xoshiro256++ PRNG with:<br>
+        <code>SplitMix64(base_seed XOR (φ × (shot_id + 1)))</code><br>
+        where φ = golden ratio. Guarantees decorrelated streams.</p>
+    </div>
+    <div>
+      <h4>Mapping to AMD Hardware</h4>
+      <table>
+        <tr><th>Concept</th><th>AMD MI300X</th></tr>
+        <tr><td>Compute unit (CU)</td><td>304 CUs</td></tr>
+        <tr><td>Wavefront (= warp)</td><td>64 lanes wide</td></tr>
+        <tr><td>Threads per block</td><td>256 (= 4 wavefronts)</td></tr>
+        <tr><td>Mode 1 occupancy</td><td>256 threads × ⌈shots/256⌉ blocks</td></tr>
+        <tr><td>HBM bandwidth</td><td>5.3 TB/s (8 stacks)</td></tr>
+      </table>
+      <div style="margin-top:0.4em;">
+        <div style="font-size:0.68em; color:var(--dim); margin-bottom:0.2em;">Wavefront (64 threads):</div>
+        <div class="wavefront-row">
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+          <div class="wavefront-lane" style="background:var(--amd-red);width:6px;"></div>
+        </div>
+        <div style="font-size:0.55em; color:var(--dim);">Each lane = 1 thread = 1 independent shot</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Why This Maps Perfectly to GPUs</h2>
+
+  <div class="grid-2" style="margin-bottom:0.5em;">
+    <div class="card card-success">
+      <h4>✓ What makes it ideal</h4>
+      <ul>
+        <li><strong>No inter-thread communication</strong> in Mode 1</li>
+        <li>Amplitude array fits in <strong>registers</strong> (k ≤ 4 → 256 bytes)</li>
+        <li>Uniform control flow &mdash; all threads execute <strong>same bytecode</strong></li>
+        <li>Batching: up to <strong>100M shots</strong> per kernel launch</li>
+        <li>Branch divergence only at measurements (random outcomes)</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>✗ Where it gets harder</h4>
+      <ul>
+        <li>Higher peak_rank → shared/global memory → <strong>sync barriers</strong></li>
+        <li>Mode 3: work-stealing adds <strong>atomicAdd contention</strong></li>
+        <li>Large v[] → <strong>HBM bandwidth bound</strong>, not compute bound</li>
+        <li>Measurement divergence reduces <strong>SIMD efficiency</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <h4>Memory Hierarchy Alignment</h4>
+  <div class="timeline">
+    <div class="seg" style="background: var(--success); flex: 4; color: #000;">Registers<br><span style="font-size:0.8em;">k ≤ 4</span></div>
+    <div class="seg" style="background: var(--highlight); flex: 3; color: #000;">LDS (shared)<br><span style="font-size:0.8em;">k 5–10</span></div>
+    <div class="seg" style="background: var(--purple); flex: 4; color: #fff;">HBM (global)<br><span style="font-size:0.8em;">k 11–19</span></div>
+    <div class="seg" style="background: var(--accent); flex: 2; color: #fff;">Too large<br><span style="font-size:0.8em;">k &gt; 19</span></div>
+  </div>
+  <div style="text-align:center; font-size:0.6em; color:var(--dim); margin-top:0.15em;">
+    ← faster access &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; more capacity →
+  </div>
+</section>
+
+<section>
+  <h2>CUDA → HIP: What Changed</h2>
+
+  <div class="grid-2">
+    <div>
+      <h4>Mechanical Translation</h4>
+      <p>The HIP backend is a <strong>1:1 API-name transform</strong> of the CUDA backend. All algorithms, data structures, constants, and kernel tiers are identical.</p>
+      <table>
+        <tr><th>CUDA</th><th>HIP</th></tr>
+        <tr><td><code>cudaMalloc</code></td><td><code>hipMalloc</code></td></tr>
+        <tr><td><code>cudaMemcpy</code></td><td><code>hipMemcpy</code></td></tr>
+        <tr><td><code>cudaError_t</code></td><td><code>hipError_t</code></td></tr>
+        <tr><td><code>__shared__</code></td><td><code>__shared__</code> (same)</td></tr>
+        <tr><td><code>__syncthreads()</code></td><td><code>__syncthreads()</code> (same)</td></tr>
+        <tr><td><code>atomicAdd</code></td><td><code>atomicAdd</code> (same)</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>Key Differences</h4>
+      <div class="card card-amd">
+        <h4>Wavefront size: 64 vs 32</h4>
+        <p style="margin:0;">AMD uses 64-wide wavefronts vs NVIDIA&rsquo;s 32-wide warps. But Clifft uses <strong>no warp-level primitives</strong> &mdash; all sync is <code>__syncthreads()</code>, so no algorithmic impact.</p>
+      </div>
+      <div class="card card-amd">
+        <h4>FP contraction: off</h4>
+        <p style="margin:0;"><code>-ffp-contract=off</code> prevents FMA fusion, ensuring <strong>bit-exact reproducibility</strong> matching the CPU oracle.</p>
+      </div>
+      <div class="card card-amd">
+        <h4>Grid sizing</h4>
+        <p style="margin:0;">Mode 3 uses <code>2 × CU_count</code> blocks.<br>MI300X: 304 CUs → 608 persistent blocks.<br>Validation: <code>compare_oracle.py</code> (5σ correctness).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ╔══════════════════════════════════════════════════════════════╗ -->
+<!-- ║  SUMMARY                                                    ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════╝ -->
+<section>
+  <h2>Summary</h2>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="num" style="color:var(--accent);">O(2<sup style="font-size:0.5em;">k</sup>)</div>
+      <div class="txt">cost per shot, k ≈ 1–3 for QEC</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--success);">90%+</div>
+      <div class="txt">of gates absorbed by Stim tableau for free</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--purple);">3 modes</div>
+      <div class="txt">register → shared → global memory tiers</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--amd-red);">304 CUs</div>
+      <div class="txt">MI300X: each thread = one independent shot</div>
+    </div>
+  </div>
+
+  <div class="insight" style="margin-top:0.5em; font-size:0.82em;">
+    Clifft turns the structure of quantum error correction circuits into a computational advantage: Clifford gates are tracked symbolically in O(n²), leaving only a tiny amplitude vector for the rare non-Clifford operations. This makes QEC simulation <strong>embarrassingly parallel at the shot level</strong> &mdash; a perfect fit for GPU architectures like AMD Instinct.
+  </div>
+
+  <div style="text-align:center; margin-top:0.6em;">
+    <div style="font-size:0.72em; color:var(--dim);">
+      <strong style="color:var(--highlight);">clifft-upstream</strong> &bull; unitaryfoundation/clifft<br>
+      <strong style="color:var(--amd-red);">clifft-amd</strong> &bull; randreshg/clifft-amd &bull; gfx942 (MI300X / MI355X)
+    </div>
+  </div>
+</section>
+
+<section class="title-slide">
+  <h1 style="font-size:2.5em !important;">Questions?</h1>
+  <div class="subtitle" style="margin-bottom:1em;">Detailed decks available for each topic</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.4em; justify-content:center; max-width:600px; margin:0 auto;">
+    <span class="box box-primary" style="font-size:0.6em;">01 Overview</span>
+    <span class="box box-primary" style="font-size:0.6em;">02 Virtual Machine</span>
+    <span class="box box-primary" style="font-size:0.6em;">03 I/O Formats</span>
+    <span class="box box-primary" style="font-size:0.6em;">04 Quantum Concepts</span>
+    <span class="box box-primary" style="font-size:0.6em;">05 GPU Comparison</span>
+    <span class="box box-primary" style="font-size:0.6em;">06 HIR Deep Dive</span>
+    <span class="box box-primary" style="font-size:0.6em;">07 Optimizer Passes</span>
+    <span class="box box-primary" style="font-size:0.6em;">08 Stim Tableau</span>
+  </div>
+  <div class="meta" style="margin-top:1.2em;">AMD &bull; Riverlane &bull; Unitary Foundation</div>
+</section>
+
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  center: false,
+  transition: 'slide',
+  backgroundTransition: 'fade',
+  width: 1200,
+  height: 700,
+  margin: 0.04,
+  slideNumber: 'c/t',
+  showSlideNumber: 'all',
+});
+</script>
+</body>
+</html>
