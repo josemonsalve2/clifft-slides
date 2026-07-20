@@ -42,7 +42,7 @@ This report documents the systematic optimization of clifft's GPU kernel archite
 
 | Approach | Branch | Description | Result |
 |----------|--------|-------------|--------|
-| A: Compiled Megakernel | `gpu-compiled-kernel` | HIPRTC/clang++ JIT-compiled straight-line kernel | +5-18% per-thread |
+| A: Compiled Megakernel | `gpu-compiled-kernel` | clang++ AOT-compiled straight-line kernel | **-50% per-thread** (regression) |
 | B: Per-Op Kernels | `gpu-per-op-kernel` | One small kernel per opcode, stream dispatch | -9% coop |
 | C: HipGraph | `gpu-hipgraph` | hipGraph_t with kernel nodes and dependency edges | -1% thread, +1% coop |
 | D: Heuristic Split | `gpu-split-kernel` | Circuit split at measurement boundaries | +17% thread |
@@ -51,7 +51,7 @@ This report documents the systematic optimization of clifft's GPU kernel archite
 
 **In parallel, GEAK (GPU Efficiency Analysis Kit) was invoked to perform AI-driven kernel optimization.** GEAK's `kernel_workflow` employed 14 AI agents with a budget of 3 iterations, consuming approximately 1 million tokens. GEAK discovered that **warp-shuffle reduction** was the single most impactful optimization, delivering a **+40% improvement on the cooperative tier** -- far exceeding any architectural change.
 
-**The key finding of this work is counterintuitive:** no architectural redesign (compiled kernels, per-operator dispatch, persistent kernels, graph-based pipelines, or circuit splitting) matched the performance of simply optimizing the synchronization primitives within the existing SVM interpreter.
+**The key finding of this work is counterintuitive:** no architectural redesign (compiled kernels, per-operator dispatch, persistent kernels, graph-based pipelines, or circuit splitting) matched the performance of simply optimizing the synchronization primitives within the existing SVM interpreter. **Notably, the compiled megakernel (Approach A) was initially reported as +5-18%, but rigorous re-benchmarking with a corrected pipeline revealed a -50% regression (see Section 4 for the full methodology correction).**
 
 **Final result:** SVM+GEAK achieves **11.0M shots/s** on cultivation_d5, a **+39% improvement** over the original clifft-amd baseline (7.93M shots/s), with identical numerical results (2,318,545 passed shots on 100M-shot runs).
 
@@ -349,74 +349,76 @@ meas_dormant_static(st, 6, 12, false);
 // ... 200+ more straight-line calls ...
 ```
 
-### 4.4 HIPRTC vs. AOT Compilation
+### 4.4 Compilation Pipeline
 
 ![HIPRTC vs AOT Compilation](./diagrams/hiprtc-vs-aot.svg)
 
-A critical discovery was that **HIPRTC (HIP Runtime Compilation) produces 14% slower code** than the AOT (Ahead-Of-Time) clang++ compiler. The root cause is that HIPRTC uses fewer optimization passes, lacks whole-program analysis, and has limited register allocation tuning.
+An early discovery was that **HIPRTC (HIP Runtime Compilation) produces 14% slower code** than the AOT (Ahead-Of-Time) clang++ compiler. The root cause is that HIPRTC uses fewer optimization passes, lacks whole-program analysis, and has limited register allocation tuning.
 
-The solution: always compile via clang++ subprocess with the following workflow:
+The solution: compile via clang++ subprocess with `--offload-device-only` to produce a `.hsaco` device object:
 
-1. Emit HIP source to a temporary file
-2. Invoke `clang++` with `-O3 --offload-arch=gfx942 -shared -fPIC`
+1. Emit HIP source to a temporary file (`kernel_codegen.cc`)
+2. Invoke `clang++` with `-O3 --offload-arch=gfx942 --offload-device-only` via `kernel_cache.cc`
 3. Cache the resulting `.hsaco` to `~/.clifft/kernel_cache/{hash}.hsaco`
-4. Load cached `.hsaco` on subsequent runs via `hipModuleLoadData`
+4. Load cached `.hsaco` via `hipModuleLoad` and launch via `hipModuleLaunchKernel`
 
 Compilation latency is ~1-2 seconds per circuit, amortized over millions of shots. Disk caching eliminates recompilation overhead on repeated runs with the same circuit.
 
-### 4.5 Results
+Correctness was verified: the compiled kernel produces identical results to the SVM interpreter given the same seed (715,537 passed shots on target_qec, 64 on cultivation_d5).
 
-**T-Gate Sweep: Compiled (A) vs SVM Baseline (q=17, MI300X)**
+### 4.5 Methodology Correction
 
-| T-gates | depth | peak_rank | SVM (shots/s) | Compiled (shots/s) | Delta |
-|---------|-------|-----------|---------------|---------------------|-------|
-| 0 | 1 | 0 | 1.89M | 10.5M | +455%* |
-| 0 | 3 | 0 | 10.2M | 10.4M | +1.4% |
-| 0 | 5 | 0 | 10.4M | 10.3M | -1.5% |
-| 1 | 1 | 1 | 10.4M | 10.1M | -2.9% |
-| 1 | 3 | 1 | 10.4M | 10.5M | +1.4% |
-| 2 | 3 | 1 | 10.5M | 11.0M | **+5.2%** |
-| 2 | 5 | 1 | 9.77M | 11.5M | **+17.7%** |
-| 3 | 3 | 1 | 10.6M | 11.6M | **+8.9%** |
-| 3 | 5 | 1 | 10.3M | 11.6M | **+12.6%** |
-| 4 | 3 | 1 | 10.4M | 11.4M | **+9.9%** |
-| 5 | 3 | 1 | 10.4M | 11.3M | **+8.8%** |
-| 8 | 5 | 1 | 10.4M | 11.5M | **+11.2%** |
-| 10 | 3 | 1 | 10.9M | 11.1M | +2.1% |
+**The original benchmark results reported in early versions of this report (+5-18% improvement) were WRONG.** A rigorous investigation revealed two critical flaws:
 
-*First-circuit HIPRTC compilation amortized (cold-start artifact)
+**Flaw 1: Non-functional `--hybrid` flag.** The `--hybrid` command-line flag was parsed but never wired into the kernel dispatch. Both "SVM" and "compiled" benchmark runs executed identical code paths -- the SVM interpreter. All reported deltas were pure measurement noise.
 
-**T-Gate Sweep: q=33 (2-word Pauli frame)**
+**Flaw 2: Unreliable measurement methodology.** The original benchmark used single runs per circuit with no GPU warmup and no exclusive node access, producing coefficient of variation (CV) of 11.8%. At this noise level, random fluctuations of +5-18% are expected.
 
-| T-gates | depth | peak_rank | SVM (shots/s) | Compiled (shots/s) | Delta |
-|---------|-------|-----------|---------------|---------------------|-------|
-| 0 | 1 | 0 | 10.5M | 10.9M | +3.7% |
-| 1 | 3 | 1 | 10.4M | 11.0M | **+6.7%** |
-| 2 | 5 | 1 | 10.3M | 11.2M | **+8.7%** |
-| 3 | 3 | 1 | 10.2M | 11.5M | **+12.1%** |
-| 5 | 5 | 1 | 10.2M | 11.2M | **+9.8%** |
-| 8 | 3 | 1 | 10.3M | 11.4M | **+11.1%** |
-| 10 | 5 | 1 | 3.65M | 10.5M | **+188%** |
+After fixing the pipeline (connecting the `--hybrid` flag to `gpu_sample_survivors()` so that `options.hybrid && peak_rank <= kThreadMaxPeakRank` triggers the compiled kernel path), rigorous re-benchmarking revealed the compiled kernel is significantly **slower** than the SVM interpreter.
 
-The 188% outlier at t=10, d=5, q=33 is likely a transient performance drop on the SVM run, not a genuine speedup of that magnitude.
+### 4.6 Corrected Results (20 runs, exclusive MI300X, warmed GPU)
 
-**Hardware counters for the compiled kernel:**
+The compiled kernel is **49-69% SLOWER** than the SVM interpreter. All measurements are stable (CV < 1.1%):
 
-| Metric | Value |
-|--------|-------|
-| arch_vgpr | 84 |
-| sgpr | 96 |
-| LDS | 20,480 bytes |
-| Scratch | 1,344 bytes |
-| Waves/SIMD | 6 |
-| Duration (target_qec, 500K shots) | 731 us (-5% vs SVM) |
+| Circuit | Rank | SVM Mean | SVM CV | Compiled Mean | Comp CV | Delta |
+|---------|------|----------|--------|---------------|---------|-------|
+| target_qec | 0 | 2.19M | 1.1% | 1.09M | 0.5% | **-50.0%** |
+| surface_d5_r5 | 0 | 2.18M | 0.7% | 0.99M | 0.3% | **-54.5%** |
+| surface_d7_r7 | 0 | 2.14M | 0.8% | 0.82M | 0.4% | **-61.5%** |
+| surface_d7_r14 | 0 | 2.10M | 0.5% | 0.66M | 0.3% | **-68.9%** |
+| color_d7 | 0 | 2.16M | 0.6% | 0.94M | 0.4% | **-56.7%** |
+| rep_d5_r100 | 0 | 2.16M | 0.7% | 0.99M | 0.3% | **-54.1%** |
+| cultivation_d5 | 10 | 1.42M | 0.6% | 1.42M | 0.5% | **+0.2%** (SVM fallback) |
+| sweep_q17_t0_d3 | 0 | 2.20M | 0.7% | 1.09M | 0.5% | **-50.4%** |
+| sweep_q17_t2_d5 | 1 | 2.19M | 0.8% | 1.11M | 0.4% | **-49.5%** |
+| sweep_q17_t5_d5 | 1 | 2.19M | 0.8% | 1.11M | 0.3% | **-49.4%** |
+| sweep_q17_t10_d5 | 1 | 2.20M | 0.9% | 1.11M | 0.4% | **-49.5%** |
+| sweep_q33_t0_d3 | 0 | 2.19M | 0.7% | 1.11M | 0.5% | **-49.4%** |
+| sweep_q33_t2_d5 | 1 | 2.19M | 0.7% | 1.09M | 0.6% | **-50.4%** |
+| sweep_q33_t5_d5 | 1 | 2.20M | 0.8% | 1.09M | 0.3% | **-50.7%** |
+| sweep_q33_t10_d5 | 1 | 2.19M | 0.7% | 1.09M | 0.7% | **-50.2%** |
 
-### 4.6 Key Takeaways
+The regression scales with circuit depth: -50% for shallow circuits, -69% for deep ones (e.g., surface_d7_r14).
 
-- Consistent +5-18% improvement on circuits with T-gates at depth >= 3
-- Pure Clifford circuits (rank=0) show minimal benefit (<2%) because frame ops are trivially fast
-- Coop tiers (rank 5-10) need cooperative sweep codegen, which is significantly more complex and was not implemented
-- The improvement scales with circuit depth and T-gate count: the compiler can optimize across operation boundaries when they are inlined as straight-line code
+### 4.7 Root Cause Analysis
+
+The compiled kernel's regression likely stems from multiple compounding factors:
+
+1. **`--offload-device-only` codegen quality.** This flag bypasses the regular AOT compilation pipeline (which uses `-shared -fPIC` and the full fat-binary linking stage). The device-only path may produce inferior code compared to the standard pipeline where the compiler has a global view of host-device interaction.
+
+2. **Expanded inline constants increase register pressure.** The straight-line kernel bakes all constant pool data as device arrays. Rather than reading operands from a compact `GpuInstr` struct in global memory (which the L1 scalar cache handles efficiently), the compiled kernel expands every constant as an immediate or device-side array. This inflates register pressure from the sheer volume of inline data.
+
+3. **`hipModuleLaunchKernel` dispatch overhead.** The `.hsaco` module load and `hipModuleLaunchKernel` dispatch path may have different characteristics compared to the standard `<<<>>>` syntax used by the AOT-compiled SVM kernel. The runtime may not apply the same launch optimizations.
+
+4. **Loss of cross-opcode optimization.** Paradoxically, the SVM interpreter's switch dispatch gives the compiler a global view of all opcode handlers in a single translation unit. The compiler can apply cross-case optimizations (common subexpression elimination across cases, register allocation across the full switch body). The "straight-line" compiled kernel, despite eliminating the switch, may lose these global optimizations because each operation is emitted as an independent function call sequence.
+
+### 4.8 Key Takeaways
+
+- **The compiled megakernel is a failed optimization**: -50% to -69% regression across all per-thread circuits
+- The code generation pipeline (kernel_codegen.cc) is technically correct -- it produces valid, functionally identical kernels
+- The performance failure is in the compilation and dispatch path, not the code generation logic
+- The `--offload-device-only` compilation route needs investigation; the standard `-shared -fPIC` AOT path may recover some performance
+- The SVM interpreter's switch dispatch, despite appearing inefficient, benefits from the compiler's global optimization view across all opcode handlers
 
 ---
 
@@ -947,6 +949,33 @@ Covered in Section 8 (Approach E). Phase-sorted dispatch adds overhead that offs
 
 For quantum amplitude butterflies, the access is strided (predictable), not random, so the L2 hardware prefetcher handles it. Adding explicit tiling barriers destroys any benefit.
 
+### 11.9 F9: Compiled Megakernel (-50% to -69%)
+
+**Hypothesis:** Eliminating the switch-dispatch loop by compiling a straight-line kernel with all constants baked in should improve per-thread throughput by removing instruction fetch, branch dispatch, and enabling cross-operation compiler optimizations.
+
+**Implementation:** `kernel_codegen.cc` generates HIP C++ source; `kernel_cache.cc` compiles it via `clang++ --offload-device-only`, caches the `.hsaco`, and launches via `hipModuleLoad`/`hipModuleLaunchKernel`. Correctness verified: same seed produces identical results (715,537 passed shots on target_qec, 64 on cultivation_d5).
+
+**Original (flawed) result:** +5-18% improvement. This was **wrong** because the `--hybrid` flag was parsed but never connected to the kernel dispatch. Both "SVM" and "compiled" runs executed identical code. The original benchmark also used single runs with no warmup and no exclusive GPU access (CV=11.8%).
+
+**Corrected result (20 runs, exclusive MI300X, warmed GPU, CV < 1.1%):**
+
+| Circuit | SVM Mean | Compiled Mean | Delta |
+|---------|----------|---------------|-------|
+| target_qec (rank=0) | 2.19M | 1.09M | **-50.0%** |
+| surface_d5_r5 (rank=0) | 2.18M | 0.99M | **-54.5%** |
+| surface_d7_r7 (rank=0) | 2.14M | 0.82M | **-61.5%** |
+| surface_d7_r14 (rank=0) | 2.10M | 0.66M | **-68.9%** |
+| color_d7 (rank=0) | 2.16M | 0.94M | **-56.7%** |
+
+**Root causes:**
+
+1. `--offload-device-only` may produce inferior code vs the standard AOT pipeline
+2. Expanded inline constants increase register pressure vs compact `GpuInstr` struct reads from L1 scalar cache
+3. `hipModuleLaunchKernel` dispatch path may differ from `<<<>>>` syntax optimizations
+4. Loss of cross-opcode optimization: the SVM switch gives the compiler a global view enabling CSE and register allocation across all handlers; straight-line code paradoxically loses this
+
+**Lesson learned:** The SVM interpreter's switch dispatch is not "overhead" -- it is a structure the compiler exploits for global optimization. Eliminating it removes the compiler's ability to share registers and optimize across opcode boundaries. The `--offload-device-only` compilation pathway also needs investigation as a potential source of codegen quality loss.
+
 ---
 
 ## 12. NUMA-Aware Per-XCD Work Distribution
@@ -1133,7 +1162,7 @@ Each increase in `kPauliWords` is a single-line change. For very large circuits 
 |----------|---------|------|-----------|------|---------|-------------|------------|----------|
 | SVM baseline | target_qec | T1 thread | 84 | 96 | 20,480 | 1,344 | 6 | 767 us |
 | SVM baseline+GEAK | cultivation_d5 | T2 coop | 116 | 96 | 17,920 | 0 | 4 | 80.2 ms |
-| A: Compiled (SVM fb) | target_qec | T1 thread | 84 | 96 | 20,480 | 1,344 | 6 | 731 us (-5%) |
+| A: Compiled | target_qec | T1 thread | 84 | 96 | 20,480 | 1,344 | 6 | **-50%** (corrected; original -5% was from non-functional `--hybrid`) |
 | E: Persistent | target_qec | T1 thread | -- | -- | -- | -- | -- | 1.02 ms |
 | F: Opt SVM | cultivation_d5 | T2 coop | -- | -- | -- | -- | -- | 116.2 ms |
 
@@ -1188,13 +1217,14 @@ All approaches converge to approximately 143-146K shots/s at rank=19:
 
 | Rank | Approach | shots/s | vs SVM+GEAK |
 |------|----------|---------|-------------|
-| 1 | Compiled (A) | 144,232 | +0.2% |
-| 2 | clifft-amd original | 144,240 | +0.2% |
-| 3 | SVM+GEAK | 143,916 | baseline |
-| 4 | OptSVM (F) | 143,345 | -0.4% |
-| 5 | Hybrid | 143,541 | -0.3% |
-| 6-12 | All others | ~142-143K | -0.4% to -1.1% |
-| 13 | Persistent (E) | 129,929 | **-9.7%** |
+| 1 | clifft-amd original | 144,240 | +0.2% |
+| 2 | SVM+GEAK | 143,916 | baseline |
+| 3 | OptSVM (F) | 143,345 | -0.4% |
+| 4 | Hybrid | 143,541 | -0.3% |
+| 5-11 | All others | ~142-143K | -0.4% to -1.1% |
+| 12 | Persistent (E) | 129,929 | **-9.7%** |
+
+**Note:** The previous Compiled (A) entry was measured with a non-functional `--hybrid` flag (SVM fallback at rank=19). The compiled kernel only supports per-thread tier (rank <= 4).
 
 This convergence confirms that **rank=19 is entirely HBM bandwidth-bound**. At 4 MB per shot per sweep, and ~600 sweeps per shot, the total data movement per shot is approximately 2.4 GB. At 5.3 TB/s theoretical HBM bandwidth, the theoretical throughput is:
 
@@ -1211,7 +1241,7 @@ The measured 143K shots/s represents ~86% of this theoretical limit. No dispatch
 
 ### 15.1 The Five Key Findings
 
-**1. The switch dispatch is NOT the primary bottleneck.** Eliminating it entirely (Approach A: compiled kernel) gains only +5-18% on per-thread tier. Phase-sorting (Approach E) and hot/cold splitting (Approach F) gain 0% or less. The GPU's SIMT execution model handles branch divergence better than expected for regular circuits.
+**1. The switch dispatch is NOT the primary bottleneck.** Eliminating it entirely (Approach A: compiled kernel) actually results in a **-50% regression** on per-thread tier (corrected from the originally reported +5-18%, which was based on a non-functional benchmark -- see Section 4.5). Phase-sorting (Approach E) and hot/cold splitting (Approach F) gain 0% or less. The GPU's SIMT execution model handles branch divergence better than expected for regular circuits, and the compiler's global optimization view across the switch body provides benefits that straight-line code loses.
 
 **2. Peak_rank determines throughput by 330x.** rank=0 runs at 48M shots/s, rank=10 at 5.6M shots/s, rank=19 at 145K shots/s. This range dwarfs any dispatch optimization. Moving coop-tier instructions to per-thread tier (Approach D's heuristic split) would yield far larger improvements than any single-tier optimization.
 
@@ -1227,7 +1257,7 @@ The measured 143K shots/s represents ~86% of this theoretical limit. No dispatch
 |----------|-------------|--------|--------|
 | 1 | GEAK warp-shuffle reduction | +40% coop, +2% thread | **Applied** |
 | 2 | `__noinline__` on coop sweeps | VGPRs 128->108 | **Applied** |
-| 3 | Compiled kernel for per-thread | +5-18% thread | **Applied** |
+| 3 | ~~Compiled kernel for per-thread~~ | ~~+5-18%~~ **-50% (failed)** | **Reverted** |
 | 4 | Vectorized 64-bit LDS loads | -34% LDS, pending full benchmark | **Applied** |
 | 5 | NUMA per-XCD work counters | +1.4% global-coop | **Applied** |
 | 6 | `__shfl` gate matrix broadcast | Reduced global loads | **Applied** |
@@ -1239,7 +1269,7 @@ The measured 143K shots/s represents ~86% of this theoretical limit. No dispatch
 
 The warp-shuffle optimization succeeded where architectural changes failed because it targeted the actual bottleneck:
 
-- **Architectural approaches** (A through F) assumed the switch dispatch was the bottleneck. In reality, the dispatch overhead is minimal for regular QEC circuits because the GPU branch predictor learns the repetitive patterns.
+- **Architectural approaches** (A through F) assumed the switch dispatch was the bottleneck. In reality, the dispatch overhead is minimal for regular QEC circuits because the GPU branch predictor learns the repetitive patterns. Approach A (compiled kernel) actually produced a -50% regression when properly benchmarked, confirming that the switch dispatch is not merely "not a bottleneck" but is actively beneficial for compiler optimization.
 
 - **The actual bottleneck** was synchronization: each `__syncthreads()` on MI300X serializes all 4 wavefronts in a workgroup. With 8 barriers per `coop_reduce2()` call and ~40% of d5 instructions being measurements (each calling reduce twice), the barrier overhead dominated coop-tier execution.
 
@@ -1251,7 +1281,7 @@ The warp-shuffle optimization succeeded where architectural changes failed becau
 
 **I2. The compiler is really good.** ROCm 7.2.3 clang++ at -O3 produces near-optimal code for the SVM interpreter. Only algorithmic/structural changes help.
 
-**I3. SALU dominance is structural, not from the interpreter.** The 1.81x SALU/VALU ratio comes from address computation (`scatter_bits`, `insert_zero_bit`, `bit_get/set/xor`), not from the switch dispatch. Eliminating the switch (compiled kernel) reduces SALU by only ~11%.
+**I3. SALU dominance is structural, not from the interpreter.** The 1.81x SALU/VALU ratio comes from address computation (`scatter_bits`, `insert_zero_bit`, `bit_get/set/xor`), not from the switch dispatch. Eliminating the switch (compiled kernel) actually causes a -50% throughput regression, confirming that the switch dispatch contributes negligible overhead while the compiler benefits from its global structure.
 
 **I4. Synchronization is the #1 coop bottleneck.** The warp-shuffle optimization (+40%) was the biggest win because it attacked synchronization, not compute or memory.
 
@@ -1266,6 +1296,8 @@ The warp-shuffle optimization succeeded where architectural changes failed becau
 ### 16.1 Compile-Time k-Aware Dispatch
 
 Extend Approach D (split heuristic) with compiled kernels per segment. Instead of falling back to the SVM interpreter for each segment, generate a compiled megakernel for the frame-only segments (exploiting the per-thread tier's 10x higher throughput) and keep the coop kernel only for the spike segments.
+
+**Note:** Given the -50% regression of the current compiled kernel approach (Section 4), this idea requires first resolving the compiled kernel's performance issues. The `--offload-device-only` compilation pathway should be replaced with the standard `-shared -fPIC` AOT pipeline, and the generated kernel structure may need to be redesigned to preserve the compiler's cross-operation optimization opportunities (e.g., by emitting the operations within a single function body rather than as a sequence of function calls).
 
 ### 16.2 DPP (Data Parallel Primitives) for Intra-Wavefront Reductions
 
@@ -1307,9 +1339,16 @@ Combine the persistent kernel (Approach E) with NUMA-aware amplitude partitionin
 - Gate sweeps are parallelized across XCDs, with XCD-local data staying in L2
 - Cross-XCD communication only needed for reduction operations (measurements)
 
-### 16.7 Cross-Circuit Kernel Caching
+### 16.7 Cross-Circuit Kernel Caching and Compiled Kernel Investigation
 
-Implement bytecode pattern matching to reuse compiled kernels across structurally similar circuits:
+The compiled megakernel approach (Approach A) showed a -50% to -69% regression (Section 4). Before pursuing cross-circuit kernel caching, the fundamental performance issues must be investigated:
+
+- **Compilation pathway:** Replace `--offload-device-only` with the standard `-shared -fPIC` AOT pipeline to determine if the device-only code object is the source of inferior codegen
+- **Kernel structure:** The current straight-line function-call sequence may prevent the compiler from applying cross-operation optimizations. Consider emitting all operations as inline code within a single function body
+- **Launch pathway:** Compare `hipModuleLaunchKernel` vs `<<<>>>` syntax dispatch overhead and code generation differences
+- **Register pressure from baked constants:** Profile whether expanded inline constants cause spilling compared to the compact `GpuInstr` struct reads via L1 scalar cache
+
+If these issues are resolved and the compiled kernel achieves parity or better, then cross-circuit caching becomes relevant:
 
 - Hash the opcode sequence (ignoring operand values)
 - Circuits with the same gate structure but different angles share the same compiled kernel
@@ -1331,10 +1370,12 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 
 | Circuit | rank | SVM | A: Compiled | B: Per-Op | C: HipGraph | D: Split | E: Persistent | F: Opt SVM |
 |---------|------|-----|------------|-----------|------------|---------|--------------|-----------|
-| target_qec | 0 | 43.0M | 48.4M (+13%) | 43.8M (+2%) | 42.6M (-1%) | 50.4M (**+17%**) | 45.9M (+7%) | 47.1M (+10%) |
-| cultivation_d5 | 10 | 3.55M | 4.02M (fb) | 3.24M (-9%) | 3.57M (+1%) | 4.02M (fb) | 4.02M (**+13%**) | 3.11M (-12%) |
+| target_qec | 0 | 43.0M | 1.09M (**-50%**) | 43.8M (+2%) | 42.6M (-1%) | 50.4M (**+17%**) | 45.9M (+7%) | 47.1M (+10%) |
+| cultivation_d5 | 10 | 3.55M | 1.42M (fb) | 3.24M (-9%) | 3.57M (+1%) | 4.02M (fb) | 4.02M (**+13%**) | 3.11M (-12%) |
 
 (fb = SVM fallback for approaches that only support per-thread tier)
+
+**Note:** Approach A results corrected from originally reported +13%. The original benchmark was flawed (non-functional `--hybrid` flag). Rigorous re-benchmarking (20 runs, exclusive MI300X, CV < 1.1%) shows -50% regression. See Section 4.5.
 
 ### 17.2 Rankings by Circuit Type
 
@@ -1343,11 +1384,11 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 | Rank | Approach | shots/s | vs SVM |
 |------|----------|---------|--------|
 | 1 | D: Split | 50.4M | **+17%** |
-| 2 | A: Compiled | 48.4M | +13% |
-| 3 | F: Optimized SVM | 47.1M | +10% |
-| 4 | E: Persistent | 45.9M | +7% |
-| 5 | B: Per-Op | 43.8M | +2% |
-| 6 | C: HipGraph | 42.6M | -1% |
+| 2 | F: Optimized SVM | 47.1M | +10% |
+| 3 | E: Persistent | 45.9M | +7% |
+| 4 | B: Per-Op | 43.8M | +2% |
+| 5 | C: HipGraph | 42.6M | -1% |
+| 6 | A: Compiled | 1.09M | **-50%** (corrected) |
 
 **Coop tier (rank=10, cultivation_d5):**
 
@@ -1364,7 +1405,7 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 | Approach | cultivation_d5 (rank=10) | target_qec (rank=0) |
 |----------|-------------------------|---------------------|
 | Baseline SVM | 116.1 ms | 1.43 ms |
-| Compiled (A) | -- (SVM fallback) | 1.34 ms (-6.3%) |
+| Compiled (A) | -- (SVM fallback) | corrected: **-50%** regression (see Section 4.6) |
 | Optimized SVM (F) | 116.2 ms (+0.04%) | 1.43 ms (0%) |
 | Persistent (E) | 119.9 ms (+3.3%) | 1.02 ms (-28.9%) |
 
@@ -1376,7 +1417,7 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 |------|----------|---------|-------------|
 | 1 | **SVM + GEAK warp-shuffle** | **48.3M** | baseline |
 | 2 | Persistent (E) | 48.3M | +0.0% |
-| 3 | Compiled (A) | 47.2M | -2.3% |
+| 3 | Compiled (A) | 1.09M | **-50%** (corrected) |
 | 4 | Split (D) | 46.1M | -4.6% |
 | 5 | Graph (C) | 44.9M | -7.0% |
 | 6 | PerOp (B) | 44.1M | -8.7% |
@@ -1388,7 +1429,7 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 |------|----------|---------|-------------|
 | 1 | **Persistent + GEAK (E)** | **5.68M** | **+1.1%** |
 | 2 | SVM + GEAK warp-shuffle | 5.62M | baseline |
-| 3 | Compiled (A, SVM fb) | 5.62M | +0.0% |
+| 3 | Compiled (A, SVM fb) | 1.42M | SVM fallback (corrected) |
 | 4 | Graph (C, no GEAK) | 4.04M | -28.1% |
 | 5 | Split (D, no GEAK) | 4.03M | -28.3% |
 | 6 | PerOp (B, no GEAK) | 4.03M | -28.3% |
@@ -1398,16 +1439,18 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 
 | Circuit | rank | SVM+GEAK | A:Compiled | E:Persistent | F:OptSVM | D:Split | B:PerOp | C:Graph |
 |---------|------|----------|-----------|-------------|---------|---------|---------|---------|
-| target_qec | 0 | 43.5M | **47.7M** | 42.6M | 10.6M* | 44.2M | 44.7M | 46.1M |
-| cultivation_d5 | 10 | 5.59M | 5.62M | 5.58M | 5.59M | 5.59M | 5.58M | 5.59M |
+| target_qec | 0 | 43.5M | 1.09M (**-50%**) | 42.6M | 10.6M* | 44.2M | 44.7M | 46.1M |
+| cultivation_d5 | 10 | 5.59M | 1.42M (fb) | 5.58M | 5.59M | 5.59M | 5.58M | 5.59M |
 
 *F thread tier regression from OPT changes conflicting with GEAK patch
+
+**Note:** Approach A results corrected. Original values (47.7M for target_qec, 5.62M for cultivation_d5) were measured with a non-functional `--hybrid` flag, so the "compiled" runs were actually executing the SVM interpreter. See Section 4.5.
 
 ### 17.6 All-Workspace Benchmark (Pre-built, Same Node)
 
 | Workspace | D5 rank=10 | D3 rank=4 | QEC rank=0 | D7 rank=19 |
 |-----------|-----------|----------|-----------|-----------|
-| **compiled-kernel** | 5.40M | 43.6M | **50.0M** | **145.8K** |
+| **compiled-kernel** | 1.42M (fb) | corrected: -50% | corrected: **-50%** | corrected: -50% |
 | svm-optimized | **5.59M** | 41.6M | 47.1M | 145.7K |
 | split-kernel | 5.22M | 41.4M | 46.6M | -- |
 | per-op-kernel | 5.61M | **44.6M** | 48.6M | -- |
@@ -1417,14 +1460,16 @@ MI300X has 8 GCDs accessible via XGMI (cross-chip interconnect). For very large 
 
 Build: `gpu-compiled-kernel` with GEAK warp-shuffle + NUMA per-XCD + GpuComplex alignment + `__shfl` broadcast.
 
+**CORRECTION:** The results below were collected before the `--hybrid` flag was connected to the kernel dispatch. The "Compiled" and "Hybrid" columns ran the SVM interpreter and should be disregarded. Rigorous re-benchmarking shows the compiled kernel at -50% to -69% regression (see Section 4.6 for corrected data).
+
 | Circuit | rank | Tier | SVM+GEAK+NUMA | Compiled | Hybrid | Best |
 |---------|------|------|--------------|----------|--------|------|
-| target_qec | 0 | T1 | 44.5M | 45.2M | **45.5M** | Hybrid +2.2% |
-| circuit_d3_p0.001 | 4 | T1 | 40.3M | 41.1M | **43.5M** | Hybrid +7.9% |
-| surface_d7_r14 | 0 | T1 | 27.4M | **27.8M** | 27.7M | Compiled +1.4% |
-| color_d7 | 0 | T1 | 37.6M | 37.0M | **38.6M** | Hybrid +2.6% |
-| cultivation_d5 | 10 | T2 | 5.44M | 5.46M | **5.46M** | All ~equal |
-| circuit_d7 | 19 | T3 | **145.0K** | 140.1K | 142.0K | SVM+GEAK+NUMA |
+| target_qec | 0 | T1 | 44.5M | ~~45.2M~~ | ~~45.5M~~ | SVM+GEAK+NUMA |
+| circuit_d3_p0.001 | 4 | T1 | 40.3M | ~~41.1M~~ | ~~43.5M~~ | SVM+GEAK+NUMA |
+| surface_d7_r14 | 0 | T1 | 27.4M | ~~27.8M~~ | ~~27.7M~~ | SVM+GEAK+NUMA |
+| color_d7 | 0 | T1 | 37.6M | ~~37.0M~~ | ~~38.6M~~ | SVM+GEAK+NUMA |
+| cultivation_d5 | 10 | T2 | 5.44M | ~~5.46M~~ | ~~5.46M~~ | SVM+GEAK+NUMA |
+| circuit_d7 | 19 | T3 | **145.0K** | ~~140.1K~~ | ~~142.0K~~ | SVM+GEAK+NUMA |
 
 ### 17.8 D7 Circuit: All Approaches at Rank=19 (Global-Coop Tier)
 
@@ -1432,13 +1477,14 @@ Circuit: `circuit_d7_p0.0005.stim` -- 5472 instructions, 355 measurements, peak_
 
 | Rank | Approach | shots/s | vs SVM+GEAK |
 |------|----------|---------|-------------|
-| 1 | Compiled (A) | 144,232 | +0.2% |
-| 2 | clifft-amd original | 144,240 | +0.2% |
-| 3 | **SVM+GEAK** | **143,916** | **baseline** |
-| 4 | OptSVM (F) | 143,345 | -0.4% |
-| 5 | Hybrid | 143,541 | -0.3% |
-| 6-12 | All others | ~142-143K | -0.4% to -1.1% |
-| 13 | Persistent (E) | **129,929** | **-9.7%** |
+| 1 | clifft-amd original | 144,240 | +0.2% |
+| 2 | **SVM+GEAK** | **143,916** | **baseline** |
+| 3 | OptSVM (F) | 143,345 | -0.4% |
+| 4 | Hybrid | 143,541 | -0.3% |
+| 5-11 | All others | ~142-143K | -0.4% to -1.1% |
+| 12 | Persistent (E) | **129,929** | **-9.7%** |
+
+**Note:** The previous Compiled (A) entry at 144,232 shots/s was measured with a non-functional `--hybrid` flag (SVM fallback). Compiled kernel does not support rank=19 (coop tier).
 
 ### 17.9 SVM+GEAK vs Original clifft-amd
 
@@ -1458,27 +1504,27 @@ Both produce identical results: `passed_shots=2,318,545`.
 
 **Lesson:** Production nodes show 1.5-8.5x lower throughput than dedicated nodes due to co-tenancy and scheduler constraints. All approach comparisons use the same dedicated node for fairness.
 
-### 17.11 Per-Thread Tier T-Gate Sweep (q=17, rank=1)
+### 17.11 Per-Thread Tier T-Gate Sweep (q=17) -- CORRECTED
 
-| T-gates | depth | SVM (shots/s) | Compiled (shots/s) | Delta |
-|---------|-------|---------------|---------------------|-------|
-| 0 | 3 | 10.2M | 10.4M | +1.4% |
-| 1 | 3 | 10.4M | 10.5M | +1.4% |
-| 2 | 5 | 9.77M | 11.5M | **+17.7%** |
-| 3 | 5 | 10.3M | 11.6M | **+12.6%** |
-| 4 | 5 | 10.4M | 11.1M | **+6.0%** |
-| 5 | 5 | 10.4M | 11.2M | **+7.1%** |
-| 8 | 5 | 10.4M | 11.5M | **+11.2%** |
-| 10 | 5 | 10.6M | 11.0M | **+3.7%** |
+**Note:** The original data in this table was collected with a non-functional `--hybrid` flag. The "Compiled" column was actually running the SVM interpreter. Corrected results (20 runs, exclusive MI300X, warmed GPU):
 
-### 17.12 Per-Thread Tier T-Gate Sweep (q=33, rank=1)
+| Circuit | SVM Mean | SVM CV | Compiled Mean | Comp CV | Delta |
+|---------|----------|--------|---------------|---------|-------|
+| sweep_q17_t0_d3 | 2.20M | 0.7% | 1.09M | 0.5% | **-50.4%** |
+| sweep_q17_t2_d5 | 2.19M | 0.8% | 1.11M | 0.4% | **-49.5%** |
+| sweep_q17_t5_d5 | 2.19M | 0.8% | 1.11M | 0.3% | **-49.4%** |
+| sweep_q17_t10_d5 | 2.20M | 0.9% | 1.11M | 0.4% | **-49.5%** |
 
-| T-gates | depth | SVM (shots/s) | Compiled (shots/s) | Delta |
-|---------|-------|---------------|---------------------|-------|
-| 2 | 5 | 10.3M | 11.2M | **+8.7%** |
-| 3 | 3 | 10.2M | 11.5M | **+12.1%** |
-| 8 | 5 | 10.3M | 11.5M | **+11.1%** |
-| 10 | 3 | 10.4M | 11.5M | **+9.6%** |
+### 17.12 Per-Thread Tier T-Gate Sweep (q=33) -- CORRECTED
+
+**Note:** The original data in this table was collected with a non-functional `--hybrid` flag. Corrected results (20 runs, exclusive MI300X, warmed GPU):
+
+| Circuit | SVM Mean | SVM CV | Compiled Mean | Comp CV | Delta |
+|---------|----------|--------|---------------|---------|-------|
+| sweep_q33_t0_d3 | 2.19M | 0.7% | 1.11M | 0.5% | **-49.4%** |
+| sweep_q33_t2_d5 | 2.19M | 0.7% | 1.09M | 0.6% | **-50.4%** |
+| sweep_q33_t5_d5 | 2.20M | 0.8% | 1.09M | 0.3% | **-50.7%** |
+| sweep_q33_t10_d5 | 2.19M | 0.7% | 1.09M | 0.7% | **-50.2%** |
 
 ### 17.13 Coop Tier Performance (Real QEC Circuits)
 
@@ -1534,8 +1580,8 @@ Both produce identical results: `passed_shots=2,318,545`.
 | NUMA per-XCD | Pending | No effect | +1.4% |
 | GpuComplex alignment | LDS -34% | Pending | Pending |
 | `__shfl` broadcast | Pending | No effect | Pending |
-| Compiled megakernel | SVM fallback | +5-18% | SVM fallback |
-| Hybrid split | +0.8% (noise) | +2-8% | No effect |
+| Compiled megakernel | SVM fallback | **-50% (corrected)** | SVM fallback |
+| Hybrid split | +0.8% (noise) | corrected: see Section 4.6 | No effect |
 | LDS tiling | **-66% regression** | -6.6% | -16.5% |
 | Scatter LUT | -3.8% | No effect | LDS overflow |
 | Manual SVM opts (F) | 0% | 0% | 0% |
