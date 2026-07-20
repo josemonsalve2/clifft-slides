@@ -1,0 +1,128 @@
+<svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg" font-family="monospace, 'Courier New'">
+  <!-- Background -->
+  <rect width="800" height="400" fill="#1a1a2e"/>
+
+  <!-- Section dividers -->
+  <line x1="267" y1="10" x2="267" y2="310" stroke="#444466" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="534" y1="10" x2="534" y2="310" stroke="#444466" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="10" y1="315" x2="790" y2="315" stroke="#444466" stroke-width="1"/>
+
+  <!-- ═══ LEFT PANEL: The Problem ═══ -->
+  <text x="133" y="28" text-anchor="middle" fill="#ff8c00" font-size="11" font-weight="bold" letter-spacing="1">THE PROBLEM</text>
+
+  <!-- SALU/VALU ratio badge -->
+  <rect x="30" y="38" width="205" height="30" rx="4" fill="#2a1800" stroke="#ff8c00" stroke-width="1.5"/>
+  <text x="133" y="57" text-anchor="middle" fill="#ff8c00" font-size="13" font-weight="bold">SALU/VALU ratio = 1.81x</text>
+
+  <text x="133" y="80" text-anchor="middle" fill="#ffaa44" font-size="10">at rank = 10</text>
+
+  <!-- Instruction counts -->
+  <rect x="22" y="90" width="220" height="50" rx="3" fill="#1e1010" stroke="#cc5500" stroke-width="1"/>
+  <text x="32" y="108" fill="#ff8c00" font-size="10" font-weight="bold">Instruction counts (rank=10):</text>
+  <rect x="32" y="113" width="8" height="8" fill="#ff4444"/>
+  <text x="46" y="121" fill="#ff6666" font-size="10">13.6B  SALU instructions</text>
+  <rect x="32" y="125" width="8" height="8" fill="#4488ff"/>
+  <text x="46" y="133" fill="#88aaff" font-size="10"> 7.5B  VALU instructions</text>
+
+  <!-- Bar chart -->
+  <text x="32" y="158" fill="#888" font-size="9">Relative weight:</text>
+  <!-- SALU bar -->
+  <rect x="32" y="163" width="140" height="12" rx="2" fill="#ff4444"/>
+  <text x="176" y="173" fill="#ff6666" font-size="9">SALU</text>
+  <!-- VALU bar -->
+  <rect x="32" y="179" width="77" height="12" rx="2" fill="#4488ff"/>
+  <text x="113" y="189" fill="#88aaff" font-size="9">VALU</text>
+
+  <!-- scatter_bits detail -->
+  <rect x="22" y="204" width="220" height="44" rx="3" fill="#1a1a10" stroke="#996600" stroke-width="1"/>
+  <text x="32" y="218" fill="#ccaa00" font-size="9" font-weight="bold">scatter_bits_1(i, axis):</text>
+  <text x="32" y="231" fill="#ffcc44" font-size="9">~15 SALU instr per loop iter</text>
+  <text x="32" y="244" fill="#888888" font-size="8">(bit shuffle via repeated shifts)</text>
+
+  <!-- ═══ CENTER PANEL: The Fix Attempt ═══ -->
+  <text x="400" y="28" text-anchor="middle" fill="#00cccc" font-size="11" font-weight="bold" letter-spacing="1">ATTEMPTED FIX</text>
+
+  <!-- LUT declaration box -->
+  <rect x="278" y="38" width="242" height="26" rx="4" fill="#001a1a" stroke="#00aaaa" stroke-width="1.5"/>
+  <text x="399" y="55" text-anchor="middle" fill="#00ffff" font-size="11" font-family="monospace">__shared__ uint32_t lut[512]</text>
+
+  <text x="399" y="78" text-anchor="middle" fill="#44dddd" font-size="10">Precomputed scatter-bits lookup table</text>
+
+  <!-- Replacement arrow -->
+  <rect x="278" y="88" width="242" height="42" rx="3" fill="#001818" stroke="#009999" stroke-width="1"/>
+  <text x="295" y="106" fill="#00cccc" font-size="10" font-weight="bold">15 SALU instructions</text>
+  <line x1="399" y1="110" x2="399" y2="120" stroke="#00cccc" stroke-width="1.5" marker-end="url(#arr-cyan)"/>
+  <text x="399" y="126" text-anchor="middle" fill="#44ffaa" font-size="10">1 LDS load   (expected win)</text>
+
+  <!-- VGPR impact -->
+  <rect x="278" y="142" width="242" height="56" rx="3" fill="#1a0a00" stroke="#ff6600" stroke-width="1.5"/>
+  <text x="399" y="158" text-anchor="middle" fill="#ff8833" font-size="10" font-weight="bold">VGPR side-effect</text>
+  <!-- before -->
+  <rect x="290" y="164" width="78" height="18" rx="2" fill="#223300" stroke="#44aa00" stroke-width="1"/>
+  <text x="329" y="177" text-anchor="middle" fill="#88ff44" font-size="10">108 VGPRs</text>
+  <!-- arrow -->
+  <text x="376" y="177" fill="#ffaa00" font-size="14">→</text>
+  <!-- after -->
+  <rect x="390" y="164" width="78" height="18" rx="2" fill="#330000" stroke="#ff4444" stroke-width="1"/>
+  <text x="429" y="177" text-anchor="middle" fill="#ff6666" font-size="10">128 VGPRs</text>
+  <text x="399" y="193" text-anchor="middle" fill="#ffaa44" font-size="9">+20 VGPRs (LUT pointer + cache)</text>
+
+  <!-- ═══ RIGHT PANEL: Why It Failed ═══ -->
+  <text x="666" y="28" text-anchor="middle" fill="#ff4444" font-size="11" font-weight="bold" letter-spacing="1">WHY IT FAILED</text>
+
+  <!-- Occupancy table -->
+  <rect x="545" y="38" width="242" height="76" rx="4" fill="#1a0000" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="666" y="54" text-anchor="middle" fill="#ff6666" font-size="10" font-weight="bold">MI300X Occupancy Table</text>
+  <!-- header -->
+  <rect x="553" y="58" width="226" height="14" rx="2" fill="#2a0000"/>
+  <text x="600" y="68" fill="#888" font-size="9">VGPRs</text>
+  <text x="700" y="68" fill="#888" font-size="9">Waves/SIMD</text>
+  <!-- row 1 -->
+  <rect x="553" y="73" width="226" height="14" rx="0" fill="#0a1a00"/>
+  <text x="600" y="83" fill="#88ff44" font-size="9">108 VGPRs</text>
+  <text x="714" y="83" fill="#88ff44" font-size="9">4 waves</text>
+  <!-- row 2 -->
+  <rect x="553" y="87" width="226" height="14" rx="0" fill="#1a0000"/>
+  <text x="600" y="97" fill="#ff6666" font-size="9">128 VGPRs</text>
+  <text x="714" y="97" fill="#ffaa00" font-size="9">4 waves  ← same!</text>
+
+  <!-- Scheduling stalls note -->
+  <rect x="545" y="122" width="242" height="32" rx="3" fill="#140010" stroke="#993399" stroke-width="1"/>
+  <text x="666" y="136" text-anchor="middle" fill="#dd66ff" font-size="9" font-weight="bold">Increased register pressure</text>
+  <text x="666" y="149" text-anchor="middle" fill="#cc44cc" font-size="9">→ more scheduling stalls</text>
+
+  <!-- Result badge -->
+  <rect x="570" y="163" width="190" height="28" rx="5" fill="#2a0000" stroke="#ff2222" stroke-width="2"/>
+  <text x="665" y="175" text-anchor="middle" fill="#ff4444" font-size="11" font-weight="bold">Result: -3.8% throughput</text>
+  <text x="665" y="187" text-anchor="middle" fill="#ff8888" font-size="9">(LUT made things worse)</text>
+
+  <!-- ═══ BOTTOM PANEL: Deeper Problem ═══ -->
+  <rect x="10" y="322" width="780" height="68" rx="5" fill="#0d0d1a" stroke="#555577" stroke-width="1.5"/>
+  <text x="400" y="337" text-anchor="middle" fill="#aaaacc" font-size="10" font-weight="bold" letter-spacing="1">DEEPER PROBLEM — FUNDAMENTAL MISMATCH</text>
+
+  <!-- three columns -->
+  <!-- Col 1: rank=19 LDS overflow -->
+  <rect x="18" y="342" width="228" height="40" rx="3" fill="#1a0a0a" stroke="#884444" stroke-width="1"/>
+  <text x="132" y="355" text-anchor="middle" fill="#ff8888" font-size="9" font-weight="bold">rank=19: LUT needs 262K entries</text>
+  <text x="132" y="367" text-anchor="middle" fill="#cc4444" font-size="9">= 1024 KB required</text>
+  <text x="132" y="379" text-anchor="middle" fill="#ff4444" font-size="9">LDS = 64 KB   →  16x overflow</text>
+
+  <!-- Col 2: low-rank VGPR cost -->
+  <rect x="254" y="342" width="290" height="40" rx="3" fill="#0a0a1a" stroke="#444488" stroke-width="1"/>
+  <text x="399" y="355" text-anchor="middle" fill="#8888ff" font-size="9" font-weight="bold">Ranks where LUT fits  (≤ 14)</text>
+  <text x="399" y="367" text-anchor="middle" fill="#6666cc" font-size="9">are exactly the ranks where</text>
+  <text x="399" y="379" text-anchor="middle" fill="#aaaaff" font-size="9">VGPR cost hurts occupancy most</text>
+
+  <!-- Col 3: mismatch verdict -->
+  <rect x="552" y="342" width="230" height="40" rx="3" fill="#0f0a00" stroke="#886600" stroke-width="1"/>
+  <text x="667" y="355" text-anchor="middle" fill="#ffcc44" font-size="9" font-weight="bold">Fix and problem never coexist</text>
+  <text x="667" y="367" text-anchor="middle" fill="#ccaa00" font-size="9">at the same rank.</text>
+  <text x="667" y="379" text-anchor="middle" fill="#ff8800" font-size="9">LUT optimization is not viable.</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arr-cyan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#00cccc"/>
+    </marker>
+  </defs>
+</svg>

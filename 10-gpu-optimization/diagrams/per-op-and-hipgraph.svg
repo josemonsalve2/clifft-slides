@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-labelledby="title desc">
+  <title id="title">Two failed GPU kernel approaches and their shared lesson</title>
+  <desc id="desc">Side-by-side comparison of per-operation kernels and a hipGraph approach, both failing because execution time rather than launch overhead is the true bottleneck.</desc>
+
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#9696a8"/>
+    </marker>
+    <style>
+      .base { font-family: Inter, Arial, sans-serif; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+      .title { fill: #f0a500; font-size: 15px; font-weight: 700; }
+      .kernel { fill: #202438; stroke: #43c77b; stroke-width: 1.8; rx: 5; }
+      .kernel-text { fill: #f4f4f7; font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+      .arrow { stroke: #9696a8; stroke-width: 1.5; fill: none; marker-end: url(#arrow-gray); }
+      .memory { fill: #aaaaba; font-size: 9.5px; }
+      .neutral { fill: #b8b8c7; font-size: 11px; }
+      .failure { fill: #ff5c67; font-size: 11px; }
+      .failure-strong { fill: #ff5c67; font-size: 12px; font-weight: 700; }
+      .italic { fill: #aaaaba; font-size: 10.5px; font-style: italic; }
+    </style>
+  </defs>
+
+  <rect width="800" height="500" fill="#1a1a2e"/>
+  <line x1="400" y1="20" x2="400" y2="397" stroke="#666679" stroke-width="1.2"/>
+
+  <!-- Left panel -->
+  <g class="base">
+    <text x="24" y="31" class="title">Approach B: Per-Op Kernels (-9% coop)</text>
+
+    <rect x="36" y="53" width="154" height="27" class="kernel"/>
+    <text x="113" y="67" class="kernel-text mono">K_FRAME_CNOT</text>
+
+    <path d="M113 80 L113 100" class="arrow"/>
+    <text x="127" y="91" class="memory mono">Global Memory</text>
+    <text x="127" y="101" class="memory">(ShotState spill/reload)</text>
+
+    <rect x="36" y="106" width="154" height="27" class="kernel"/>
+    <text x="113" y="120" class="kernel-text mono">K_FRAME_H</text>
+
+    <path d="M113 133 L113 153" class="arrow"/>
+    <text x="127" y="144" class="memory mono">Global Memory</text>
+    <text x="127" y="154" class="memory">(ShotState spill/reload)</text>
+
+    <rect x="36" y="159" width="154" height="27" class="kernel"/>
+    <text x="113" y="173" class="kernel-text mono">K_EXPAND</text>
+
+    <path d="M113 186 L113 206" class="arrow"/>
+    <text x="127" y="197" class="memory mono">Global Memory</text>
+    <text x="127" y="207" class="memory">(ShotState spill/reload)</text>
+
+    <rect x="36" y="212" width="154" height="27" class="kernel"/>
+    <text x="113" y="226" class="kernel-text mono">K_ARRAY_H</text>
+
+    <path d="M113 239 L113 259" class="arrow"/>
+    <text x="127" y="250" class="memory mono">Global Memory</text>
+    <text x="127" y="260" class="memory">(ShotState spill/reload)</text>
+
+    <rect x="36" y="265" width="154" height="27" class="kernel"/>
+    <text x="113" y="279" class="kernel-text mono">K_MEAS</text>
+
+    <text x="24" y="318" class="failure-strong mono">Launch overhead: ~5-10μs × N_instructions</text>
+
+    <g transform="translate(26 335)">
+      <circle cx="11" cy="11" r="11" fill="#ff5c67"/>
+      <path d="M6 6 L16 16 M16 6 L6 16" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <text x="54" y="345" class="failure">
+      <tspan x="54" dy="0">State serialization 2.4KB per op</tspan>
+      <tspan x="54" dy="15">per shot dominates</tspan>
+    </text>
+
+    <text x="24" y="386" class="italic">
+      <tspan x="24" dy="0">Inverted bottleneck: bandwidth pressure</tspan>
+      <tspan x="24" dy="14">replaces register pressure</tspan>
+    </text>
+  </g>
+
+  <!-- Right panel -->
+  <g class="base">
+    <text x="420" y="31" class="title">Approach C: HipGraph (-1% thread, +1% coop)</text>
+
+    <rect x="420" y="46" width="356" height="261" rx="8" fill="none" stroke="#5194e2" stroke-width="1.8" stroke-dasharray="7 5"/>
+    <rect x="435" y="39" width="114" height="16" fill="#1a1a2e"/>
+    <text x="442" y="51" fill="#76adf0" font-family="Consolas, monospace" font-size="11.5px" font-weight="700">hipGraph_t DAG</text>
+
+    <rect x="443" y="64" width="142" height="27" class="kernel"/>
+    <text x="514" y="78" class="kernel-text mono">K_FRAME_CNOT</text>
+    <path d="M514 91 L514 106" class="arrow"/>
+
+    <rect x="443" y="111" width="142" height="27" class="kernel"/>
+    <text x="514" y="125" class="kernel-text mono">K_FRAME_H</text>
+    <path d="M514 138 L514 153" class="arrow"/>
+
+    <rect x="443" y="158" width="142" height="27" class="kernel"/>
+    <text x="514" y="172" class="kernel-text mono">K_EXPAND</text>
+    <path d="M514 185 L514 200" class="arrow"/>
+
+    <rect x="443" y="205" width="142" height="27" class="kernel"/>
+    <text x="514" y="219" class="kernel-text mono">K_ARRAY_H</text>
+    <path d="M514 232 L514 247" class="arrow"/>
+
+    <rect x="443" y="252" width="142" height="27" class="kernel"/>
+    <text x="514" y="266" class="kernel-text mono">K_MEAS</text>
+
+    <rect x="603" y="93" width="155" height="42" rx="6" fill="#20372f" stroke="#43c77b" stroke-width="1.8"/>
+    <text x="680.5" y="109" class="kernel-text mono">
+      <tspan x="680.5" dy="0">hipGraphLaunch()</tspan>
+      <tspan x="680.5" dy="15" font-size="10.5px" font-weight="400">single API call</tspan>
+    </text>
+
+    <text x="603" y="166" class="neutral">
+      <tspan x="603" dy="0">Frame ops batched</tspan>
+      <tspan x="603" dy="15">into fewer nodes</tspan>
+    </text>
+
+    <path d="M598 78 C625 78, 625 90, 644 90" stroke="#9696a8" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+    <path d="M598 125 C625 125, 625 122, 644 122" stroke="#9696a8" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+
+    <g transform="translate(422 320)">
+      <circle cx="11" cy="11" r="11" fill="#ff5c67"/>
+      <path d="M6 6 L16 16 M16 6 L6 16" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <text x="450" y="330" class="failure">
+      <tspan x="450" dy="0">Same inter-kernel memory</tspan>
+      <tspan x="450" dy="15">transfers as B</tspan>
+    </text>
+
+    <text x="420" y="374" class="italic">
+      <tspan x="420" dy="0">Optimizes launch overhead, but execution time</tspan>
+      <tspan x="420" dy="14">is the real bottleneck</tspan>
+    </text>
+  </g>
+
+  <!-- Shared lesson -->
+  <g class="base">
+    <rect x="20" y="415" width="760" height="68" rx="8" fill="#351d29" stroke="#b93d4b" stroke-width="2"/>
+    <text x="400" y="442" fill="#ffffff" font-size="17px" font-weight="700" text-anchor="middle">
+      Both approaches solve the wrong problem.
+    </text>
+    <text x="400" y="466" fill="#f2f2f5" font-size="12.5px" text-anchor="middle">
+      The bottleneck is execution time (sync barriers, register pressure), not launch overhead.
+    </text>
+  </g>
+</svg>

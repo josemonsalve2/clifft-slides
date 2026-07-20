@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU Kernel Architecture Optimization — Clifft on AMD MI300X</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg-dark: #1a1a2e;
+  --bg-card: #161b22;
+  --accent: #e94560;
+  --secondary: #0f3460;
+  --highlight: #53d8fb;
+  --text: #e0e0e0;
+  --dim: #8888aa;
+  --code-bg: #0d1117;
+  --success: #4ec9b0;
+  --warn: #e9a045;
+  --purple: #c678dd;
+  --border: #30363d;
+}
+
+.reveal {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 22px !important;
+  color: var(--text);
+}
+.reveal .slides { text-align: left; }
+.reveal .slides section { background: var(--bg-dark); padding: 40px 50px; }
+
+.reveal h1 { font-size: 2em !important; color: var(--accent); font-weight: 800; text-align: center; margin-bottom: 0.3em; letter-spacing: -0.02em; }
+.reveal h2 { font-size: 1.45em !important; color: var(--highlight); font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 0.15em; margin-bottom: 0.5em; letter-spacing: -0.01em; }
+.reveal h3 { font-size: 1.1em !important; color: var(--accent); font-weight: 700; margin-bottom: 0.3em; }
+.reveal h4 { font-size: 0.92em !important; color: var(--highlight); font-weight: 600; margin-bottom: 0.2em; }
+
+.reveal p, .reveal li { font-size: 0.82em !important; line-height: 1.6; }
+.reveal ul { margin-left: 1.2em; }
+.reveal li { margin-bottom: 0.25em; }
+.reveal code { background: var(--bg-card); color: var(--highlight); padding: 0.15em 0.4em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+.reveal pre { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.8em; margin: 0.5em 0; overflow-x: auto; }
+.reveal pre code { background: transparent; padding: 0; font-size: 0.72em; line-height: 1.5; }
+.reveal strong { color: var(--accent); font-weight: 700; }
+.reveal em { color: var(--highlight); font-style: normal; }
+.reveal hr { border: none; border-top: 1px solid var(--border); margin: 0.6em 0; }
+
+.reveal table { font-size: 0.72em; border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+.reveal th { background: var(--secondary); color: var(--highlight); padding: 0.45em 0.7em; border: 1px solid var(--border); text-align: left; font-weight: 700; }
+.reveal td { padding: 0.4em 0.7em; border: 1px solid var(--border); }
+
+.title-slide { text-align: center !important; display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+.title-slide h1 { font-size: 3.2em !important; margin-bottom: 0.05em; line-height: 1.1; }
+.title-slide .subtitle { font-size: 1em; color: var(--highlight); margin-bottom: 1.8em; font-weight: 600; }
+.title-slide .meta { font-size: 0.72em; color: var(--dim); line-height: 1.8; }
+.title-slide .tagline { font-size: 0.68em; color: var(--dim); margin-top: 1.5em; border-top: 1px solid var(--border); padding-top: 0.8em; max-width: 500px; }
+
+.section-divider { text-align: center !important; display: flex !important; flex-direction: column; align-items: center; justify-content: center; }
+.section-divider .section-num { font-size: 5em; font-weight: 900; color: var(--secondary); opacity: 0.4; margin-bottom: -0.25em; line-height: 1; }
+.section-divider h1 { font-size: 2.4em !important; margin-bottom: 0.15em; }
+.section-divider .section-sub { font-size: 0.75em; color: var(--dim); max-width: 500px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8em; }
+.grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 1em; }
+.grid-60-40 { display: grid; grid-template-columns: 3fr 2fr; gap: 1em; }
+
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75em; margin: 0.3em 0; }
+.card-accent { border-left: 3px solid var(--accent); }
+.card-hl { border-left: 3px solid var(--highlight); }
+.card-success { border-left: 3px solid var(--success); }
+.card-warn { border-left: 3px solid var(--warn); }
+.card-purple { border-left: 3px solid var(--purple); }
+
+.box { display: inline-flex; align-items: center; justify-content: center; padding: 0.4em 0.85em; border-radius: 8px; font-size: 0.72em; font-weight: 700; text-align: center; line-height: 1.3; white-space: nowrap; }
+.box-primary { background: rgba(15,52,96,0.5); border: 2px solid var(--highlight); color: var(--highlight); }
+.box-accent { background: rgba(233,69,96,0.12); border: 2px solid var(--accent); color: var(--accent); }
+.box-success { background: rgba(78,201,176,0.1); border: 2px solid var(--success); color: var(--success); }
+.box-warn { background: rgba(233,160,69,0.1); border: 2px solid var(--warn); color: var(--warn); }
+.box-purple { background: rgba(198,120,221,0.1); border: 2px solid var(--purple); color: var(--purple); }
+.box-dim { background: rgba(136,136,170,0.1); border: 2px solid var(--dim); color: var(--dim); }
+
+.arrow { color: var(--dim); font-size: 1.3em; margin: 0 0.3em; display: inline-flex; align-items: center; }
+.flow-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em; margin: 0.5em 0; }
+.flow-col { display: flex; flex-direction: column; align-items: center; gap: 0.15em; margin: 0.4em 0; }
+
+.big-num { font-size: 2.5em; font-weight: 800; color: var(--accent); text-align: center; margin: 0.15em 0; line-height: 1; }
+.big-label { font-size: 0.7em; color: var(--dim); text-align: center; }
+
+.insight { background: rgba(233,69,96,0.08); border: 1px solid rgba(233,69,96,0.3); border-radius: 8px; padding: 0.55em 0.75em; margin: 0.5em 0; font-size: 0.78em; line-height: 1.5; }
+.insight::before { content: "💡 "; }
+
+.mode-card { background: var(--bg-card); border-radius: 10px; padding: 0.65em 0.8em; border-left: 3px solid var(--highlight); margin: 0.3em 0; }
+.mode-card .mode-title { font-weight: 700; font-size: 0.82em; margin-bottom: 0.25em; }
+.mode-card .mode-detail { font-size: 0.68em; color: var(--dim); line-height: 1.5; }
+
+.perf-bar { margin: 0.35em 0; }
+.perf-bar .label { font-size: 0.65em; color: var(--dim); margin-bottom: 0.1em; }
+.perf-bar .track { background: #21262d; border-radius: 6px; height: 24px; position: relative; overflow: hidden; }
+.perf-bar .fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 0.6em; font-size: 0.6em; font-weight: 700; color: #fff; }
+
+.timeline { display: flex; align-items: center; gap: 0; margin: 0.4em 0; border-radius: 6px; overflow: hidden; height: 32px; }
+.timeline .seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.55em; font-weight: 600; white-space: nowrap; padding: 0 0.5em; }
+
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6em; margin: 0.4em 0; }
+.summary-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.65em 0.8em; text-align: center; }
+.summary-card .num { font-size: 1.8em; font-weight: 800; line-height: 1; margin-bottom: 0.1em; }
+.summary-card .txt { font-size: 0.65em; color: var(--dim); }
+
+.stat-callout { text-align: center; padding: 0.8em; background: rgba(233,69,96,0.1); border: 2px solid var(--accent); border-radius: 12px; margin: 0.5em auto; max-width: 500px; }
+.stat-callout .stat-num { font-size: 2.5em; font-weight: 800; color: var(--accent); line-height: 1; }
+.stat-callout .stat-label { font-size: 0.75em; color: var(--dim); margin-top: 0.2em; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8em; }
+
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .grid-60-40, .cols { grid-template-columns: 1fr; }
+}
+  </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 1: Title -->
+    <!-- ============================================================ -->
+    <section class="title-slide">
+      <h1>GPU Kernel Architecture Optimization</h1>
+      <div class="subtitle">Clifft Quantum Circuit Simulator on AMD MI300X</div>
+      <div class="tagline">Six approaches, 14 AI agents, one clear winner</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 2: Section Divider — Overview -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">1</div>
+      <h1>Overview</h1>
+      <div class="section-sub">Six GPU kernel architectures evaluated on MI300X</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 3: Six Approaches at a Glance -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Six Approaches at a Glance</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Approach</th>
+            <th>Description</th>
+            <th>Tiers</th>
+            <th>Per-Thread</th>
+            <th>Coop</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>A: Compiled</td>
+            <td>Straight-line codegen via clang++</td>
+            <td>T1</td>
+            <td>+5–18%</td>
+            <td>SVM fb</td>
+            <td>Useful</td>
+          </tr>
+          <tr>
+            <td>B: Per-Op</td>
+            <td>One kernel per opcode</td>
+            <td>T1</td>
+            <td>+2%</td>
+            <td>−9%</td>
+            <td>Failed</td>
+          </tr>
+          <tr>
+            <td>C: HipGraph</td>
+            <td>hipGraph_t DAG</td>
+            <td>T1</td>
+            <td>−1%</td>
+            <td>+1%</td>
+            <td>Failed</td>
+          </tr>
+          <tr>
+            <td>D: Split</td>
+            <td>k-aware circuit splitting</td>
+            <td>T1</td>
+            <td>+17%</td>
+            <td>SVM fb</td>
+            <td>Promising</td>
+          </tr>
+          <tr>
+            <td>E: Persistent</td>
+            <td>Phase-sorted + work-stealing</td>
+            <td>All</td>
+            <td>+7%</td>
+            <td>−3%</td>
+            <td>Mixed</td>
+          </tr>
+          <tr>
+            <td>F: Opt SVM</td>
+            <td>7 micro-optimizations</td>
+            <td>All</td>
+            <td>+10%</td>
+            <td>−12%</td>
+            <td>Failed</td>
+          </tr>
+          <tr style="background: rgba(233,69,96,0.12);">
+            <td><strong>GEAK</strong></td>
+            <td>Warp-shuffle reduction</td>
+            <td>All</td>
+            <td>+2%</td>
+            <td><strong>+40%</strong></td>
+            <td><strong>Winner</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 4: Section Divider — The Problem -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">2</div>
+      <h1>The Problem</h1>
+      <div class="section-sub">SVM interpreter dispatch, memory hierarchy, and MI300X hardware</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 5: SVM Interpreter -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>SVM Interpreter</h2>
+      <div style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" style="width:100%;max-width:750px;" font-family="'Courier New', Consolas, monospace">
+          <rect width="800" height="500" fill="#1a1a2e"/>
+          <text x="400" y="28" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="'Courier New', Consolas, monospace">SVM Interpreter: 35 opcode handlers ⇒ 108 VGPRs, switch dispatch overhead</text>
+          <rect x="14" y="42" width="490" height="442" rx="8" fill="rgba(83,216,251,0.06)" stroke="#53d8fb" stroke-width="1.5"/>
+          <text x="22" y="59" fill="#53d8fb" font-size="11" font-weight="bold">GPU Thread (one per shot)</text>
+          <text x="22" y="73" fill="#aaaacc" font-size="10">for each instruction in bytecode[] {</text>
+          <rect x="28" y="80" width="240" height="392" rx="8" fill="rgba(233,69,96,0.10)" stroke="#e94560" stroke-width="1.5"/>
+          <text x="148" y="97" fill="#e94560" font-size="11" font-weight="bold" text-anchor="middle">switch (opcode)</text>
+          <rect x="60" y="100" width="176" height="22" rx="5" fill="rgba(233,160,69,0.22)" stroke="#e9a045" stroke-width="1.2"/>
+          <text x="148" y="115" fill="#e9a045" font-size="9.5" font-weight="bold" text-anchor="middle">⚠ BRANCH DIVERGENCE</text>
+          <text x="22" y="483" fill="#aaaacc" font-size="10">}</text>
+          <rect x="38" y="130" width="218" height="26" rx="5" fill="rgba(83,216,251,0.13)" stroke="#53d8fb" stroke-width="1"/>
+          <text x="48" y="147" fill="#53d8fb" font-size="10">case FRAME_CNOT:</text>
+          <text x="200" y="147" fill="#aaaacc" font-size="9" text-anchor="end">rw px,pz</text>
+          <rect x="38" y="160" width="218" height="26" rx="5" fill="rgba(83,216,251,0.13)" stroke="#53d8fb" stroke-width="1"/>
+          <text x="48" y="177" fill="#53d8fb" font-size="10">case FRAME_H:</text>
+          <text x="200" y="177" fill="#aaaacc" font-size="9" text-anchor="end">rw px,pz</text>
+          <rect x="38" y="190" width="218" height="26" rx="5" fill="rgba(78,201,176,0.13)" stroke="#4ec9b0" stroke-width="1"/>
+          <text x="48" y="207" fill="#4ec9b0" font-size="10">case ARRAY_H:</text>
+          <text x="200" y="207" fill="#aaaacc" font-size="9" text-anchor="end">rw v[]</text>
+          <rect x="38" y="220" width="218" height="26" rx="5" fill="rgba(78,201,176,0.13)" stroke="#4ec9b0" stroke-width="1"/>
+          <text x="48" y="237" fill="#4ec9b0" font-size="10">case EXPAND_T:</text>
+          <text x="200" y="237" fill="#aaaacc" font-size="9" text-anchor="end">rw v[], Rng</text>
+          <rect x="38" y="250" width="218" height="26" rx="5" fill="rgba(233,160,69,0.13)" stroke="#e9a045" stroke-width="1"/>
+          <text x="48" y="267" fill="#e9a045" font-size="10">case MEAS_ACTIVE:</text>
+          <text x="200" y="267" fill="#aaaacc" font-size="9" text-anchor="end">rw meas[], active_k</text>
+          <rect x="38" y="280" width="218" height="26" rx="5" fill="rgba(233,160,69,0.13)" stroke="#e9a045" stroke-width="1"/>
+          <text x="48" y="297" fill="#e9a045" font-size="10">case NOISE:</text>
+          <text x="200" y="297" fill="#aaaacc" font-size="9" text-anchor="end">rw px,pz, Rng</text>
+          <rect x="38" y="310" width="218" height="26" rx="5" fill="rgba(83,216,251,0.13)" stroke="#53d8fb" stroke-width="1"/>
+          <text x="48" y="327" fill="#53d8fb" font-size="10">case RESET:</text>
+          <text x="200" y="327" fill="#aaaacc" font-size="9" text-anchor="end">rw v[], px,pz</text>
+          <rect x="38" y="340" width="218" height="26" rx="5" fill="rgba(233,69,96,0.13)" stroke="#e94560" stroke-width="1"/>
+          <text x="48" y="357" fill="#e94560" font-size="10">case MEASURE_Z:</text>
+          <text x="200" y="357" fill="#aaaacc" font-size="9" text-anchor="end">rw v[], meas[]</text>
+          <rect x="38" y="370" width="218" height="26" rx="5" fill="rgba(78,201,176,0.13)" stroke="#4ec9b0" stroke-width="1"/>
+          <text x="48" y="387" fill="#4ec9b0" font-size="10">case DETECTOR:</text>
+          <text x="200" y="387" fill="#aaaacc" font-size="9" text-anchor="end">r meas[]</text>
+          <rect x="38" y="400" width="218" height="26" rx="5" fill="rgba(233,160,69,0.13)" stroke="#e9a045" stroke-width="1"/>
+          <text x="48" y="417" fill="#e9a045" font-size="10">case DEPOLARIZE:</text>
+          <text x="200" y="417" fill="#aaaacc" font-size="9" text-anchor="end">rw px,pz, Rng</text>
+          <text x="148" y="445" fill="#888899" font-size="10" text-anchor="middle">... 25 more handlers ...</text>
+          <rect x="28" y="457" width="240" height="18" rx="4" fill="rgba(233,69,96,0.18)" stroke="#e94560" stroke-width="1"/>
+          <text x="148" y="469" fill="#e94560" font-size="9" font-weight="bold" text-anchor="middle">ALL handlers compiled in ⇒ 108 VGPRs</text>
+          <rect x="520" y="42" width="266" height="442" rx="8" fill="rgba(78,201,176,0.07)" stroke="#4ec9b0" stroke-width="1.5"/>
+          <text x="653" y="61" fill="#4ec9b0" font-size="11" font-weight="bold" text-anchor="middle">ShotState (per thread, VGPR)</text>
+          <line x1="520" y1="67" x2="786" y2="67" stroke="#4ec9b0" stroke-width="0.7" stroke-dasharray="4,3"/>
+          <rect x="532" y="74" width="242" height="50" rx="6" fill="rgba(78,201,176,0.13)" stroke="#4ec9b0" stroke-width="1"/>
+          <text x="653" y="91" fill="#4ec9b0" font-size="10" font-weight="bold" text-anchor="middle">v[16]  —  complex amplitudes</text>
+          <text x="653" y="105" fill="#aaaacc" font-size="9" text-anchor="middle">float2 · 16 entries = 32 VGPRs</text>
+          <text x="653" y="118" fill="#aaaacc" font-size="9" text-anchor="middle">statevector slice for active qubits</text>
+          <rect x="532" y="132" width="242" height="44" rx="6" fill="rgba(83,216,251,0.11)" stroke="#53d8fb" stroke-width="1"/>
+          <text x="653" y="149" fill="#53d8fb" font-size="10" font-weight="bold" text-anchor="middle">px[2] / pz[2]  —  Pauli frame</text>
+          <text x="653" y="163" fill="#aaaacc" font-size="9" text-anchor="middle">uint64 × 4 = 4 VGPRs (bit-packed)</text>
+          <rect x="532" y="184" width="242" height="44" rx="6" fill="rgba(233,160,69,0.11)" stroke="#e9a045" stroke-width="1"/>
+          <text x="653" y="201" fill="#e9a045" font-size="10" font-weight="bold" text-anchor="middle">meas[4096]  —  measurement record</text>
+          <text x="653" y="215" fill="#aaaacc" font-size="9" text-anchor="middle">bit-packed → 64 VGPRs (uint64×64)</text>
+          <rect x="532" y="236" width="116" height="36" rx="6" fill="rgba(233,160,69,0.11)" stroke="#e9a045" stroke-width="1"/>
+          <text x="590" y="252" fill="#e9a045" font-size="10" font-weight="bold" text-anchor="middle">Rng</text>
+          <text x="590" y="265" fill="#aaaacc" font-size="9" text-anchor="middle">Philox state 4 VGPRs</text>
+          <rect x="656" y="236" width="118" height="36" rx="6" fill="rgba(83,216,251,0.11)" stroke="#53d8fb" stroke-width="1"/>
+          <text x="715" y="252" fill="#53d8fb" font-size="10" font-weight="bold" text-anchor="middle">active_k</text>
+          <text x="715" y="265" fill="#aaaacc" font-size="9" text-anchor="middle">uint32, 1 VGPR</text>
+          <rect x="532" y="282" width="242" height="22" rx="5" fill="rgba(233,69,96,0.20)" stroke="#e94560" stroke-width="1.2"/>
+          <text x="653" y="297" fill="#e94560" font-size="10" font-weight="bold" text-anchor="middle">Total: ~108 VGPRs allocated per thread</text>
+          <rect x="532" y="432" width="242" height="40" rx="6" fill="rgba(233,69,96,0.13)" stroke="#e94560" stroke-width="1"/>
+          <text x="653" y="449" fill="#e94560" font-size="9.5" font-weight="bold" text-anchor="middle">Low occupancy: 2/8 waves per CU</text>
+          <text x="653" y="464" fill="#aaaacc" font-size="9" text-anchor="middle">switch overhead + register spill latency</text>
+        </svg>
+      </div>
+      <div class="card card-accent" style="margin-top:0.4em;">
+        <p style="margin:0;">35 opcodes · 108 VGPRs · 2/8 waves occupancy · branch divergence on every instruction</p>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 6: Three-Tier Memory Hierarchy -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Three-Tier Memory Hierarchy</h2>
+      <div style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" style="width:100%; max-width:750px;" role="img" aria-labelledby="title desc">
+          <title id="title-mem">GPU Kernel Tier Architecture - AMD MI300X</title>
+          <desc id="desc-mem">Three GPU kernel tiers and their memory hierarchy for the clifft quantum circuit simulator.</desc>
+          <defs>
+            <linearGradient id="tier1Fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#00cc66" stop-opacity="0.22"/><stop offset="1" stop-color="#00cc66" stop-opacity="0.07"/></linearGradient>
+            <linearGradient id="tier2Fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8800" stop-opacity="0.22"/><stop offset="1" stop-color="#ff8800" stop-opacity="0.07"/></linearGradient>
+            <linearGradient id="tier3Fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cc2222" stop-opacity="0.25"/><stop offset="1" stop-color="#cc2222" stop-opacity="0.08"/></linearGradient>
+            <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="glowOrange" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <marker id="arrowGreenM" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/></marker>
+            <marker id="arrowOrangeM" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#ff8800"/></marker>
+            <marker id="arrowRedM" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/></marker>
+          </defs>
+          <rect width="800" height="500" fill="#1a1a2e"/>
+          <path d="M0 78 H800 M0 390 H800" stroke="#ffffff" stroke-opacity="0.06"/>
+          <text x="400" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">GPU Kernel Tier Architecture -- AMD MI300X</text>
+          <text x="400" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">clifft quantum circuit simulator -- memory placement drives throughput</text>
+          <!-- Rank axis -->
+          <text x="34" y="72" fill="#cfd3df" font-family="Arial, sans-serif" font-size="10" font-weight="700">QUBIT RANK</text>
+          <line x1="40" y1="88" x2="760" y2="88" stroke="#aeb4c7" stroke-width="1.5"/>
+          <path d="M760 88 l-8 -4 v8 z" fill="#aeb4c7"/>
+          <g fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">
+            <line x1="40" y1="83" x2="40" y2="94" stroke="#dfe3ed"/><text x="40" y="105">0</text>
+            <line x1="192" y1="83" x2="192" y2="94" stroke="#dfe3ed"/><text x="192" y="105">4</text>
+            <line x1="230" y1="83" x2="230" y2="94" stroke="#dfe3ed"/><text x="230" y="105">5</text>
+            <line x1="419" y1="83" x2="419" y2="94" stroke="#dfe3ed"/><text x="419" y="105">10</text>
+            <line x1="457" y1="83" x2="457" y2="94" stroke="#dfe3ed"/><text x="457" y="105">11</text>
+            <line x1="760" y1="83" x2="760" y2="94" stroke="#dfe3ed"/><text x="760" y="105">19</text>
+          </g>
+          <line x1="211" y1="78" x2="211" y2="369" stroke="#ffffff" stroke-opacity="0.10" stroke-dasharray="3 4"/>
+          <line x1="438" y1="78" x2="438" y2="369" stroke="#ffffff" stroke-opacity="0.10" stroke-dasharray="3 4"/>
+          <!-- Tier regions -->
+          <rect x="40" y="116" width="171" height="238" rx="10" fill="url(#tier1Fill)" stroke="#00cc66" stroke-width="2"/>
+          <rect x="222" y="116" width="216" height="238" rx="10" fill="url(#tier2Fill)" stroke="#ff8800" stroke-width="2"/>
+          <rect x="449" y="116" width="311" height="238" rx="10" fill="url(#tier3Fill)" stroke="#cc2222" stroke-width="2"/>
+          <!-- Tier 1 -->
+          <rect x="40" y="116" width="171" height="31" rx="9" fill="#00cc66" fill-opacity="0.22"/>
+          <text x="125.5" y="136" fill="#67f0a9" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Tier 1: Register File</text>
+          <text x="55" y="165" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">VGPRs: 512/SIMD</text>
+          <rect x="55" y="178" width="141" height="49" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66" stroke-opacity="0.75"/>
+          <text x="125.5" y="198" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">v[16]</text>
+          <text x="125.5" y="216" fill="#cfd3df" font-family="Arial, sans-serif" font-size="10.5" text-anchor="middle">amplitude array (128B)</text>
+          <text x="55" y="250" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">1 thread = 1 shot</text>
+          <text x="55" y="278" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" letter-spacing="0.5">THROUGHPUT</text>
+          <text x="55" y="304" fill="#00ff80" font-family="Arial, sans-serif" font-size="23" font-weight="700" filter="url(#glowGreen)">48M</text>
+          <text x="102" y="304" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11">shots/s</text>
+          <text x="55" y="334" fill="#67f0a9" font-family="Arial, sans-serif" font-size="10">rank 0-4</text>
+          <!-- Tier 2 -->
+          <rect x="222" y="116" width="216" height="31" rx="9" fill="#ff8800" fill-opacity="0.22"/>
+          <text x="330" y="136" fill="#ffb35c" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Tier 2: Shared Memory</text>
+          <text x="237" y="165" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">LDS: 64KB/CU</text>
+          <rect x="237" y="178" width="186" height="49" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#ff8800" stroke-opacity="0.75"/>
+          <text x="330" y="198" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">v[1024]</text>
+          <text x="330" y="216" fill="#cfd3df" font-family="Arial, sans-serif" font-size="10.5" text-anchor="middle">amplitude array (8KB)</text>
+          <text x="237" y="247" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">256 threads cooperate</text>
+          <text x="237" y="261" fill="#dfe3ed" font-family="monospace" font-size="9.5">__syncthreads barriers</text>
+          <text x="237" y="285" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" letter-spacing="0.5">THROUGHPUT</text>
+          <text x="237" y="311" fill="#ff9d2e" font-family="Arial, sans-serif" font-size="23" font-weight="700" filter="url(#glowOrange)">5.6M</text>
+          <text x="291" y="311" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11">shots/s</text>
+          <text x="237" y="334" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10">rank 5-10</text>
+          <!-- Tier 3 -->
+          <rect x="449" y="116" width="311" height="31" rx="9" fill="#cc2222" fill-opacity="0.27"/>
+          <text x="604.5" y="136" fill="#ff7777" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Tier 3: HBM Global Memory</text>
+          <text x="464" y="165" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">HBM: 192GB</text>
+          <rect x="464" y="178" width="281" height="49" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#cc2222" stroke-opacity="0.85"/>
+          <text x="604.5" y="198" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">v[524288]</text>
+          <text x="604.5" y="216" fill="#cfd3df" font-family="Arial, sans-serif" font-size="10.5" text-anchor="middle">amplitude array (4MB)</text>
+          <text x="464" y="247" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">1 block = 1 shot - persistent kernel</text>
+          <rect x="625" y="237" width="120" height="22" rx="11" fill="#cc2222" fill-opacity="0.25" stroke="#ef5555" stroke-opacity="0.8"/>
+          <text x="685" y="252" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">5.3 TB/s ceiling</text>
+          <text x="464" y="285" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" letter-spacing="0.5">THROUGHPUT</text>
+          <text x="464" y="311" fill="#ff5555" font-family="Arial, sans-serif" font-size="23" font-weight="700" filter="url(#glowRed)">145K</text>
+          <text x="522" y="311" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11">shots/s</text>
+          <text x="464" y="334" fill="#ff7777" font-family="Arial, sans-serif" font-size="10">rank 11-19</text>
+          <!-- Performance cliff staircase -->
+          <path d="M160 289 H215 V316 H442 V340 H727" fill="none" stroke="#f5f5f7" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>
+          <circle cx="160" cy="289" r="4" fill="#00cc66"/>
+          <circle cx="442" cy="316" r="4" fill="#ff8800"/>
+          <path d="M727 340 l-10 -5 v10 z" fill="#cc2222"/>
+          <rect x="165" y="270" width="112" height="17" rx="8.5" fill="#0d0d1a" stroke="#ffffff" stroke-opacity="0.16"/>
+          <text x="221" y="282" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">48M - 5.6M - 8.6x cliff</text>
+          <rect x="419" y="294" width="132" height="17" rx="8.5" fill="#0d0d1a" stroke="#ffffff" stroke-opacity="0.16"/>
+          <text x="485" y="306" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">5.6M - 145K - 38x cliff</text>
+          <rect x="610" y="319" width="135" height="17" rx="8.5" fill="#cc2222" fill-opacity="0.34" stroke="#ff6666" stroke-opacity="0.65"/>
+          <text x="677.5" y="331" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">330x total performance range</text>
+          <!-- Array size scale -->
+          <text x="40" y="379" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">AMPLITUDE ARRAY SCALE</text>
+          <rect x="187" y="365" width="58" height="23" rx="5" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66"/>
+          <text x="216" y="380.5" fill="#8ff7bf" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">128B</text>
+          <line x1="252" y1="376.5" x2="320" y2="376.5" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreenM)"/>
+          <rect x="329" y="365" width="58" height="23" rx="5" fill="#ff8800" fill-opacity="0.14" stroke="#ff8800"/>
+          <text x="358" y="380.5" fill="#ffc175" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">8KB</text>
+          <line x1="394" y1="376.5" x2="462" y2="376.5" stroke="#ff8800" stroke-width="1.5" marker-end="url(#arrowOrangeM)"/>
+          <rect x="471" y="365" width="62" height="23" rx="5" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222"/>
+          <text x="502" y="380.5" fill="#ff8e8e" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">4MB</text>
+          <line x1="540" y1="376.5" x2="597" y2="376.5" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRedM)"/>
+          <text x="610" y="380" fill="#cfd3df" font-family="Arial, sans-serif" font-size="10">32,768x growth</text>
+          <!-- Memory hierarchy labels -->
+          <g font-family="Arial, sans-serif" font-size="9" text-anchor="middle">
+            <text x="125" y="406" fill="#67f0a9">PRIVATE - ON-CHIP</text>
+            <text x="330" y="406" fill="#ffb35c">WORKGROUP - ON-CHIP</text>
+            <text x="605" y="406" fill="#ff7777">DEVICE - OFF-CHIP</text>
+          </g>
+          <line x1="67" y1="414" x2="183" y2="414" stroke="#00cc66" stroke-width="2"/>
+          <line x1="265" y1="414" x2="395" y2="414" stroke="#ff8800" stroke-width="2"/>
+          <line x1="527" y1="414" x2="683" y2="414" stroke="#cc2222" stroke-width="2"/>
+          <!-- Footer -->
+          <rect x="0" y="434" width="800" height="66" fill="#0d0d1a"/>
+          <line x1="0" y1="434" x2="800" y2="434" stroke="#69708a" stroke-opacity="0.45"/>
+          <text x="400" y="454" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1.2" text-anchor="middle">AMD INSTINCT MI300X HARDWARE</text>
+          <g fill="#ffffff" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">
+            <text x="80" y="480">304 CUs</text>
+            <text x="237" y="480">512 VGPRs/SIMD</text>
+            <text x="400" y="480">64KB LDS/CU</text>
+            <text x="556" y="480">192GB HBM3</text>
+            <text x="716" y="480">5.3 TB/s</text>
+          </g>
+          <g stroke="#4c5369" stroke-width="1">
+            <line x1="155" y1="465" x2="155" y2="486"/><line x1="319" y1="465" x2="319" y2="486"/>
+            <line x1="480" y1="465" x2="480" y2="486"/><line x1="636" y1="465" x2="636" y2="486"/>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 7: AMD MI300X Hardware -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>AMD MI300X Hardware</h2>
+      <div style="text-align:center;">
+        <svg width="800" height="500" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:750px;">
+          <defs>
+            <marker id="arrowGX" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4" fill="none" stroke="#00ff88" stroke-width="0.8"/></marker>
+            <marker id="arrowRX" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4" fill="none" stroke="#ff4444" stroke-width="0.8"/></marker>
+            <marker id="arrowOX" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4" fill="none" stroke="#ff9944" stroke-width="0.8"/></marker>
+          </defs>
+          <rect width="800" height="500" fill="#1a1a2e"/>
+          <text x="400" y="28" text-anchor="middle" font-family="monospace" font-size="16" font-weight="bold" fill="#e0e0ff">MI300X GPU Architecture -- clifft Relevance</text>
+          <text x="400" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="#8888bb">gfx942 ISA - CDNA3 Architecture - 304 CUs total - 512 VGPRs/SIMD - 64KB LDS/CU</text>
+          <!-- XCD Chiplet Layout -->
+          <text x="10" y="72" font-family="monospace" font-size="11" font-weight="bold" fill="#00e5ff">[ XCD Chiplet Layout -- 8 XCDs in 2x4 grid ]</text>
+          <!-- Row 0: XCDs 0-3 -->
+          <rect x="10"  y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="51"  y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 0</text>
+          <text x="51"  y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <text x="51"  y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+          <rect x="100" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="141" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 1</text>
+          <text x="141" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <text x="141" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+          <rect x="190" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="231" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 2</text>
+          <text x="231" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <text x="231" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+          <rect x="280" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="321" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 3</text>
+          <text x="321" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <text x="321" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+          <!-- Row 1: XCDs 4-7 -->
+          <rect x="10"  y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="51"  y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 4</text>
+          <text x="51"  y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <rect x="100" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="141" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 5</text>
+          <text x="141" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <rect x="190" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="231" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 6</text>
+          <text x="231" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <rect x="280" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+          <text x="321" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 7</text>
+          <text x="321" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+          <!-- Interconnect arrows -->
+          <line x1="92"  y1="106" x2="100" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowGX)"/>
+          <line x1="182" y1="106" x2="190" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowGX)"/>
+          <line x1="272" y1="106" x2="280" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowGX)"/>
+          <line x1="51"  y1="132" x2="51"  y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowRX)"/>
+          <line x1="141" y1="132" x2="141" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowRX)"/>
+          <line x1="231" y1="132" x2="231" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowRX)"/>
+          <line x1="321" y1="132" x2="321" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowRX)"/>
+          <!-- Latency legend -->
+          <rect x="10" y="198" width="355" height="18" rx="3" fill="#0a1520"/>
+          <text x="15"  y="211" font-family="monospace" font-size="8.5" fill="#00ff88">Same XCD: 116 ns</text>
+          <text x="135" y="211" font-family="monospace" font-size="8.5" fill="#ff4444">Cross XCD: 202 ns</text>
+          <text x="258" y="211" font-family="monospace" font-size="8.5" fill="#ffaa00">8 XCDs x 38 CUs</text>
+          <!-- Memory Hierarchy -->
+          <text x="382" y="72" font-family="monospace" font-size="11" font-weight="bold" fill="#ff9944">[ Memory Hierarchy ]</text>
+          <rect x="382" y="80" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ff6600" stroke-width="1.5"/>
+          <text x="388" y="94"  font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">VGPRs</text>
+          <text x="388" y="108" font-family="monospace" font-size="8" fill="#ffcc88">512 / SIMD  -  4 waves @ 128 VGPRs</text>
+          <line x1="478" y1="116" x2="478" y2="126" stroke="#ff9944" stroke-width="1.2" marker-end="url(#arrowOX)"/>
+          <rect x="382" y="126" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ff9944" stroke-width="1.5"/>
+          <text x="388" y="140" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">LDS</text>
+          <text x="388" y="154" font-family="monospace" font-size="8" fill="#ffcc88">64 KB / CU  -  shared within workgroup</text>
+          <line x1="478" y1="162" x2="478" y2="172" stroke="#ff9944" stroke-width="1.2" marker-end="url(#arrowOX)"/>
+          <rect x="382" y="172" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ffaa44" stroke-width="1.5"/>
+          <text x="388" y="186" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">L2 Cache</text>
+          <text x="388" y="200" font-family="monospace" font-size="8" fill="#ffcc88">Per-XCD  -  ~8 MB  -  8 instances</text>
+          <line x1="478" y1="208" x2="478" y2="218" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowRX)"/>
+          <rect x="382" y="218" width="192" height="36" rx="4" fill="#1a0005" stroke="#ff4444" stroke-width="1.5"/>
+          <text x="388" y="232" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff6666">HBM3</text>
+          <text x="388" y="246" font-family="monospace" font-size="8" fill="#ffaaaa">192 GB  -  5.3 TB/s aggregate</text>
+          <!-- Wavefront diagram -->
+          <text x="10" y="232" font-family="monospace" font-size="11" font-weight="bold" fill="#00e5ff">[ Wavefront -- 64 threads / wave ]</text>
+          <g fill="#00e5ff" opacity="0.85">
+            <rect x="10"  y="240" width="10" height="10" rx="1"/><rect x="22"  y="240" width="10" height="10" rx="1"/><rect x="34"  y="240" width="10" height="10" rx="1"/><rect x="46"  y="240" width="10" height="10" rx="1"/>
+            <rect x="58"  y="240" width="10" height="10" rx="1"/><rect x="70"  y="240" width="10" height="10" rx="1"/><rect x="82"  y="240" width="10" height="10" rx="1"/><rect x="94"  y="240" width="10" height="10" rx="1"/>
+            <rect x="10"  y="252" width="10" height="10" rx="1"/><rect x="22"  y="252" width="10" height="10" rx="1"/><rect x="34"  y="252" width="10" height="10" rx="1"/><rect x="46"  y="252" width="10" height="10" rx="1"/>
+            <rect x="58"  y="252" width="10" height="10" rx="1"/><rect x="70"  y="252" width="10" height="10" rx="1"/><rect x="82"  y="252" width="10" height="10" rx="1"/><rect x="94"  y="252" width="10" height="10" rx="1"/>
+            <rect x="10"  y="264" width="10" height="10" rx="1"/><rect x="22"  y="264" width="10" height="10" rx="1"/><rect x="34"  y="264" width="10" height="10" rx="1"/><rect x="46"  y="264" width="10" height="10" rx="1"/>
+            <rect x="58"  y="264" width="10" height="10" rx="1"/><rect x="70"  y="264" width="10" height="10" rx="1"/><rect x="82"  y="264" width="10" height="10" rx="1"/><rect x="94"  y="264" width="10" height="10" rx="1"/>
+            <rect x="10"  y="276" width="10" height="10" rx="1"/><rect x="22"  y="276" width="10" height="10" rx="1"/><rect x="34"  y="276" width="10" height="10" rx="1"/><rect x="46"  y="276" width="10" height="10" rx="1"/>
+            <rect x="58"  y="276" width="10" height="10" rx="1"/><rect x="70"  y="276" width="10" height="10" rx="1"/><rect x="82"  y="276" width="10" height="10" rx="1"/><rect x="94"  y="276" width="10" height="10" rx="1"/>
+          </g>
+          <g fill="#44bbff" opacity="0.85">
+            <rect x="10"  y="288" width="10" height="10" rx="1"/><rect x="22"  y="288" width="10" height="10" rx="1"/><rect x="34"  y="288" width="10" height="10" rx="1"/><rect x="46"  y="288" width="10" height="10" rx="1"/>
+            <rect x="58"  y="288" width="10" height="10" rx="1"/><rect x="70"  y="288" width="10" height="10" rx="1"/><rect x="82"  y="288" width="10" height="10" rx="1"/><rect x="94"  y="288" width="10" height="10" rx="1"/>
+            <rect x="10"  y="300" width="10" height="10" rx="1"/><rect x="22"  y="300" width="10" height="10" rx="1"/><rect x="34"  y="300" width="10" height="10" rx="1"/><rect x="46"  y="300" width="10" height="10" rx="1"/>
+            <rect x="58"  y="300" width="10" height="10" rx="1"/><rect x="70"  y="300" width="10" height="10" rx="1"/><rect x="82"  y="300" width="10" height="10" rx="1"/><rect x="94"  y="300" width="10" height="10" rx="1"/>
+            <rect x="10"  y="312" width="10" height="10" rx="1"/><rect x="22"  y="312" width="10" height="10" rx="1"/><rect x="34"  y="312" width="10" height="10" rx="1"/><rect x="46"  y="312" width="10" height="10" rx="1"/>
+            <rect x="58"  y="312" width="10" height="10" rx="1"/><rect x="70"  y="312" width="10" height="10" rx="1"/><rect x="82"  y="312" width="10" height="10" rx="1"/><rect x="94"  y="312" width="10" height="10" rx="1"/>
+            <rect x="10"  y="324" width="10" height="10" rx="1"/><rect x="22"  y="324" width="10" height="10" rx="1"/><rect x="34"  y="324" width="10" height="10" rx="1"/><rect x="46"  y="324" width="10" height="10" rx="1"/>
+            <rect x="58"  y="324" width="10" height="10" rx="1"/><rect x="70"  y="324" width="10" height="10" rx="1"/><rect x="82"  y="324" width="10" height="10" rx="1"/><rect x="94"  y="324" width="10" height="10" rx="1"/>
+          </g>
+          <!-- __shfl_xor arcs -->
+          <path d="M15 240 Q35 229 55 240" stroke="#00ff88" fill="none" stroke-width="1.2" stroke-dasharray="2,2"/>
+          <path d="M67 240 Q87 229 99 240" stroke="#00ff88" fill="none" stroke-width="1.2" stroke-dasharray="2,2"/>
+          <text x="112" y="252" font-family="monospace" font-size="8.5" fill="#00e5ff">64 threads execute same</text>
+          <text x="112" y="264" font-family="monospace" font-size="8.5" fill="#00e5ff">instruction (SIMT)</text>
+          <text x="112" y="280" font-family="monospace" font-size="8.5" fill="#00ff88">__shfl_xor: intra-wave register</text>
+          <text x="112" y="292" font-family="monospace" font-size="8.5" fill="#00ff88">swap -- no barriers needed</text>
+          <text x="112" y="310" font-family="monospace" font-size="8" fill="#8888bb">T0-T31  (wave half 0)</text>
+          <text x="112" y="322" font-family="monospace" font-size="8" fill="#6688aa">T32-T63 (wave half 1)</text>
+          <!-- clifft relevance panel -->
+          <rect x="10" y="346" width="780" height="58" rx="5" fill="#0a0f1a" stroke="#555577" stroke-width="1"/>
+          <text x="20" y="362" font-family="monospace" font-size="9.5" font-weight="bold" fill="#e0e0ff">clifft relevance on MI300X</text>
+          <text x="20" y="376" font-family="monospace" font-size="8.5" fill="#88ccff">Keep gate kernels XCD-local -- avoid 202 ns cross-XCD penalty</text>
+          <text x="20" y="388" font-family="monospace" font-size="8.5" fill="#88ccff">Pack amplitudes in VGPRs (512/SIMD) -- minimize LDS spills; butterfly ops stay register-resident</text>
+          <text x="20" y="400" font-family="monospace" font-size="8.5" fill="#88ccff">Use LDS (64 KB/CU) for sub-warp amplitude sharing; __shfl_xor for intra-wavefront reductions (no barrier)</text>
+          <!-- Legend -->
+          <rect x="10" y="412" width="780" height="78" rx="5" fill="#080c18" stroke="#333355" stroke-width="1"/>
+          <text x="20" y="428" font-family="monospace" font-size="9.5" font-weight="bold" fill="#e0e0ff">Legend</text>
+          <rect x="20"  y="436" width="14" height="10" rx="2" fill="#00e5ff"/>
+          <text x="38"  y="446" font-family="monospace" font-size="8.5" fill="#00e5ff">Compute (XCDs / SIMT threads)</text>
+          <rect x="230" y="436" width="14" height="10" rx="2" fill="#ff9944"/>
+          <text x="248" y="446" font-family="monospace" font-size="8.5" fill="#ff9944">Memory hierarchy (VGPR - LDS - L2 - HBM3)</text>
+          <line x1="20"  y1="463" x2="48"  y2="463" stroke="#00ff88" stroke-width="2"/>
+          <text x="52"  y="467" font-family="monospace" font-size="8.5" fill="#00ff88">Fast path / same-XCD (116 ns) / __shfl_xor (barrier-free)</text>
+          <line x1="390" y1="463" x2="418" y2="463" stroke="#ff4444" stroke-width="2" stroke-dasharray="4,2"/>
+          <text x="422" y="467" font-family="monospace" font-size="8.5" fill="#ff4444">Bottleneck / cross-XCD (202 ns) / HBM3 access</text>
+          <rect x="20" y="474" width="148" height="12" rx="3" fill="#1a1a00" stroke="#ffaa00" stroke-width="1"/>
+          <text x="94" y="484" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffcc44">gfx942 - CDNA3 - 304 CUs total</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 8: Section Divider — Approach A -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">3</div>
+      <h1>Approach A: Compiled Megakernel</h1>
+      <div class="section-sub">+5–18% per-thread tier gain</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 9: Compiled Megakernel Pipeline -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Compiled Megakernel Pipeline</h2>
+      <div style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" style="width:100%;max-width:750px;">
+          <rect width="800" height="600" fill="#1a1a2e"/>
+          <text x="400" y="22" fill="#80deea" font-family="Arial,sans-serif" font-size="14" font-weight="700" text-anchor="middle">Compiled Megakernel Pipeline — Approach A</text>
+          <!-- Pipeline flow -->
+          <rect x="10" y="40" width="110" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="65" y="62" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="11" font-weight="700" text-anchor="middle">Stim Circuit</text>
+          <text x="65" y="78" fill="#b0bec5" font-family="monospace" font-size="9" text-anchor="middle">.stim file</text>
+          <line x1="120" y1="65" x2="150" y2="65" stroke="#00bcd4" stroke-width="2" marker-end="url(#arr1)"/>
+          <rect x="150" y="40" width="110" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="205" y="62" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="11" font-weight="700" text-anchor="middle">Bytecode</text>
+          <text x="205" y="78" fill="#b0bec5" font-family="monospace" font-size="9" text-anchor="middle">OP_H, OP_CNOT...</text>
+          <line x1="260" y1="65" x2="290" y2="65" stroke="#00bcd4" stroke-width="2" marker-end="url(#arr1)"/>
+          <rect x="290" y="40" width="130" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="355" y="60" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">Host-side</text>
+          <text x="355" y="73" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">Code Generator</text>
+          <text x="355" y="85" fill="#b0bec5" font-family="monospace" font-size="8" text-anchor="middle">kernel_codegen.cc</text>
+          <line x1="420" y1="65" x2="450" y2="65" stroke="#00bcd4" stroke-width="2" marker-end="url(#arr1)"/>
+          <rect x="450" y="40" width="140" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="520" y="60" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">Generated HIP</text>
+          <text x="520" y="73" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">Source (.cpp)</text>
+          <text x="520" y="85" fill="#b0bec5" font-family="monospace" font-size="8" text-anchor="middle">straight-line code</text>
+          <line x1="590" y1="65" x2="620" y2="65" stroke="#00bcd4" stroke-width="2" marker-end="url(#arr1)"/>
+          <rect x="620" y="40" width="110" height="50" rx="8" fill="#173b34" stroke="#4caf50" stroke-width="2"/>
+          <text x="675" y="62" fill="#4caf50" font-family="Arial,sans-serif" font-size="11" font-weight="700" text-anchor="middle">clang++ -O3</text>
+          <text x="675" y="78" fill="#b0bec5" font-family="monospace" font-size="9" text-anchor="middle">--offload-arch=gfx942</text>
+          <!-- HIPRTC crossed out -->
+          <rect x="480" y="105" width="90" height="30" rx="6" fill="#321e2d" stroke="#f44336" stroke-width="1.7"/>
+          <text x="525" y="124" fill="#f44336" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">HIPRTC: -14%</text>
+          <line x1="480" y1="105" x2="570" y2="135" stroke="#f44336" stroke-width="2"/>
+          <line x1="570" y1="105" x2="480" y2="135" stroke="#f44336" stroke-width="2"/>
+          <!-- Arrow down -->
+          <line x1="675" y1="90" x2="675" y2="120" stroke="#4caf50" stroke-width="2" marker-end="url(#arr2)"/>
+          <rect x="620" y="120" width="110" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="675" y="142" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">.hsaco binary</text>
+          <text x="675" y="158" fill="#4caf50" font-family="monospace" font-size="9" text-anchor="middle">disk cached</text>
+          <line x1="675" y1="170" x2="675" y2="200" stroke="#00bcd4" stroke-width="2" marker-end="url(#arr1)"/>
+          <rect x="610" y="200" width="130" height="50" rx="8" fill="#202443" stroke="#00bcd4" stroke-width="1.8"/>
+          <text x="675" y="222" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">hipModuleLaunch</text>
+          <text x="675" y="237" fill="#e0e0e0" font-family="Arial,sans-serif" font-size="10" font-weight="700" text-anchor="middle">Kernel()</text>
+          <!-- Result box -->
+          <rect x="10" y="270" width="580" height="70" rx="10" fill="#17342f" stroke="#4caf50" stroke-width="2"/>
+          <text x="300" y="295" fill="#4caf50" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">Result: Only 8 of 35 handlers compiled into binary</text>
+          <text x="300" y="318" fill="#e0e0e0" font-family="monospace" font-size="12" text-anchor="middle">VGPRs: 84 → 60–72  ·  Throughput: +5–18%</text>
+          <defs>
+            <marker id="arr1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#00bcd4"/></marker>
+            <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#4caf50"/></marker>
+          </defs>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 10: A: Before vs After — Code -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>A: Before vs After — Code</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <h4>SVM: switch dispatch</h4>
+          <pre><code class="language-cpp">switch (opcode) {
+    case OP_FRAME_CNOT:
+        // px, pz bit manipulation
+        break;
+    case OP_EXPAND_T:
+        // v[] array expansion
+        break;
+    // ... 35 total handlers
+    // ALL compiled into binary
+    // =&gt; 108 VGPRs
+}</code></pre>
+        </div>
+        <div class="card card-success">
+          <h4>Compiled: straight-line</h4>
+          <pre><code class="language-cpp">// Instruction 0: FRAME_CNOT(3,7)
+px[0] ^= (uint64_t(px_c) &lt;&lt; 7);
+// Instruction 1: EXPAND_T(axis=0)
+v[half] = v[0] * 0.707...;
+// Constants baked in
+// Only used handlers emitted
+// =&gt; 60-72 VGPRs</code></pre>
+        </div>
+      </div>
+      <div class="insight">Template specialization: only emit handlers that appear in the circuit — unused opcodes produce zero code</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 11: A: HIPRTC vs AOT Compilation -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>A: HIPRTC vs AOT Compilation</h2>
+      <div class="grid-2" style="margin-bottom:0.6em;">
+        <div class="card card-accent">
+          <h4>HIPRTC JIT</h4>
+          <ul>
+            <li>Invoked at runtime</li>
+            <li>Fewer optimization passes</li>
+            <li>−14% throughput vs AOT</li>
+            <li>No disk caching benefit</li>
+          </ul>
+        </div>
+        <div class="card card-success">
+          <h4>AOT: clang++ subprocess</h4>
+          <ul>
+            <li>Full <code>-O3</code> passes</li>
+            <li>Disk-cached <code>.hsaco</code> binary</li>
+            <li>Reused on subsequent runs</li>
+            <li>Correct choice</li>
+          </ul>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>T-gates</th>
+            <th>depth</th>
+            <th>SVM (shots/s)</th>
+            <th>Compiled</th>
+            <th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>0</td><td>3</td><td>10.2M</td><td>10.4M</td><td>+1.4%</td>
+          </tr>
+          <tr>
+            <td>2</td><td>5</td><td>9.77M</td><td>11.5M</td><td>+17.7%</td>
+          </tr>
+          <tr>
+            <td>3</td><td>5</td><td>10.3M</td><td>11.6M</td><td>+12.6%</td>
+          </tr>
+          <tr>
+            <td>5</td><td>3</td><td>10.4M</td><td>11.3M</td><td>+8.8%</td>
+          </tr>
+          <tr>
+            <td>8</td><td>5</td><td>10.4M</td><td>11.5M</td><td>+11.2%</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 12: A: T-Gate Sweep Results -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>A: T-Gate Sweep Results</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>T-gates</th>
+            <th>depth</th>
+            <th>SVM (shots/s)</th>
+            <th>Compiled (shots/s)</th>
+            <th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>0</td><td>3</td><td>10.2M</td><td>10.4M</td><td>+1.4%</td>
+          </tr>
+          <tr style="background:rgba(78,201,176,0.1);">
+            <td><strong>2</strong></td><td><strong>5</strong></td><td>9.77M</td><td><strong>11.5M</strong></td><td><strong>+17.7%</strong></td>
+          </tr>
+          <tr style="background:rgba(78,201,176,0.1);">
+            <td><strong>3</strong></td><td><strong>5</strong></td><td>10.3M</td><td><strong>11.6M</strong></td><td><strong>+12.6%</strong></td>
+          </tr>
+          <tr>
+            <td>5</td><td>3</td><td>10.4M</td><td>11.3M</td><td>+8.8%</td>
+          </tr>
+          <tr style="background:rgba(78,201,176,0.1);">
+            <td><strong>8</strong></td><td><strong>5</strong></td><td>10.4M</td><td><strong>11.5M</strong></td><td><strong>+11.2%</strong></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="insight">Gains are larger for deeper circuits with more T-gates — the compiled approach eliminates more dead code when fewer handlers are needed</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 13: Section Divider — Approaches B + C -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">4</div>
+      <h1>Approaches B + C</h1>
+      <div class="section-sub">Per-Op Kernels and HipGraph</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 14: B + C: Both Failed -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>B: Per-Op + C: HipGraph — Both Failed</h2>
+      <div style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" style="width:100%;max-width:750px;" role="img">
+          <rect width="800" height="500" fill="#1a1a2e"/>
+          <line x1="400" y1="20" x2="400" y2="397" stroke="#666679" stroke-width="1.2"/>
+          <text x="24" y="31" fill="#f0a500" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">Approach B: Per-Op Kernels (-9% coop)</text>
+          <rect x="36" y="53" width="154" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="113" y="71" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_FRAME_CNOT</text>
+          <line x1="113" y1="80" x2="113" y2="100" stroke="#9696a8" stroke-width="1.5"/>
+          <text x="127" y="91" fill="#aaaaba" font-family="monospace" font-size="9.5">Global Memory</text>
+          <text x="127" y="101" fill="#aaaaba" font-family="monospace" font-size="9.5">(ShotState spill/reload)</text>
+          <rect x="36" y="106" width="154" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="113" y="124" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_FRAME_H</text>
+          <line x1="113" y1="133" x2="113" y2="153" stroke="#9696a8" stroke-width="1.5"/>
+          <text x="127" y="144" fill="#aaaaba" font-family="monospace" font-size="9.5">Global Memory</text>
+          <text x="127" y="154" fill="#aaaaba" font-family="monospace" font-size="9.5">(ShotState spill/reload)</text>
+          <rect x="36" y="159" width="154" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="113" y="177" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_EXPAND</text>
+          <line x1="113" y1="186" x2="113" y2="206" stroke="#9696a8" stroke-width="1.5"/>
+          <text x="127" y="197" fill="#aaaaba" font-family="monospace" font-size="9.5">Global Memory</text>
+          <text x="127" y="207" fill="#aaaaba" font-family="monospace" font-size="9.5">(ShotState spill/reload)</text>
+          <rect x="36" y="212" width="154" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="113" y="230" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_MEAS</text>
+          <text x="24" y="318" fill="#ff5c67" font-family="monospace" font-size="11" font-weight="700">State serialization: 2.4KB per op dominates</text>
+          <circle cx="37" cy="339" r="11" fill="#ff5c67"/>
+          <path d="M32 334 L42 344 M42 334 L32 344" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+          <text x="54" y="344" fill="#ff5c67" font-family="Inter,Arial,sans-serif" font-size="11">State serialization 2.4KB per op per shot</text>
+          <text x="54" y="359" fill="#ff5c67" font-family="Inter,Arial,sans-serif" font-size="11">dominates — inverts bandwidth bottleneck</text>
+          <text x="420" y="31" fill="#f0a500" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700">Approach C: HipGraph (-1% thread, +1% coop)</text>
+          <rect x="420" y="46" width="356" height="261" rx="8" fill="none" stroke="#5194e2" stroke-width="1.8" stroke-dasharray="7 5"/>
+          <text x="442" y="51" fill="#76adf0" font-family="monospace" font-size="11.5" font-weight="700">hipGraph_t DAG</text>
+          <rect x="443" y="64" width="142" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="514" y="82" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_FRAME_CNOT</text>
+          <line x1="514" y1="91" x2="514" y2="106" stroke="#9696a8" stroke-width="1.5"/>
+          <rect x="443" y="111" width="142" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="514" y="129" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_FRAME_H</text>
+          <line x1="514" y1="138" x2="514" y2="153" stroke="#9696a8" stroke-width="1.5"/>
+          <rect x="443" y="158" width="142" height="27" fill="#202438" stroke="#43c77b" stroke-width="1.8" rx="5"/>
+          <text x="514" y="176" fill="#f4f4f7" font-family="monospace" font-size="12" font-weight="700" text-anchor="middle">K_MEAS</text>
+          <rect x="603" y="93" width="155" height="42" rx="6" fill="#20372f" stroke="#43c77b" stroke-width="1.8"/>
+          <text x="680" y="114" fill="#f4f4f7" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">hipGraphLaunch()</text>
+          <circle cx="433" cy="339" r="11" fill="#ff5c67"/>
+          <path d="M428 334 L438 344 M438 334 L428 344" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+          <text x="450" y="344" fill="#ff5c67" font-family="Inter,Arial,sans-serif" font-size="11">Same inter-kernel memory transfers as B</text>
+          <text x="420" y="374" fill="#aaaaba" font-family="Inter,Arial,sans-serif" font-size="10.5" font-style="italic">Optimizes launch overhead, but execution time is the real bottleneck</text>
+          <rect x="20" y="415" width="760" height="68" rx="8" fill="#351d29" stroke="#b93d4b" stroke-width="2"/>
+          <text x="400" y="444" fill="#ffffff" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" text-anchor="middle">Both approaches solve the wrong problem.</text>
+          <text x="400" y="466" fill="#f2f2f5" font-family="Inter,Arial,sans-serif" font-size="12.5" text-anchor="middle">The bottleneck is execution time (sync barriers, register pressure), not launch overhead.</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 15: B+C: Shared Lesson -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>B+C: Shared Lesson</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <h4>B: Per-Op Kernels</h4>
+          <ul>
+            <li>Each opcode is its own GPU kernel</li>
+            <li>State must serialize to global memory between ops</li>
+            <li>2.4 KB serialized per instruction per shot</li>
+            <li>Bandwidth replaces register pressure as bottleneck</li>
+            <li>Result: +2% thread, −9% coop</li>
+          </ul>
+        </div>
+        <div class="card card-accent">
+          <h4>C: HipGraph</h4>
+          <ul>
+            <li>Pre-recorded DAG of kernel launches</li>
+            <li>Single <code>hipGraphLaunch()</code> call</li>
+            <li>Reduces kernel launch overhead to near-zero</li>
+            <li>But execution time dominates — launch overhead was never the bottleneck</li>
+            <li>Result: −1% thread, +1% coop</li>
+          </ul>
+        </div>
+      </div>
+      <div class="insight">The bottleneck is sync barriers and register pressure, not launch overhead</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 16: Section Divider — Approach D -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">5</div>
+      <h1>Approach D: Heuristic Split</h1>
+      <div class="section-sub">k-aware circuit segmentation</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 17: D: Sawtooth Circuit Profile -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>D: Sawtooth Circuit Profile</h2>
+      <div style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" style="width:100%;max-width:750px;">
+          <rect width="800" height="480" fill="#1a1a2e"/>
+          <text x="14" y="22" font-family="monospace" font-size="11" fill="#64748b" font-weight="bold">ACTIVE-K PROFILE — sawtooth circuit</text>
+          <rect x="14" y="28" width="772" height="118" rx="4" fill="#0f172a" stroke="#1e3a5f" stroke-width="1"/>
+          <line x1="18" y1="135" x2="782" y2="135" stroke="#334155" stroke-width="1"/>
+          <!-- k=4 threshold -->
+          <line x1="18" y1="88" x2="782" y2="88" stroke="#4ade80" stroke-width="0.8" stroke-dasharray="5,4" opacity="0.5"/>
+          <text x="783" y="91" font-family="monospace" font-size="8" fill="#4ade80">k=4</text>
+          <!-- Sawtooth waveform -->
+          <polygon points="18,135 18,88 165,88 165,135" fill="#4ade80" opacity="0.07"/>
+          <polyline points="18,135 55,30 110,30 130,108 150,135 210,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+          <polygon points="210,135 210,30 420,30 420,135" fill="#fb923c" opacity="0.12"/>
+          <polyline points="210,135 210,30 420,30 420,135 460,135" stroke="#fb923c" stroke-width="2" fill="none"/>
+          <polygon points="460,135 460,88 610,88 610,135" fill="#4ade80" opacity="0.07"/>
+          <polyline points="460,135 500,30 560,30 580,108 610,135 660,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+          <polyline points="660,135 660,77 720,77 720,135 782,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+          <rect x="18" y="125" width="764" height="10" fill="#4ade80" opacity="0.08" rx="2"/>
+          <text x="400" y="133" font-family="monospace" font-size="8" fill="#4ade80" text-anchor="middle">75–85% of instructions execute at k=0</text>
+          <!-- Y-axis labels -->
+          <text x="8" y="33" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">10</text>
+          <text x="8" y="144" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">0</text>
+          <text x="400" y="160" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">instruction index →  active_k (non-Clifford rank)</text>
+
+          <!-- Segment dispatch -->
+          <text x="14" y="192" font-family="monospace" font-size="11" fill="#64748b" font-weight="bold">HEURISTIC SPLIT — SEGMENT DISPATCH</text>
+          <rect x="14" y="200" width="215" height="64" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="2"/>
+          <text x="121" y="220" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">SEGMENT 1  (k &le; 4)</text>
+          <text x="121" y="238" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle">Per-thread kernel</text>
+          <text x="121" y="256" font-family="monospace" font-size="10" fill="#a3e635" text-anchor="middle" font-weight="bold">48M shots/s</text>
+          <text x="233" y="232" font-family="monospace" font-size="14" fill="#94a3b8" text-anchor="middle">→</text>
+          <rect x="248" y="200" width="264" height="64" rx="6" fill="#431407" stroke="#fb923c" stroke-width="2"/>
+          <text x="380" y="220" font-family="monospace" font-size="10" fill="#fb923c" text-anchor="middle" font-weight="bold">SEGMENT 2  (k = 10)</text>
+          <text x="380" y="238" font-family="monospace" font-size="9" fill="#fdba74" text-anchor="middle">Cooperative kernel</text>
+          <text x="380" y="256" font-family="monospace" font-size="10" fill="#fbbf24" text-anchor="middle" font-weight="bold">5.6M shots/s</text>
+          <text x="520" y="232" font-family="monospace" font-size="14" fill="#94a3b8" text-anchor="middle">→</text>
+          <rect x="535" y="200" width="241" height="64" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="2"/>
+          <text x="655" y="220" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">SEGMENT 3  (k &le; 4)</text>
+          <text x="655" y="238" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle">Per-thread kernel</text>
+          <text x="655" y="256" font-family="monospace" font-size="10" fill="#a3e635" text-anchor="middle" font-weight="bold">48M shots/s</text>
+
+          <!-- Performance comparison -->
+          <rect x="14" y="290" width="370" height="80" rx="6" fill="#1c0a0a" stroke="#ef4444" stroke-width="1.5"/>
+          <text x="199" y="313" font-family="monospace" font-size="10" fill="#ef4444" text-anchor="middle" font-weight="bold">WITHOUT SPLIT — all at coop speed</text>
+          <text x="199" y="333" font-family="monospace" font-size="11" fill="#f87171" text-anchor="middle" font-weight="bold">5.6M shots/s</text>
+          <text x="199" y="352" font-family="monospace" font-size="9" fill="#9ca3af" text-anchor="middle">Slowest segment dictates throughput</text>
+          <text x="400" y="334" font-family="monospace" font-size="18" fill="#4ade80" text-anchor="middle">→</text>
+          <rect x="416" y="290" width="370" height="80" rx="6" fill="#022c22" stroke="#4ade80" stroke-width="1.5"/>
+          <text x="601" y="313" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">WITH HEURISTIC SPLIT</text>
+          <text x="601" y="333" font-family="monospace" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="bold">3–5x improvement (sawtooth circuits)</text>
+          <text x="601" y="352" font-family="monospace" font-size="9" fill="#9ca3af" text-anchor="middle">80% at 48M + 20% at 5.6M ≈ 38M eff.</text>
+
+          <!-- Caveat -->
+          <rect x="14" y="384" width="772" height="50" rx="5" fill="#0f1729" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="20" y="404" font-family="monospace" font-size="9" fill="#f59e0b" font-weight="bold">CAVEAT:</text>
+          <text x="72" y="404" font-family="monospace" font-size="9" fill="#cbd5e1">cultivation_d5 has NO sawtooth profile — sustains k=10 throughout the entire circuit.</text>
+          <text x="20" y="425" font-family="monospace" font-size="9" fill="#94a3b8">Heuristic split yields only +17% on target_qec (rank=0). True 3–5x gain requires sawtooth circuits with genuine low-k regions.</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 18: D: Results and Caveat -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>D: Results and Caveat</h2>
+      <div class="grid-2">
+        <div class="card card-success">
+          <h4>Actual Results</h4>
+          <ul>
+            <li>target_qec (rank=0): 48.9M → 50.4M (+3%)</li>
+            <li>Overhead reduction only: no sawtooth to exploit</li>
+            <li>Circuit splitting detection works correctly</li>
+          </ul>
+        </div>
+        <div class="card card-warn">
+          <h4>The Caveat</h4>
+          <ul>
+            <li>cultivation_d5 has NO sawtooth profile</li>
+            <li>Sustains k=10 throughout the entire circuit</li>
+            <li>Expected 3–5x improvement requires sawtooth</li>
+            <li>Only circuits with EXPAND→MEAS→EXPAND patterns benefit</li>
+          </ul>
+        </div>
+      </div>
+      <div class="insight">Test the hypothesis on the right circuit. The split is correct; the test circuit was wrong.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 19: Section Divider — Approach E -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">6</div>
+      <h1>Approach E: Persistent Kernel</h1>
+      <div class="section-sub">Phase-sorted dispatch + work-stealing</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 20: E: Persistent Kernel -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>E: Persistent Kernel</h2>
+      <div style="text-align:center;">
+        <svg width="800" height="380" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:750px;">
+          <rect width="800" height="380" fill="#1a1a2e"/>
+          <text x="400" y="18" font-family="monospace" font-size="11" fill="#7070aa" text-anchor="middle">MI300X · 304 CUs across 8 XCDs — Persistent Kernel stays resident</text>
+          <!-- XCDs row -->
+          <rect x="8" y="24" width="784" height="70" rx="6" fill="#1e1e3a" stroke="#3a3a6e" stroke-width="1"/>
+          <text x="400" y="85" font-family="monospace" font-size="9" fill="#44dd44" text-anchor="middle">Persistent kernel: workgroups stay resident on CUs — no re-launch overhead between shots</text>
+          <!-- 8 small XCD boxes -->
+          <rect x="16" y="30" width="88" height="48" rx="4" fill="#1a1a3e" stroke="#5050a0" stroke-width="1"/>
+          <text x="60" y="57" font-family="monospace" font-size="8" fill="#8888cc" text-anchor="middle">XCD 0-1 · 76 CUs</text>
+          <rect x="110" y="30" width="88" height="48" rx="4" fill="#1a1a3e" stroke="#5050a0" stroke-width="1"/>
+          <text x="154" y="57" font-family="monospace" font-size="8" fill="#8888cc" text-anchor="middle">XCD 2-3 · 76 CUs</text>
+          <rect x="204" y="30" width="88" height="48" rx="4" fill="#1a1a3e" stroke="#5050a0" stroke-width="1"/>
+          <text x="248" y="57" font-family="monospace" font-size="8" fill="#8888cc" text-anchor="middle">XCD 4-5 · 76 CUs</text>
+          <rect x="298" y="30" width="88" height="48" rx="4" fill="#1a1a3e" stroke="#5050a0" stroke-width="1"/>
+          <text x="342" y="57" font-family="monospace" font-size="8" fill="#8888cc" text-anchor="middle">XCD 6-7 · 76 CUs</text>
+          <!-- Phase boxes -->
+          <text x="14" y="120" font-family="monospace" font-size="11" fill="#7070aa" font-weight="bold">Phase-sorted dispatch (replaces 35-case switch → 6 phase types)</text>
+          <rect x="8" y="128" width="784" height="80" rx="6" fill="#1e1218" stroke="#5a3040" stroke-width="1"/>
+          <rect x="16" y="136" width="118" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="75" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">1. Frame</text>
+          <text x="75" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Clifford gates</text>
+          <text x="75" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">H, CNOT, S, T</text>
+          <rect x="142" y="136" width="118" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="201" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">2. Expand</text>
+          <text x="201" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Qubit activation</text>
+          <text x="201" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">state vector grow</text>
+          <rect x="268" y="136" width="118" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="327" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">3. Array</text>
+          <text x="327" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Unitary sweeps</text>
+          <text x="327" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">amplitude ops</text>
+          <rect x="394" y="136" width="118" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="453" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">4. Measure</text>
+          <text x="453" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Born-rule + collapse</text>
+          <text x="453" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">coop reduction</text>
+          <rect x="520" y="136" width="118" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="579" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">5. Noise</text>
+          <text x="579" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Error channels</text>
+          <text x="579" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">depolarize etc.</text>
+          <rect x="646" y="136" width="138" height="62" rx="4" fill="#2a1a00" stroke="#ff8c00" stroke-width="1.5"/>
+          <text x="715" y="158" font-family="monospace" font-size="9" fill="#ffa500" text-anchor="middle" font-weight="bold">6. Detector/Obs</text>
+          <text x="715" y="174" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">Syndrome extraction</text>
+          <text x="715" y="188" font-family="monospace" font-size="8" fill="#aa8844" text-anchor="middle">observable flip</text>
+          <!-- Work-stealing -->
+          <text x="14" y="235" font-family="monospace" font-size="11" fill="#7070aa" font-weight="bold">Work-stealing pattern</text>
+          <rect x="8" y="242" width="784" height="70" rx="6" fill="#120818" stroke="#5a2070" stroke-width="1"/>
+          <rect x="16" y="252" width="148" height="52" rx="4" fill="#1e0a2e" stroke="#a855f7" stroke-width="2"/>
+          <text x="90" y="274" font-family="monospace" font-size="9" fill="#c084fc" text-anchor="middle" font-weight="bold">Atomic Counter</text>
+          <text x="90" y="292" font-family="monospace" font-size="8" fill="#e879f9" text-anchor="middle">atomicAdd(work_counter)</text>
+          <rect x="180" y="252" width="270" height="52" rx="4" fill="#0e0a1e" stroke="#7c3aed" stroke-width="1.5"/>
+          <text x="315" y="272" font-family="monospace" font-size="9" fill="#c084fc" text-anchor="middle" font-weight="bold">Work-Stealing Flow</text>
+          <text x="315" y="288" font-family="monospace" font-size="8" fill="#a78bfa" text-anchor="middle">Block finishes shot → atomicAdd → next shot ID</text>
+          <text x="315" y="300" font-family="monospace" font-size="8" fill="#7c3aed" text-anchor="middle">Lock-free assignment — no barrier needed</text>
+          <rect x="466" y="252" width="140" height="52" rx="4" fill="#1a0808" stroke="#dc2626" stroke-width="2"/>
+          <text x="536" y="272" font-family="monospace" font-size="9" fill="#f87171" text-anchor="middle" font-weight="bold">Coop tier</text>
+          <text x="536" y="292" font-family="monospace" font-size="20" fill="#dc2626" text-anchor="middle" font-weight="bold">-3%</text>
+          <rect x="622" y="252" width="140" height="52" rx="4" fill="#0a1a0a" stroke="#16a34a" stroke-width="2"/>
+          <text x="692" y="272" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle" font-weight="bold">Thread tier</text>
+          <text x="692" y="292" font-family="monospace" font-size="20" fill="#16a34a" text-anchor="middle" font-weight="bold">+7%</text>
+          <!-- Bottom note -->
+          <rect x="8" y="324" width="784" height="46" rx="4" fill="#0a0a18" stroke="#333366" stroke-width="1"/>
+          <text x="400" y="352" font-family="monospace" font-size="9.5" fill="#9090cc" text-anchor="middle" font-style="italic">GPU branch predictor handles the 35-case switch well for regular circuits — phase-sorted dispatch adds overhead for coop</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 21: Section Divider — Approach F -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">7</div>
+      <h1>Approach F: Optimized SVM</h1>
+      <div class="section-sub">7 micro-optimizations, 0% improvement</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SLIDE 22: F: All 7 Optimizations Failed -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>F: All 7 Optimizations Failed</h2>
+      <div style="text-align:center;">
+        <svg width="800" height="400" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:750px;" font-family="monospace, 'Courier New', sans-serif">
+          <rect width="800" height="400" fill="#1a1a2e"/>
+          <text x="400" y="22" text-anchor="middle" fill="#ff6b6b" font-size="13" font-weight="bold">Approach F: 7 SVM Micro-Optimizations — 0% Improvement</text>
+          <rect x="200" y="30" width="400" height="18" rx="4" fill="#2a1a1a" stroke="#ff4444" stroke-width="1"/>
+          <text x="400" y="43" text-anchor="middle" fill="#ffaaaa" font-size="10">rocprof:  Baseline: 116.1ms  |  Optimized: 116.2ms  |  Delta: +0.04%</text>
+          <!-- Row 1: 4 cards -->
+          <rect x="10" y="55" width="183" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="101" y="72" text-anchor="middle" fill="#ff4444" font-size="11" font-weight="bold">Hot/Cold Split ❌</text>
+          <line x1="10" y1="78" x2="193" y2="78" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="101" y="92" text-anchor="middle" fill="#cc8888" font-size="9.5">HIP compiler already</text>
+          <text x="101" y="106" text-anchor="middle" fill="#cc8888" font-size="9.5">does this</text>
+          <rect x="203" y="55" width="183" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="294" y="72" text-anchor="middle" fill="#ff4444" font-size="11" font-weight="bold">Frame Batching ❌</text>
+          <line x1="203" y1="78" x2="386" y2="78" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="294" y="92" text-anchor="middle" fill="#cc8888" font-size="9.5">Compiler already</text>
+          <text x="294" y="106" text-anchor="middle" fill="#cc8888" font-size="9.5">schedules this</text>
+          <rect x="396" y="55" width="183" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="487" y="72" text-anchor="middle" fill="#ff4444" font-size="10" font-weight="bold">__launch_bounds__ ❌</text>
+          <line x1="396" y1="78" x2="579" y2="78" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="487" y="92" text-anchor="middle" fill="#cc8888" font-size="9.5">Default already</text>
+          <text x="487" y="106" text-anchor="middle" fill="#cc8888" font-size="9.5">optimal</text>
+          <rect x="589" y="55" width="201" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="689" y="72" text-anchor="middle" fill="#ff4444" font-size="11" font-weight="bold">Instr. Prefetch ❌</text>
+          <line x1="589" y1="78" x2="790" y2="78" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="689" y="92" text-anchor="middle" fill="#cc8888" font-size="9.5">Hardware prefetcher</text>
+          <text x="689" y="106" text-anchor="middle" fill="#cc8888" font-size="9.5">handles it</text>
+          <!-- Row 2: 3 cards -->
+          <rect x="107" y="132" width="193" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="203" y="149" text-anchor="middle" fill="#ff4444" font-size="10" font-weight="bold">meas[] Reduction ❌</text>
+          <line x1="107" y1="155" x2="300" y2="155" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="203" y="169" text-anchor="middle" fill="#cc8888" font-size="9.5">Page-granular</text>
+          <text x="203" y="183" text-anchor="middle" fill="#cc8888" font-size="9.5">allocation</text>
+          <rect x="310" y="132" width="193" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="406" y="149" text-anchor="middle" fill="#ff4444" font-size="10" font-weight="bold">Compact px/pz ❌</text>
+          <line x1="310" y1="155" x2="503" y2="155" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="406" y="169" text-anchor="middle" fill="#cc8888" font-size="9.5">No measurable</text>
+          <text x="406" y="183" text-anchor="middle" fill="#cc8888" font-size="9.5">effect</text>
+          <rect x="513" y="132" width="193" height="68" rx="6" fill="#2a0a0a" stroke="#cc2222" stroke-width="1.5"/>
+          <text x="609" y="149" text-anchor="middle" fill="#ff4444" font-size="10" font-weight="bold">__noinline__ cold ❌</text>
+          <line x1="513" y1="155" x2="706" y2="155" stroke="#cc2222" stroke-width="0.8"/>
+          <text x="609" y="169" text-anchor="middle" fill="#cc8888" font-size="9.5">Already done</text>
+          <text x="609" y="183" text-anchor="middle" fill="#cc8888" font-size="9.5">by -O3</text>
+          <!-- Insight -->
+          <rect x="30" y="212" width="740" height="82" rx="8" fill="#0a1f0a" stroke="#22cc44" stroke-width="2"/>
+          <text x="400" y="234" text-anchor="middle" fill="#44ff88" font-size="12" font-weight="bold">Key Insight</text>
+          <text x="400" y="254" text-anchor="middle" fill="#88ffaa" font-size="11">ROCm clang++ -O3 is excellent. All 7 optimizations replicate what the</text>
+          <text x="400" y="270" text-anchor="middle" fill="#88ffaa" font-size="11">compiler already does automatically.</text>
+          <text x="400" y="286" text-anchor="middle" fill="#55cc77" font-size="10">Tested individually and in combination — no statistically significant delta observed.</text>
+          <!-- Lesson -->
+          <rect x="30" y="306" width="740" height="54" rx="8" fill="#0d1a26" stroke="#4488cc" stroke-width="1.5"/>
+          <text x="400" y="325" text-anchor="middle" fill="#66aaff" font-size="11" font-weight="bold">Lesson</text>
+          <text x="400" y="343" text-anchor="middle" fill="#aaccee" font-size="10.5">Don't compete with the compiler on micro-optimizations.</text>
+          <text x="400" y="358" text-anchor="middle" fill="#aaccee" font-size="10.5">Focus on algorithmic / structural changes instead.</text>
+          <text x="400" y="391" text-anchor="middle" fill="#444466" font-size="8.5">Approach F — SVM micro-optimization audit — AMD MI300X / HIP / ROCm clang++ -O3</text>
+        </svg>
+      </div>
+    </section>
+
+<section class="section-divider">
+  <div class="section-num">8</div>
+  <h1>GEAK: The Real Win</h1>
+  <div class="section-sub">14 agents, warp-shuffle reduction, +40% coop tier</div>
+</section>
+
+<section>
+  <h2>GEAK: AI-Driven Kernel Optimization</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-hl">
+        <h4>GEAK Workflow</h4>
+        <ul>
+          <li><strong>14 AI agents</strong> with budget=3, 1M tokens</li>
+          <li>kernel_workflow: multi-agent kernel optimization</li>
+          <li>Agents propose, implement, benchmark, iterate</li>
+        </ul>
+      </div>
+      <div class="card card-success" style="margin-top:0.5em;">
+        <h4>3 Optimizations Found</h4>
+        <ul>
+          <li><strong>Warp-shuffle reduction</strong> — eliminated 7 barriers per measurement</li>
+          <li><strong>Frame barrier batching</strong> — coalesced sync points</li>
+          <li><strong>LDS right-sizing</strong> — reduced shared memory footprint</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card card-accent">
+        <h4>Correctly Ruled Out</h4>
+        <ul>
+          <li><code>__noinline__</code> on all handlers: +10–22% overhead</li>
+          <li><code>__launch_bounds__(256,4)</code>: caused scratch register spills</li>
+          <li>Scatter-bits LUT: VGPRs 108→128, -3.8%</li>
+          <li>MFMA matrix acceleration: 45–70x slower</li>
+        </ul>
+      </div>
+      <div class="stat-callout" style="margin-top:0.5em;">
+        <div class="stat-num">+40%</div>
+        <div class="stat-label">coop tier throughput (4.0M → 5.6M shots/s)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>GEAK: Warp-Shuffle Reduction</h2>
+  <div style="text-align:center;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="800" height="550" viewBox="0 0 800 550" style="width:100%;max-width:750px;">
+      <rect width="800" height="550" fill="#1a1a2e"/>
+      <rect x="0" y="0" width="800" height="72" fill="#101023"/>
+      <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-family="Arial,sans-serif" font-size="23" font-weight="700">Warp-Shuffle Reduction vs Tree Reduction</text>
+      <text x="400" y="54" text-anchor="middle" fill="#c7d2ee" font-family="Arial,sans-serif" font-size="14">GEAK optimization: <tspan fill="#ff7777" font-weight="700">8 barriers</tspan><tspan fill="#ffffff"> → </tspan><tspan fill="#44ff88" font-weight="700">1 barrier</tspan></text>
+      <rect x="8" y="80" width="382" height="404" rx="10" fill="#16213e" stroke="#405177" stroke-width="1.5"/>
+      <rect x="410" y="80" width="382" height="404" rx="10" fill="#0f3460" stroke="#3074a2" stroke-width="1.5"/>
+      <text x="199" y="107" text-anchor="middle" fill="#ff6b4a" font-family="Arial,sans-serif" font-size="16" font-weight="700">BEFORE: Tree Reduction (8 barriers)</text>
+      <!-- 8 barrier markers -->
+      <g fill="#ff4444" stroke="#ff9292" stroke-width="1">
+        <polygon points="274,142 280,136 350,136 356,142 356,154 350,160 280,160 274,154"/>
+        <polygon points="274,170 280,164 350,164 356,170 356,182 350,188 280,188 274,182"/>
+        <polygon points="274,198 280,192 350,192 356,198 356,210 350,216 280,216 274,210"/>
+        <polygon points="274,226 280,220 350,220 356,226 356,238 350,244 280,244 274,238"/>
+        <polygon points="274,254 280,248 350,248 356,254 356,266 350,272 280,272 274,266"/>
+        <polygon points="274,282 280,276 350,276 356,282 356,294 350,300 280,300 274,294"/>
+        <polygon points="274,310 280,304 350,304 356,310 356,322 350,328 280,328 274,322"/>
+        <polygon points="274,338 280,332 350,332 356,338 356,350 350,356 280,356 274,350"/>
+      </g>
+      <g fill="#ffffff" font-family="Consolas,monospace" font-size="7.7" font-weight="700" text-anchor="middle">
+        <text x="315" y="151">__syncthreads()</text>
+        <text x="315" y="179">__syncthreads()</text>
+        <text x="315" y="207">__syncthreads()</text>
+        <text x="315" y="235">__syncthreads()</text>
+        <text x="315" y="263">__syncthreads()</text>
+        <text x="315" y="291">__syncthreads()</text>
+        <text x="315" y="319">__syncthreads()</text>
+        <text x="315" y="347">__syncthreads()</text>
+      </g>
+      <text x="199" y="473" text-anchor="middle" fill="#ff7777" font-family="Arial,sans-serif" font-size="12" font-weight="700">8 × __syncthreads per measurement</text>
+      <!-- Right panel -->
+      <text x="601" y="107" text-anchor="middle" fill="#44ff88" font-family="Arial,sans-serif" font-size="16" font-weight="700">AFTER: Warp-Shuffle (1 barrier)</text>
+      <text x="430" y="132" fill="#44ff88" font-family="Arial,sans-serif" font-size="11.5" font-weight="700">Phase 1: intra-wavefront __shfl_xor, NO barriers</text>
+      <rect x="438" y="141" width="320" height="22" rx="5" fill="#126484" stroke="#44ff88"/>
+      <text x="447" y="156" fill="#ffffff" font-family="Arial,sans-serif" font-size="10" font-weight="700">WF0 — 64 threads — __shfl_xor reduction</text>
+      <rect x="438" y="169" width="320" height="22" rx="5" fill="#175b89" stroke="#44ff88"/>
+      <text x="447" y="184" fill="#ffffff" font-family="Arial,sans-serif" font-size="10" font-weight="700">WF1 — 64 threads — __shfl_xor reduction</text>
+      <rect x="438" y="197" width="320" height="22" rx="5" fill="#214f91" stroke="#44ff88"/>
+      <text x="447" y="212" fill="#ffffff" font-family="Arial,sans-serif" font-size="10" font-weight="700">WF2 — 64 threads — __shfl_xor reduction</text>
+      <rect x="438" y="225" width="320" height="22" rx="5" fill="#294395" stroke="#44ff88"/>
+      <text x="447" y="240" fill="#ffffff" font-family="Arial,sans-serif" font-size="10" font-weight="700">WF3 — 64 threads — __shfl_xor reduction</text>
+      <text x="430" y="275" fill="#44ff88" font-family="Arial,sans-serif" font-size="11.5" font-weight="700">Phase 2: inter-wavefront — 1 barrier, 4 LDS slots</text>
+      <rect x="470" y="302" width="64" height="38" rx="5" fill="#173f59" stroke="#44ff88" stroke-width="1.5"/>
+      <text x="502" y="325" fill="#ffffff" font-family="Consolas,monospace" font-size="9" text-anchor="middle">LDS[0]</text>
+      <rect x="538" y="302" width="64" height="38" rx="5" fill="#173f59" stroke="#44ff88" stroke-width="1.5"/>
+      <text x="570" y="325" fill="#ffffff" font-family="Consolas,monospace" font-size="9" text-anchor="middle">LDS[1]</text>
+      <rect x="606" y="302" width="64" height="38" rx="5" fill="#173f59" stroke="#44ff88" stroke-width="1.5"/>
+      <text x="638" y="325" fill="#ffffff" font-family="Consolas,monospace" font-size="9" text-anchor="middle">LDS[2]</text>
+      <rect x="674" y="302" width="64" height="38" rx="5" fill="#173f59" stroke="#44ff88" stroke-width="1.5"/>
+      <text x="706" y="325" fill="#ffffff" font-family="Consolas,monospace" font-size="9" text-anchor="middle">LDS[3]</text>
+      <rect x="512" y="349" width="178" height="25" rx="12.5" fill="#44ff88" stroke="#ffffff" stroke-opacity=".7"/>
+      <text x="601" y="366" text-anchor="middle" fill="#000000" font-family="Consolas,monospace" font-size="10.5" font-weight="700">1 × __syncthreads</text>
+      <text x="601" y="477" text-anchor="middle" fill="#bfffd3" font-family="Arial,sans-serif" font-size="9">256 values → 4 partials → 1 result</text>
+      <!-- Bottom callout -->
+      <rect x="0" y="490" width="800" height="60" fill="#1a4a2a"/>
+      <text x="400" y="516" text-anchor="middle" fill="#ffffff" font-family="Arial,sans-serif" font-size="21" font-weight="800">+40% throughput on coop tier</text>
+      <text x="400" y="539" text-anchor="middle" fill="#d6ffe2" font-family="Arial,sans-serif" font-size="12.5">4.0M → 5.6M shots/s  |  8 barriers → 1 barrier  |  Measurement ops ≈ 40% of d5 execution</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>GEAK: coop_reduce2 Before &amp; After</h2>
+  <div class="cols">
+    <div>
+      <div class="card card-accent">
+        <h4>Before: Tree Reduction (8 barriers)</h4>
+        <pre><code class="language-cpp">__device__ void coop_reduce2(
+    CoopShotState&amp; st,
+    double&amp; out0, double&amp; out1) {
+  st.red0[threadIdx.x] = out0;
+  st.red1[threadIdx.x] = out1;
+  __syncthreads();
+  for (uint32_t s = blockDim.x >> 1;
+       s > 0; s >>= 1) {
+    if (threadIdx.x &lt; s) {
+      st.red0[threadIdx.x] +=
+          st.red0[threadIdx.x + s];
+      st.red1[threadIdx.x] +=
+          st.red1[threadIdx.x + s];
+    }
+    __syncthreads(); // 8 barriers
+  }
+  out0 = st.red0[0];
+  out1 = st.red1[0];
+}</code></pre>
+      </div>
+    </div>
+    <div>
+      <div class="card card-success">
+        <h4>After: Warp-Shuffle (1 barrier)</h4>
+        <pre><code class="language-cpp">__device__ void coop_reduce2(
+    CoopShotState&amp; st,
+    double local0, double local1,
+    double&amp; out0, double&amp; out1) {
+  // Phase 1: intra-wavefront (no barriers)
+  for (int off = 32; off > 0; off >>= 1) {
+    local0 += __shfl_xor(local0, off);
+    local1 += __shfl_xor(local1, off);
+  }
+  // Phase 2: inter-wavefront (1 barrier)
+  uint32_t warp_id = threadIdx.x >> 6;
+  uint32_t lane    = threadIdx.x &amp; 63;
+  if (lane == 0) {
+    st.red0[warp_id] = local0;
+    st.red1[warp_id] = local1;
+  }
+  __syncthreads(); // 1 barrier total
+  if (threadIdx.x &lt; 4) {
+    local0 = st.red0[threadIdx.x];
+    local1 = st.red1[threadIdx.x];
+    for (int off = 2; off > 0; off >>= 1) {
+      local0 += __shfl_xor(local0, off);
+      local1 += __shfl_xor(local1, off);
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>GEAK: GPU Execution Timeline — cultivation_d5</h2>
+  <div style="text-align:center;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400" style="width:100%;max-width:850px;">
+      <rect width="900" height="400" fill="#1a1a2e"/>
+      <text x="450" y="28" text-anchor="middle" font-family="monospace" font-size="13" fill="#e0e0e0" font-weight="bold">cultivation_d5: 1720 instructions, rank=10, ~40% of time in measurement reduction</text>
+      <text x="450" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="#888">Horizontal axis = instruction time (not to scale). Phases repeat per measurement round.</text>
+      <rect x="30" y="65" width="840" height="60" rx="4" fill="#12122a" stroke="#333" stroke-width="1"/>
+      <!-- Phase blocks -->
+      <rect x="36"  y="72" width="180" height="46" rx="3" fill="#00bcd4" opacity="0.85"/>
+      <text x="126" y="91"  text-anchor="middle" font-family="monospace" font-size="9" fill="#002028" font-weight="bold">FRAME</text>
+      <text x="126" y="103" text-anchor="middle" font-family="monospace" font-size="8" fill="#002028">px/pz bit flips</text>
+      <text x="126" y="113" text-anchor="middle" font-family="monospace" font-size="8" fill="#003038">k=0 (no array)</text>
+      <rect x="220" y="72" width="38" height="46" rx="3" fill="#ff9800" opacity="0.9"/>
+      <text x="239" y="91"  text-anchor="middle" font-family="monospace" font-size="8" fill="#1a0a00" font-weight="bold">EXP</text>
+      <text x="239" y="102" text-anchor="middle" font-family="monospace" font-size="7" fill="#1a0a00">k rises</text>
+      <rect x="262" y="72" width="145" height="46" rx="3" fill="#4caf50" opacity="0.85"/>
+      <text x="334" y="88"  text-anchor="middle" font-family="monospace" font-size="9" fill="#001a00" font-weight="bold">Array Sweep</text>
+      <text x="334" y="100" text-anchor="middle" font-family="monospace" font-size="8" fill="#001a00">2^k FMAs (1024 elems)</text>
+      <rect x="411" y="72" width="135" height="46" rx="3" fill="#f44336" opacity="0.88"/>
+      <text x="478" y="88"  text-anchor="middle" font-family="monospace" font-size="9" fill="#fff0f0" font-weight="bold">MEAS</text>
+      <text x="478" y="100" text-anchor="middle" font-family="monospace" font-size="8" fill="#fff0f0">coop_reduce2()</text>
+      <text x="478" y="111" text-anchor="middle" font-family="monospace" font-size="7" fill="#ffd0d0">8 barriers → 1 barrier</text>
+      <rect x="550" y="72" width="30" height="46" rx="3" fill="#9c27b0" opacity="0.85"/>
+      <text x="565" y="91"  text-anchor="middle" font-family="monospace" font-size="7.5" fill="#f0e0ff" font-weight="bold">CON</text>
+      <rect x="585" y="72" width="140" height="46" rx="3" fill="#00bcd4" opacity="0.85"/>
+      <text x="655" y="91"  text-anchor="middle" font-family="monospace" font-size="9" fill="#002028" font-weight="bold">FRAME</text>
+      <text x="655" y="103" text-anchor="middle" font-family="monospace" font-size="8" fill="#002028">px/pz bit flips</text>
+      <text x="745" y="100" font-family="monospace" font-size="18" fill="#666">···</text>
+      <!-- Occupancy row -->
+      <rect x="30" y="145" width="840" height="36" rx="4" fill="#0d0d20" stroke="#333" stroke-width="1"/>
+      <text x="40" y="157" font-family="monospace" font-size="9" fill="#888">Wavefront occupancy</text>
+      <rect x="36"  y="162" width="180" height="14" rx="2" fill="#00bcd4" opacity="0.3"/>
+      <text x="126" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#aaeeff">SALU-heavy (frame bits)</text>
+      <rect x="262" y="162" width="145" height="14" rx="2" fill="#4caf50" opacity="0.55"/>
+      <text x="334" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#ccffcc">4 waves/SIMD (peak VALU)</text>
+      <rect x="411" y="162" width="135" height="14" rx="2" fill="#f44336" opacity="0.4"/>
+      <text x="478" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffcccc">barrier stalls</text>
+      <!-- SALU/VALU row -->
+      <rect x="30" y="195" width="840" height="36" rx="4" fill="#0d0d20" stroke="#333" stroke-width="1"/>
+      <text x="40" y="208" font-family="monospace" font-size="9" fill="#888">SALU / VALU ratio</text>
+      <rect x="262" y="207" width="145" height="18" rx="2" fill="#222244"/>
+      <rect x="262" y="207" width="93"  height="18" rx="2" fill="#ff6f00" opacity="0.8"/>
+      <rect x="355" y="207" width="52"  height="18" rx="2" fill="#1565c0" opacity="0.7"/>
+      <text x="308" y="219" text-anchor="middle" font-family="monospace" font-size="8" fill="#fff">SALU 64%</text>
+      <text x="381" y="219" text-anchor="middle" font-family="monospace" font-size="8" fill="#cce">VALU 36%</text>
+      <!-- Before/After GEAK panel -->
+      <rect x="30" y="248" width="840" height="82" rx="4" fill="#0d0d20" stroke="#444" stroke-width="1"/>
+      <text x="42" y="264" font-family="monospace" font-size="10" fill="#f44336" font-weight="bold">BEFORE GEAK — 8 barriers in measurement phase (~40% of total time)</text>
+      <g>
+        <rect x="160" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="172" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="184" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="196" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="208" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="220" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="232" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+        <rect x="244" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+      </g>
+      <text x="256" y="282" font-family="monospace" font-size="9" fill="#f44336">  8 barriers per meas</text>
+      <text x="42" y="305" font-family="monospace" font-size="10" fill="#4caf50" font-weight="bold">AFTER GEAK — 1 barrier: barrier overhead collapsed by warp-shuffle fusion</text>
+      <rect x="160" y="313" width="8" height="16" rx="1" fill="#4caf50" opacity="0.9"/>
+      <text x="172" y="324" font-family="monospace" font-size="9" fill="#4caf50">  1 barrier per meas</text>
+      <!-- Legend -->
+      <rect x="30" y="345" width="840" height="45" rx="4" fill="#12122a" stroke="#333" stroke-width="1"/>
+      <rect x="95" y="350" width="14" height="10" rx="2" fill="#00bcd4"/>
+      <text x="113" y="359" font-family="monospace" font-size="9" fill="#00bcd4">FRAME (Clifford px/pz)</text>
+      <rect x="255" y="350" width="14" height="10" rx="2" fill="#ff9800"/>
+      <text x="273" y="359" font-family="monospace" font-size="9" fill="#ff9800">EXPAND (grow active_k)</text>
+      <rect x="415" y="350" width="14" height="10" rx="2" fill="#4caf50"/>
+      <text x="433" y="359" font-family="monospace" font-size="9" fill="#4caf50">ARRAY SWEEP (2^k FMAs)</text>
+      <rect x="95" y="366" width="14" height="10" rx="2" fill="#f44336"/>
+      <text x="113" y="375" font-family="monospace" font-size="9" fill="#f44336">MEAS (coop_reduce2, barriers)</text>
+      <rect x="315" y="366" width="14" height="10" rx="2" fill="#9c27b0"/>
+      <text x="333" y="375" font-family="monospace" font-size="9" fill="#ce93d8">CONTRACT (deactivate qubit)</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>GEAK: Hardware Counters &amp; Results</h2>
+  <div class="grid-2">
+    <div>
+      <h4>rocprof Hardware Counters</h4>
+      <table>
+        <tr><th>Metric</th><th>Before GEAK</th><th>After GEAK</th></tr>
+        <tr><td>Duration (500K shots)</td><td style="color:var(--accent)">116ms</td><td style="color:var(--success)"><strong>83ms</strong></td></tr>
+        <tr><td>VGPRs</td><td>108</td><td>124</td></tr>
+        <tr><td>LDS usage</td><td>30208B</td><td style="color:var(--success)">19968B</td></tr>
+        <tr><td>__syncthreads / meas</td><td style="color:var(--accent)">8</td><td style="color:var(--success)"><strong>1</strong></td></tr>
+      </table>
+      <div class="card card-success" style="margin-top:0.6em;">
+        <h4>SVM+GEAK vs clifft-amd</h4>
+        <p>cultivation_d5: <strong>7.93M → 11.0M = +39%</strong></p>
+        <p>This exceeds the internal clifft-amd implementation.</p>
+      </div>
+    </div>
+    <div>
+      <div class="stat-callout">
+        <div class="stat-num">+40%</div>
+        <div class="stat-label">coop tier throughput<br>4.0M → 5.6M shots/s</div>
+      </div>
+      <div class="stat-callout" style="border-color:var(--success); background:rgba(78,201,176,0.1); margin-top:0.5em;">
+        <div class="stat-num" style="color:var(--success)">83ms</div>
+        <div class="stat-label">down from 116ms (500K shots)<br>29% faster wall-clock</div>
+      </div>
+      <div class="insight" style="margin-top:0.5em;">
+        The 7 VGPRs increase (108→124) is fine: LDS dropped 10KB, keeping occupancy stable. Warp-shuffle uses registers instead of shared memory.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-divider">
+  <div class="section-num">9</div>
+  <h1>Pitfalls &amp; Dead Ends</h1>
+  <div class="section-sub">When optimizations make things worse</div>
+</section>
+
+<section>
+  <h2>Pitfall: Scatter-Bits Lookup Table</h2>
+  <div class="grid-2">
+    <div class="card card-hl">
+      <h4>Expected</h4>
+      <ul>
+        <li>Replace ~15 SALU instructions with 1 LDS load</li>
+        <li>Precomputed 16KB table in shared memory</li>
+        <li>Target: reduce SALU/VALU ratio at rank=10</li>
+        <li>Predicted: -20% to -30% SALU stalls</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>Actual</h4>
+      <ul>
+        <li>VGPRs: 108 → 128 (table index variables)</li>
+        <li>Throughput: <strong>-3.8%</strong></li>
+        <li>Extra VGPR pressure caused scheduling stalls</li>
+        <li>LDS bank conflicts on random access pattern</li>
+      </ul>
+    </div>
+  </div>
+  <div class="insight">
+    Root cause: register pressure increase from index tracking outweighed any SALU savings. The SALU instructions were cheap; the new VGPR spills were not.
+  </div>
+  <div class="card card-warn" style="margin-top:0.5em;">
+    <p>Also tried: <strong>16KB precomputed table + 8KB table</strong> — both showed the same pattern. The fundamental issue is that scatter-bit indices themselves consume registers.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Pitfall: MFMA Matrix Acceleration — 45–70x Slower</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-accent">
+        <h4>Why MFMA Fails for Clifft</h4>
+        <ul>
+          <li>Gate matrices are <strong>2×2 or 4×4 complex</strong></li>
+          <li>MFMA minimum K dimension = 4 (real)</li>
+          <li>Complex gates require <strong>4 real MFMAs each</strong></li>
+          <li>K=2 for 2×2 complex → below MFMA minimum</li>
+          <li>Gather/scatter overhead: ~80 cycles per gate</li>
+        </ul>
+      </div>
+      <div class="insight" style="margin-top:0.5em;">
+        MFMA is designed for large matrix multiplications (128×128+). Gate matrices in QEC circuits are tiny — the overhead dwarfs any computation benefit.
+      </div>
+    </div>
+    <div>
+      <div class="stat-callout" style="border-color:var(--accent); background:rgba(233,69,96,0.1);">
+        <div class="stat-num">45–70x</div>
+        <div class="stat-label">SLOWER than scalar path<br>(not applied)</div>
+      </div>
+      <div class="card card-warn" style="margin-top:0.5em;">
+        <h4>MFMA Applicability Threshold</h4>
+        <p>MFMA pays off when: matrix K ≥ 16 (real), batch size ≥ 16, no gather/scatter needed. Clifft's 2×2 and 4×4 gates meet none of these criteria.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Pitfall: LDS Tiling — Extra Barriers Destroyed Gains</h2>
+  <div class="grid-2">
+    <div class="card card-hl">
+      <h4>Expected</h4>
+      <ul>
+        <li>Replace random HBM accesses with coalesced tile loads</li>
+        <li>Stage amplitude data in LDS before sweep</li>
+        <li>Reduce HBM bandwidth pressure at rank=10</li>
+        <li>Expected: -20% to -40% memory latency</li>
+      </ul>
+    </div>
+    <div class="card card-accent">
+      <h4>Actual Results</h4>
+      <table>
+        <tr><th>Circuit</th><th>Before</th><th>After</th><th>Delta</th></tr>
+        <tr><td>cultivation_d5 (rank=10)</td><td>5.59M</td><td style="color:var(--accent)">1.90M</td><td style="color:var(--accent)"><strong>-66.1%</strong></td></tr>
+        <tr><td>surface_d7_r7 (rank=19)</td><td>143.9K</td><td style="color:var(--accent)">120.1K</td><td style="color:var(--accent)"><strong>-16.5%</strong></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="insight">
+    Root cause: The coop kernel <strong>already</strong> stores amplitudes in LDS. Adding tiling introduced 3 new __syncthreads() barriers per sweep where zero existed before. Net effect: catastrophic slowdown.
+  </div>
+</section>
+
+<section>
+  <h2>__noinline__: The One Micro-Optimization That Worked</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-success">
+        <h4>What Worked</h4>
+        <ul>
+          <li>Extract <code>coop_u2_sweep</code> and <code>coop_u4_sweep</code> with <code>__noinline__</code></li>
+          <li>VGPRs: <strong>128 → 108</strong></li>
+          <li>Prevents inlining of large sweep bodies</li>
+          <li>Compiler can now schedule outer loop registers independently</li>
+        </ul>
+      </div>
+      <div class="card card-warn" style="margin-top:0.5em;">
+        <h4>Critical Constraint</h4>
+        <p>Must use raw <code>GpuComplex*</code> pointers, NOT <code>CoopShotState&amp;</code> references.</p>
+        <p>HIP rejects <code>__noinline__</code> on functions containing <code>__syncthreads()</code> when passed struct references.</p>
+      </div>
+    </div>
+    <div>
+      <div class="stat-callout" style="border-color:var(--success); background:rgba(78,201,176,0.1);">
+        <div class="stat-num" style="color:var(--success)">-20</div>
+        <div class="stat-label">VGPRs (128 → 108)<br>via __noinline__ sweep extraction</div>
+      </div>
+      <div class="insight" style="margin-top:0.5em;">
+        This is different from the failed Approach F: here __noinline__ is applied to specific large sweep functions, not blindly to all handlers. Targeted extraction works; blanket application does not.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Pitfall Summary — All Dead Ends</h2>
+  <table>
+    <tr>
+      <th>Optimization</th><th>Expected</th><th>Actual</th><th>Root Cause</th>
+    </tr>
+    <tr>
+      <td><strong>Scatter-Bits LUT</strong></td>
+      <td>-30% SALU</td>
+      <td style="color:var(--accent)">-3.8% throughput</td>
+      <td>VGPR spill from index tracking</td>
+    </tr>
+    <tr>
+      <td><strong>MFMA Acceleration</strong></td>
+      <td>Matrix speedup</td>
+      <td style="color:var(--accent)">45–70x slower</td>
+      <td>2×2 gate size below MFMA minimum</td>
+    </tr>
+    <tr>
+      <td><strong>LDS Tiling</strong></td>
+      <td>Coalesced loads</td>
+      <td style="color:var(--accent)">-66% throughput</td>
+      <td>3 new barriers per sweep</td>
+    </tr>
+    <tr>
+      <td><strong>7 SVM micro-opts</strong></td>
+      <td>Various</td>
+      <td style="color:var(--dim)">+0.04% (noise)</td>
+      <td>Compiler already does all of them</td>
+    </tr>
+    <tr>
+      <td><strong>HIPRTC JIT</strong></td>
+      <td>Same as AOT</td>
+      <td style="color:var(--accent)">-14%</td>
+      <td>Fewer optimization passes than clang++ -O3</td>
+    </tr>
+    <tr>
+      <td><strong style="color:var(--success)">__noinline__ sweeps</strong></td>
+      <td>VGPR reduction</td>
+      <td style="color:var(--success)">VGPRs 128→108 ✓</td>
+      <td style="color:var(--success)">Targeted extraction works</td>
+    </tr>
+  </table>
+  <div class="insight">
+    Pattern: optimizations that add state (LUT indices, tiling tiles) increase register pressure and lose. Optimizations that reduce synchronization (warp-shuffle) or code size (__noinline__) win.
+  </div>
+</section>
+
+<section class="section-divider">
+  <div class="section-num">10</div>
+  <h1>Large Circuits &amp; NUMA</h1>
+  <div class="section-sub">128→384 qubits, per-XCD optimization</div>
+</section>
+
+<section>
+  <h2>Large Circuit Support: 128→384 Qubits</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-hl">
+        <h4>Extended Limits</h4>
+        <ul>
+          <li><code>kPauliWords</code>: 2→6 (128→384 qubits)</li>
+          <li><code>kMaxMeas</code>: 1024→4096</li>
+          <li><code>px[kPauliWords]</code>, <code>pz[kPauliWords]</code> arrays</li>
+          <li>All XOR patterns updated with kPauliWords loops</li>
+        </ul>
+      </div>
+      <div class="card card-success" style="margin-top:0.5em;">
+        <h4>New Large Circuits — All Tier 1 (rank=0)</h4>
+        <table>
+          <tr><th>Circuit</th><th>Qubits</th><th>shots/s</th></tr>
+          <tr><td>surface_d9_r9</td><td>188</td><td>1.78M</td></tr>
+          <tr><td>surface_d11_r11</td><td>274</td><td>1.69M</td></tr>
+          <tr><td>surface_d13_r13</td><td>376</td><td>1.57M</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="insight">
+        All large surface code circuits compile to rank=0 (per-thread tier). The active non-Clifford rank stays low even with 376 qubits — QEC circuits have very few simultaneous non-Clifford gates.
+      </div>
+      <div class="card card-warn" style="margin-top:0.5em;">
+        <h4>Why Throughput Decreases with Circuit Size</h4>
+        <ul>
+          <li>More instructions per shot (deeper circuits)</li>
+          <li>Larger px/pz arrays (6 words vs 2)</li>
+          <li>More measurement records to track</li>
+          <li>NOT due to memory tier — still register-resident</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>D7: HBM Bandwidth Ceiling &amp; NUMA</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-accent">
+        <h4>cultivation_d7: The Hard Case</h4>
+        <ul>
+          <li>5472 instructions, rank=19</li>
+          <li>All approaches converge to ~145K shots/s</li>
+          <li>This is the HBM bandwidth ceiling</li>
+          <li>SALU/VALU ratio inverts: 0.82x (VALU-dominated)</li>
+          <li>4MB amplitude array per shot, random access pattern</li>
+        </ul>
+      </div>
+      <div class="stat-callout" style="margin-top:0.5em;">
+        <div class="stat-num">145K</div>
+        <div class="stat-label">shots/s — HBM3 bandwidth ceiling<br>No kernel optimization can break this</div>
+      </div>
+    </div>
+    <div>
+      <div class="card card-hl">
+        <h4>NUMA Per-XCD Optimization</h4>
+        <ul>
+          <li>8 XCDs, each with local L2 cache (~8MB)</li>
+          <li>For rank≥15: route work to XCD-local memory</li>
+          <li>Avoid 202ns cross-XCD penalty</li>
+          <li>Assign amplitude blocks per XCD affinity</li>
+          <li>Applicable only to global-coop tier</li>
+        </ul>
+      </div>
+      <div class="insight" style="margin-top:0.5em;">
+        At rank=19, the bottleneck is pure HBM bandwidth — 4MB of random-access amplitude data per shot. NUMA optimization helps cross-XCD latency but cannot exceed 5.3 TB/s HBM3 aggregate limit.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-divider">
+  <div class="section-num">11</div>
+  <h1>Synthesis</h1>
+  <div class="section-sub">Complete comparison and key findings</div>
+</section>
+
+<section>
+  <h2>Final Definitive Results</h2>
+  <div class="grid-2">
+    <div>
+      <h4>Per-Thread Tier (rank=0, target_qec)</h4>
+      <table>
+        <tr><th>Rank</th><th>Approach</th><th>shots/s</th><th>vs SVM+GEAK</th></tr>
+        <tr style="background:rgba(78,201,176,0.1);"><td>1</td><td><strong>SVM+GEAK</strong></td><td><strong>48.3M</strong></td><td>baseline</td></tr>
+        <tr><td>1</td><td>Persistent (E)</td><td>48.3M</td><td>+0.0%</td></tr>
+        <tr><td>3</td><td>Compiled (A)</td><td>47.2M</td><td>-2.3%</td></tr>
+        <tr><td>4</td><td>Split (D)</td><td>50.4M</td><td style="color:var(--success)">+4.4%</td></tr>
+        <tr><td>5</td><td>Per-Op (B)</td><td>49.1M</td><td>+1.7%</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>Coop Tier (rank=10, cultivation_d5)</h4>
+      <table>
+        <tr><th>Rank</th><th>Approach</th><th>shots/s</th><th>vs SVM+GEAK</th></tr>
+        <tr style="background:rgba(78,201,176,0.1);"><td>1</td><td><strong>SVM+GEAK</strong></td><td><strong>5.62M</strong></td><td>baseline</td></tr>
+        <tr style="background:rgba(78,201,176,0.05);"><td>1</td><td>Persistent+GEAK</td><td>5.68M</td><td style="color:var(--success)">+1.1%</td></tr>
+        <tr><td>3</td><td>Compiled (A)</td><td>4.83M</td><td style="color:var(--accent)">-14.1%</td></tr>
+        <tr><td>4</td><td>Per-Op (B)</td><td>4.07M</td><td style="color:var(--accent)">-27.7%</td></tr>
+        <tr><td>5</td><td>Opt SVM (F)</td><td>3.75M</td><td style="color:var(--accent)">-33.3%</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="insight">
+    GEAK is the clear winner across tiers. The warp-shuffle optimization is universally beneficial — zero cases where it hurts.
+  </div>
+</section>
+
+<section>
+  <h2>5 Key Findings</h2>
+  <div class="flow-col" style="gap:0.4em; align-items:stretch;">
+    <div class="card card-hl">
+      <h4>1. Switch dispatch is NOT the primary bottleneck</h4>
+      <p>Compiled megakernel (Approach A) gains only +5–18% by eliminating the switch. The GPU branch predictor handles regular switch patterns efficiently.</p>
+    </div>
+    <div class="card card-accent">
+      <h4>2. peak_rank determines throughput by 330x</h4>
+      <p>Tier 1 (rank 0–4): 48M shots/s. Tier 2 (rank 5–10): 5.6M. Tier 3 (rank 11–19): 145K. Circuit selection matters more than kernel optimization.</p>
+    </div>
+    <div class="card card-success">
+      <h4>3. The HIP compiler is excellent at micro-optimizations</h4>
+      <p>All 7 manual micro-optimizations in Approach F achieved 0% gain. ROCm clang++ -O3 already does them. Don't fight the compiler.</p>
+    </div>
+    <div class="card card-warn">
+      <h4>4. HIPRTC vs AOT matters: -14%</h4>
+      <p>Runtime JIT compilation loses 14% throughput vs offline clang++. Always use AOT with disk-cached .hsaco binaries.</p>
+    </div>
+    <div class="card card-purple">
+      <h4>5. Synchronization is the #1 coop bottleneck</h4>
+      <p>Warp-shuffle reduction eliminates 7 of 8 barriers per measurement. +40% throughput. Synchronization cost, not compute, dominates cooperative kernels.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Priority Stack: What to Do (and Not Do)</h2>
+  <div class="grid-2">
+    <div>
+      <h4>High Priority (apply now)</h4>
+      <div class="mode-card m1">
+        <div class="mode-title">1. GEAK warp-shuffle — already applied</div>
+        <div class="mode-detail">+40% coop tier. Zero downsides. SVM+GEAK is the baseline going forward.</div>
+      </div>
+      <div class="mode-card m2" style="margin-top:0.3em;">
+        <div class="mode-title">2. Compiled kernel — for deeper circuits</div>
+        <div class="mode-detail">+5–18% per-thread tier when T-gate depth ≥ 2. AOT only, disk-cached .hsaco.</div>
+      </div>
+      <div class="mode-card m3" style="margin-top:0.3em;">
+        <div class="mode-title">3. __noinline__ coop sweeps</div>
+        <div class="mode-detail">VGPRs 128→108 via targeted extraction of coop_u2_sweep and coop_u4_sweep.</div>
+      </div>
+    </div>
+    <div>
+      <h4>Medium Priority (circuit-dependent)</h4>
+      <div class="mode-card" style="border-left-color:var(--warn); margin-top:0.3em;">
+        <div class="mode-title" style="color:var(--warn);">4. Heuristic split — sawtooth circuits only</div>
+        <div class="mode-detail">3–5x potential when circuits have genuine low-k regions. Verify active_k profile first.</div>
+      </div>
+      <div class="mode-card" style="border-left-color:var(--dim); margin-top:0.3em;">
+        <div class="mode-title" style="color:var(--dim);">5. NUMA per-XCD — rank≥15 only</div>
+        <div class="mode-detail">Reduces cross-XCD latency for global-coop tier. Cannot break HBM bandwidth ceiling.</div>
+      </div>
+      <hr>
+      <h4>Do Not Pursue</h4>
+      <ul>
+        <li>MFMA acceleration (45–70x slower)</li>
+        <li>LDS tiling (-66% on coop tier)</li>
+        <li>Scatter-bits LUT (-3.8%, VGPR pressure)</li>
+        <li>Any HIPRTC JIT path (-14%)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What&apos;s Next</h2>
+  <div class="grid-2">
+    <div>
+      <div class="card card-success">
+        <h4>Near-Term (actionable)</h4>
+        <ul>
+          <li><strong>Heuristic split on sawtooth circuits</strong> — identify QEC circuits with genuine EXPAND→low-k→EXPAND patterns, apply split, verify 3–5x gain</li>
+          <li><strong>NUMA per-XCD for rank≥15</strong> — implement XCD-affinity workgroup routing for global-coop tier</li>
+          <li><strong>Upstream GEAK warp-shuffle</strong> — contribute to clifft upstream as a device-agnostic improvement</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="card card-hl">
+        <h4>Hardware Roadmap</h4>
+        <ul>
+          <li><strong>MI350X (CDNA4)</strong> — same ISA for <code>__shfl_xor</code>, same optimizations apply</li>
+          <li><strong>Higher HBM bandwidth</strong> — rank=19 ceiling will rise proportionally</li>
+          <li><strong>Larger LDS</strong> — may enable more aggressive coop strategies</li>
+        </ul>
+      </div>
+      <div class="card card-accent" style="margin-top:0.5em;">
+        <h4>Open Questions</h4>
+        <ul>
+          <li>Can warp-shuffle extend to inter-block reductions?</li>
+          <li>Is there a circuit class where MFMA becomes viable (k≥16)?</li>
+          <li>Can compiled + GEAK be combined for +20%+ on coop?</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="insight" style="margin-top:0.5em;">
+    The architecture is stable. GEAK is the breakthrough. Next step is finding sawtooth circuits to unlock the 3–5x split gain.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- BONUS: Circuit Translation Pipeline -->
+<!-- ============================================================ -->
+<section>
+  <h2>Appendix: Circuit Translation Pipeline</h2>
+  <div style="text-align:center;">
+    <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:750px; font-family: 'Courier New', monospace;">
+      <rect width="800" height="600" fill="#1a1a2e"/>
+      <!-- Layer 1: Stim Circuit -->
+      <rect x="20" y="10" width="760" height="90" rx="6" fill="#0d0d1a" stroke="#00e5ff" stroke-width="1.5"/>
+      <text x="30" y="28" fill="#00e5ff" font-size="11" font-weight="bold">LAYER 1 -- Stim Circuit</text>
+      <line x1="120" y1="55" x2="700" y2="55" stroke="#444" stroke-width="1"/>
+      <line x1="120" y1="80" x2="700" y2="80" stroke="#444" stroke-width="1"/>
+      <text x="90" y="59" fill="#00e5ff" font-size="11" text-anchor="end">q0</text>
+      <text x="90" y="84" fill="#00e5ff" font-size="11" text-anchor="end">q1</text>
+      <rect x="140" y="44" width="28" height="22" rx="3" fill="#003344" stroke="#00e5ff" stroke-width="1.2"/>
+      <text x="154" y="59" fill="#00e5ff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+      <circle cx="240" cy="55" r="5" fill="#00e5ff"/>
+      <line x1="240" y1="55" x2="240" y2="80" stroke="#00e5ff" stroke-width="1.2"/>
+      <circle cx="240" cy="80" r="9" fill="none" stroke="#00e5ff" stroke-width="1.2"/>
+      <line x1="231" y1="80" x2="249" y2="80" stroke="#00e5ff" stroke-width="1.2"/>
+      <line x1="240" y1="71" x2="240" y2="89" stroke="#00e5ff" stroke-width="1.2"/>
+      <rect x="310" y="44" width="28" height="22" rx="3" fill="#003344" stroke="#00e5ff" stroke-width="1.2"/>
+      <text x="324" y="59" fill="#00e5ff" font-size="11" font-weight="bold" text-anchor="middle">T</text>
+      <rect x="390" y="44" width="28" height="22" rx="3" fill="#1a0044" stroke="#00e5ff" stroke-width="1.2"/>
+      <text x="404" y="59" fill="#00e5ff" font-size="10" font-weight="bold" text-anchor="middle">M</text>
+      <rect x="390" y="69" width="28" height="22" rx="3" fill="#1a0044" stroke="#00e5ff" stroke-width="1.2"/>
+      <text x="404" y="84" fill="#00e5ff" font-size="10" font-weight="bold" text-anchor="middle">M</text>
+      <rect x="460" y="39" width="115" height="52" rx="3" fill="#0d001a" stroke="#00e5ff" stroke-width="1" stroke-dasharray="4,2"/>
+      <text x="517" y="52" fill="#00e5ff" font-size="9" text-anchor="middle">DETECTOR</text>
+      <text x="517" y="64" fill="#aaa" font-size="8" text-anchor="middle">rec[-1] rec[-2]</text>
+      <!-- Arrow 1 -->
+      <line x1="400" y1="100" x2="400" y2="118" stroke="#555" stroke-width="1.5"/>
+      <text x="430" y="113" fill="#aaa" font-size="9">Frontend Trace</text>
+      <!-- Layer 2: HIR -->
+      <rect x="20" y="120" width="760" height="80" rx="6" fill="#0d0d1a" stroke="#00cc66" stroke-width="1.5"/>
+      <text x="30" y="138" fill="#00cc66" font-size="11" font-weight="bold">LAYER 2 -- HIR (Heisenberg IR) -- Pauli-mask nodes</text>
+      <rect x="50" y="145" width="95" height="40" rx="4" fill="#001a0d" stroke="#00cc66" stroke-width="1.1"/>
+      <text x="97" y="160" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">HIR_H</text>
+      <text x="97" y="173" fill="#888" font-size="8" text-anchor="middle">axis=0 mask=X</text>
+      <rect x="165" y="145" width="110" height="40" rx="4" fill="#001a0d" stroke="#00cc66" stroke-width="1.1"/>
+      <text x="220" y="160" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">HIR_CNOT</text>
+      <text x="220" y="173" fill="#888" font-size="8" text-anchor="middle">ctrl=0 tgt=1 ZX</text>
+      <rect x="295" y="145" width="95" height="40" rx="4" fill="#001a0d" stroke="#00cc66" stroke-width="1.1"/>
+      <text x="342" y="160" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">HIR_T</text>
+      <text x="342" y="173" fill="#888" font-size="8" text-anchor="middle">axis=0 Rank+1</text>
+      <rect x="410" y="145" width="110" height="40" rx="4" fill="#001a0d" stroke="#00cc66" stroke-width="1.1"/>
+      <text x="465" y="160" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">HIR_MEAS</text>
+      <text x="465" y="173" fill="#888" font-size="8" text-anchor="middle">axes=0,1 Rank-1</text>
+      <rect x="540" y="145" width="110" height="40" rx="4" fill="#001a0d" stroke="#00cc66" stroke-width="1.1"/>
+      <text x="595" y="160" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">HIR_DET</text>
+      <text x="595" y="173" fill="#888" font-size="8" text-anchor="middle">rec[-1] rec[-2]</text>
+      <!-- Arrow 2 -->
+      <line x1="400" y1="200" x2="400" y2="218" stroke="#555" stroke-width="1.5"/>
+      <text x="420" y="213" fill="#aaa" font-size="9">Optimizer Passes</text>
+      <!-- Layer 3: Optimizer -->
+      <rect x="20" y="220" width="760" height="90" rx="6" fill="#0d0d1a" stroke="#ffaa00" stroke-width="1.5"/>
+      <text x="30" y="238" fill="#ffaa00" font-size="11" font-weight="bold">LAYER 3 -- StatevectorSqueezePass (peak_rank minimizer)</text>
+      <rect x="35" y="244" width="210" height="55" rx="4" fill="#1a0800" stroke="#ffaa00" stroke-width="1"/>
+      <text x="140" y="258" fill="#ffaa00" font-size="9" font-weight="bold" text-anchor="middle">Before</text>
+      <text x="140" y="271" fill="#ccc" font-size="8" text-anchor="middle">T-gate at q0 -- rank rises to 1</text>
+      <text x="140" y="283" fill="#ccc" font-size="8" text-anchor="middle">peak_rank = 1</text>
+      <text x="140" y="295" fill="#ff6666" font-size="8" text-anchor="middle">concurrent T-gates -- rank spike</text>
+      <rect x="290" y="244" width="210" height="55" rx="4" fill="#001a08" stroke="#00cc66" stroke-width="1"/>
+      <text x="395" y="258" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">After</text>
+      <text x="395" y="271" fill="#ccc" font-size="8" text-anchor="middle">Reordered to minimize T-gate overlap</text>
+      <text x="395" y="283" fill="#ccc" font-size="8" text-anchor="middle">peak_rank &lt;= 1</text>
+      <text x="395" y="295" fill="#66ff99" font-size="8" text-anchor="middle">208 synthetic circuits: all rank 1</text>
+      <rect x="520" y="244" width="245" height="55" rx="4" fill="#0a0a00" stroke="#ffaa00" stroke-width="1" stroke-dasharray="4,2"/>
+      <text x="642" y="258" fill="#ffaa00" font-size="9" font-weight="bold" text-anchor="middle">Critical Invariant</text>
+      <text x="642" y="271" fill="#ccc" font-size="8" text-anchor="middle">208 synthetic circuits compiled</text>
+      <text x="642" y="283" fill="#ccc" font-size="8" text-anchor="middle">All -- rank &lt;= 1 on MI300X</text>
+      <text x="642" y="295" fill="#00e5ff" font-size="8" text-anchor="middle">No unbounded amplification</text>
+      <!-- Arrow 3 -->
+      <line x1="400" y1="310" x2="400" y2="328" stroke="#555" stroke-width="1.5"/>
+      <text x="420" y="323" fill="#aaa" font-size="9">Backend Lower</text>
+      <!-- Layer 4: Bytecode -->
+      <rect x="20" y="330" width="760" height="110" rx="6" fill="#0d0d1a" stroke="#ff6633" stroke-width="1.5"/>
+      <text x="30" y="348" fill="#ff6633" font-size="11" font-weight="bold">LAYER 4 -- Flat Bytecode Array</text>
+      <rect x="35" y="354" width="360" height="78" rx="3" fill="#0d0500" stroke="#ff6633" stroke-width="0.8"/>
+      <text x="45" y="368" fill="#888" font-size="9">[0]</text><text x="70" y="368" fill="#ff9966" font-size="9">OP_FRAME_H</text>
+      <text x="45" y="382" fill="#888" font-size="9">[1]</text><text x="70" y="382" fill="#ff9966" font-size="9">OP_FRAME_CNOT</text>
+      <text x="45" y="396" fill="#888" font-size="9">[2]</text><text x="70" y="396" fill="#ff6633" font-size="9" font-weight="bold">OP_EXPAND_T</text><text x="245" y="396" fill="#ffaa00" font-size="9">active_k: 0--1</text>
+      <text x="45" y="410" fill="#888" font-size="9">[3]</text><text x="70" y="410" fill="#ff6633" font-size="9" font-weight="bold">OP_MEAS_ACTIVE</text><text x="245" y="410" fill="#ffaa00" font-size="9">active_k: 1--0</text>
+      <text x="45" y="424" fill="#888" font-size="9">[4]</text><text x="70" y="424" fill="#ff9966" font-size="9">OP_DETECTOR</text>
+      <!-- active_k tracker -->
+      <rect x="415" y="354" width="355" height="78" rx="3" fill="#100500" stroke="#ffaa00" stroke-width="0.8"/>
+      <text x="592" y="368" fill="#ffaa00" font-size="9" font-weight="bold" text-anchor="middle">active_k tracker (Heisenberg rank)</text>
+      <text x="430" y="386" fill="#888" font-size="8">op</text>
+      <text x="510" y="386" fill="#888" font-size="8">k_before</text>
+      <text x="600" y="386" fill="#888" font-size="8">delta</text>
+      <text x="670" y="386" fill="#888" font-size="8">k_after</text>
+      <text x="430" y="399" fill="#ccc" font-size="8">OP_FRAME_H</text><text x="520" y="399" fill="#aaa" font-size="8">0</text><text x="610" y="399" fill="#aaa" font-size="8">0</text><text x="680" y="399" fill="#aaa" font-size="8">0</text>
+      <text x="430" y="412" fill="#ccc" font-size="8">OP_EXPAND_T</text><text x="520" y="412" fill="#aaa" font-size="8">0</text><text x="610" y="412" fill="#ffaa00" font-size="8">+1</text><text x="680" y="412" fill="#ffaa00" font-size="8">1</text>
+      <text x="430" y="425" fill="#ccc" font-size="8">OP_MEAS_ACTIVE</text><text x="520" y="425" fill="#aaa" font-size="8">1</text><text x="610" y="425" fill="#00cc66" font-size="8">-1</text><text x="680" y="425" fill="#00cc66" font-size="8">0</text>
+      <!-- Arrow 4 -->
+      <line x1="400" y1="440" x2="400" y2="458" stroke="#555" stroke-width="1.5"/>
+      <text x="420" y="453" fill="#aaa" font-size="9">GPU Dispatch</text>
+      <!-- Layer 5: GPU Execution -->
+      <rect x="20" y="460" width="760" height="128" rx="6" fill="#0d0d1a" stroke="#cc0033" stroke-width="1.5"/>
+      <text x="30" y="478" fill="#cc0033" font-size="11" font-weight="bold">LAYER 5 -- GPU Kernel Execution (HIP / MI300X)</text>
+      <rect x="35" y="486" width="110" height="90" rx="4" fill="#1a0008" stroke="#cc0033" stroke-width="1"/>
+      <text x="90" y="500" fill="#cc0033" font-size="9" font-weight="bold" text-anchor="middle">Thread Block 0</text>
+      <text x="90" y="513" fill="#888" font-size="8" text-anchor="middle">wave 0-3</text>
+      <text x="90" y="526" fill="#ff9966" font-size="8" text-anchor="middle">OP_FRAME_H</text>
+      <text x="90" y="539" fill="#ff9966" font-size="8" text-anchor="middle">OP_FRAME_CNOT</text>
+      <text x="90" y="552" fill="#ff6633" font-size="8" font-weight="bold" text-anchor="middle">OP_EXPAND_T k++</text>
+      <rect x="165" y="486" width="110" height="90" rx="4" fill="#1a0008" stroke="#cc0033" stroke-width="1"/>
+      <text x="220" y="500" fill="#cc0033" font-size="9" font-weight="bold" text-anchor="middle">Thread Block 1</text>
+      <text x="220" y="513" fill="#888" font-size="8" text-anchor="middle">wave 4-7</text>
+      <text x="220" y="526" fill="#ff9966" font-size="8" text-anchor="middle">OP_FRAME_H</text>
+      <text x="220" y="539" fill="#ff9966" font-size="8" text-anchor="middle">OP_FRAME_CNOT</text>
+      <text x="220" y="552" fill="#ff6633" font-size="8" font-weight="bold" text-anchor="middle">OP_EXPAND_T k++</text>
+      <text x="310" y="535" fill="#555" font-size="14" text-anchor="middle">...</text>
+      <rect x="430" y="486" width="160" height="90" rx="4" fill="#110011" stroke="#9933cc" stroke-width="1"/>
+      <text x="510" y="500" fill="#cc66ff" font-size="9" font-weight="bold" text-anchor="middle">Bytecode ROM</text>
+      <text x="510" y="514" fill="#888" font-size="8" text-anchor="middle">(constant memory)</text>
+      <text x="510" y="528" fill="#ccc" font-size="8" text-anchor="middle">[0] OP_FRAME_H</text>
+      <text x="510" y="541" fill="#ccc" font-size="8" text-anchor="middle">[1] OP_FRAME_CNOT</text>
+      <text x="510" y="554" fill="#ccc" font-size="8" text-anchor="middle">[2] OP_EXPAND_T</text>
+      <text x="510" y="567" fill="#ccc" font-size="8" text-anchor="middle">[3] OP_MEAS_ACTIVE</text>
+      <rect x="615" y="486" width="155" height="90" rx="4" fill="#001111" stroke="#00e5ff" stroke-width="1"/>
+      <text x="692" y="500" fill="#00e5ff" font-size="9" font-weight="bold" text-anchor="middle">Detector Outcomes</text>
+      <text x="692" y="514" fill="#888" font-size="8" text-anchor="middle">(device -- host)</text>
+      <text x="692" y="528" fill="#00cc66" font-size="8" text-anchor="middle">det[0] = meas[0] xor meas[1]</text>
+      <text x="692" y="542" fill="#ccc" font-size="8" text-anchor="middle">peak_rank enforced &lt;= 1</text>
+      <text x="692" y="556" fill="#00cc66" font-size="8" text-anchor="middle">active_k -- 0 at exit</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- FINAL: Optimization Impact Summary -->
+<!-- ============================================================ -->
+<section>
+  <h2>Optimization Impact Summary</h2>
+  <table>
+    <tr><th>Optimization</th><th>Coop Tier (rank=10)</th><th>Per-Thread (rank=0)</th><th>Global-Coop (rank=19)</th></tr>
+    <tr><td><strong style="color:var(--success);">GEAK warp-shuffle</strong></td><td style="color:var(--success);"><strong>+40%</strong></td><td>+2%</td><td>Negligible</td></tr>
+    <tr><td><strong>__noinline__ sweeps</strong></td><td>VGPRs 128&rarr;108</td><td>VGPRs 128&rarr;108</td><td>VGPRs 128&rarr;108</td></tr>
+    <tr><td><strong>Compiled megakernel</strong></td><td>SVM fallback</td><td style="color:var(--success);">+5&ndash;18%</td><td>SVM fallback</td></tr>
+    <tr><td>NUMA per-XCD</td><td>Pending</td><td>No effect</td><td>+1.4%</td></tr>
+    <tr><td>GpuComplex alignment</td><td>Pending</td><td>Pending</td><td>Pending</td></tr>
+    <tr><td>__shfl broadcast</td><td>Pending</td><td>No effect</td><td>Pending</td></tr>
+    <tr><td style="color:var(--accent);">LDS tiling</td><td style="color:var(--accent);"><strong>-66%</strong></td><td>-6.6%</td><td>-16.5%</td></tr>
+    <tr><td style="color:var(--accent);">Scatter LUT</td><td style="color:var(--accent);">-3.8%</td><td>No effect</td><td>LDS overflow</td></tr>
+    <tr><td style="color:var(--accent);">MFMA</td><td colspan="3" style="color:var(--accent);text-align:center;">45&ndash;70x slower (not applied)</td></tr>
+    <tr><td style="color:var(--accent);">7 SVM micro-opts</td><td colspan="3" style="text-align:center;">0% (compiler already does it)</td></tr>
+    <tr><td style="color:var(--accent);">HIPRTC JIT</td><td colspan="3" style="color:var(--accent);text-align:center;">-14% vs AOT</td></tr>
+    <tr><td>Hybrid split</td><td>+0.8%</td><td>+2&ndash;8%</td><td>No effect</td></tr>
+  </table>
+  <div class="insight" style="margin-top:0.5em;">
+    <strong>Green rows</strong> = applied optimizations. <strong>Red</strong> = reverted or rejected. Only 3 optimizations survive: warp-shuffle, __noinline__, and compiled megakernel.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- FINAL: All-Workspace Benchmark -->
+<!-- ============================================================ -->
+<section>
+  <h2>All-Workspace Benchmark</h2>
+  <p>All approach branches benchmarked using pre-built workspace binaries on MI300X (same node).</p>
+  <table>
+    <tr><th>Workspace</th><th>D5 rank=10</th><th>D3 rank=4</th><th>QEC rank=0</th><th>D7 rank=19</th></tr>
+    <tr>
+      <td><strong style="color:var(--success);">compiled-kernel</strong></td>
+      <td>5.40M</td><td>43.6M</td><td style="color:var(--success);"><strong>50.0M</strong></td><td style="color:var(--success);"><strong>145.8K</strong></td>
+    </tr>
+    <tr>
+      <td>svm-optimized</td>
+      <td style="color:var(--success);"><strong>5.59M</strong></td><td>41.6M</td><td>47.1M</td><td>145.7K</td>
+    </tr>
+    <tr>
+      <td>split-kernel</td>
+      <td>5.22M</td><td>41.4M</td><td>46.6M</td><td>&mdash;</td>
+    </tr>
+    <tr>
+      <td>per-op-kernel</td>
+      <td>5.61M</td><td style="color:var(--success);"><strong>44.6M</strong></td><td>48.6M</td><td>&mdash;</td>
+    </tr>
+    <tr>
+      <td>hipgraph</td>
+      <td>5.19M</td><td style="color:var(--success);"><strong>44.9M</strong></td><td>50.0M</td><td>&mdash;</td>
+    </tr>
+  </table>
+  <div class="grid-2" style="margin-top:0.6em;">
+    <div class="card card-success">
+      <h4>Observations</h4>
+      <ul>
+        <li>svm-optimized leads on coop tier (D5): 5.59M &mdash; micro-opts help for coop</li>
+        <li>compiled-kernel leads on global-coop (D7): NUMA per-XCD counters matter</li>
+        <li>At rank=19, all approaches converge to ~145K shots/s (HBM ceiling)</li>
+      </ul>
+    </div>
+    <div class="stat-callout">
+      <div class="stat-num" style="color:var(--highlight);">145K</div>
+      <div class="stat-label">HBM bandwidth ceiling at rank=19<br/>No dispatch optimization can improve this</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Questions -->
+<!-- ============================================================ -->
+<section class="title-slide">
+  <h1 style="font-size:2.5em !important;">Questions?</h1>
+  <div class="subtitle" style="margin-bottom:1em;">GPU Kernel Architecture Optimization &mdash; Clifft on AMD MI300X</div>
+  <div style="display:flex; flex-wrap:wrap; gap:0.4em; justify-content:center; max-width:600px; margin:0 auto;">
+    <span class="box box-primary" style="font-size:0.6em;">SVM Interpreter</span>
+    <span class="box box-primary" style="font-size:0.6em;">Compiled Megakernel</span>
+    <span class="box box-primary" style="font-size:0.6em;">Warp-Shuffle</span>
+    <span class="box box-primary" style="font-size:0.6em;">GEAK Agents</span>
+    <span class="box box-primary" style="font-size:0.6em;">Heuristic Split</span>
+    <span class="box box-primary" style="font-size:0.6em;">Memory Tiers</span>
+  </div>
+  <div class="meta" style="margin-top:1.2em;">AMD &bull; Riverlane &bull; Unitary Foundation</div>
+</section>
+
+</div><!-- end .slides -->
+</div><!-- end .reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+Reveal.initialize({
+    hash: true,
+    center: false,
+    transition: 'slide',
+    backgroundTransition: 'fade',
+    width: 1200,
+    height: 700,
+    margin: 0.04,
+    slideNumber: 'c/t',
+    showSlideNumber: 'all',
+});
+</script>
+</body>
+</html>

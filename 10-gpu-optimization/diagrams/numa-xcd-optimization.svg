@@ -1,0 +1,152 @@
+<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Courier New', monospace;">
+  <!-- Background -->
+  <rect width="800" height="400" fill="#1a1a2e"/>
+
+  <!-- Section labels -->
+  <text x="10" y="18" fill="#888" font-size="10" font-style="italic">MI300X · 8 XCDs · Private L2 Caches</text>
+
+  <!-- ─── TOP: XCD ROW ─── -->
+  <!-- XCDs 0–7 -->
+  <g id="xcds">
+    <!-- XCD boxes -->
+    <rect x="12"  y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="103" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="194" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="285" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="376" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="467" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="558" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+    <rect x="649" y="26" width="84" height="52" rx="5" fill="#0e2040" stroke="#00bcd4" stroke-width="1.5"/>
+
+    <!-- XCD labels -->
+    <text x="54"  y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 0</text>
+    <text x="145" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 1</text>
+    <text x="236" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 2</text>
+    <text x="327" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 3</text>
+    <text x="418" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 4</text>
+    <text x="509" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 5</text>
+    <text x="600" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 6</text>
+    <text x="691" y="44" fill="#00bcd4" font-size="11" font-weight="bold" text-anchor="middle">XCD 7</text>
+
+    <!-- Private L2 labels inside each XCD box -->
+    <text x="54"  y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="54"  y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="145" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="145" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="236" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="236" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="327" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="327" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="418" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="418" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="509" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="509" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="600" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="600" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+    <text x="691" y="58" fill="#4dd0e1" font-size="8" text-anchor="middle">Private</text>
+    <text x="691" y="69" fill="#4dd0e1" font-size="8" text-anchor="middle">L2</text>
+  </g>
+
+  <!-- Cross-XCD interconnect bar -->
+  <line x1="12" y1="90" x2="733" y2="90" stroke="#ff9800" stroke-width="2.5" stroke-dasharray="6,3"/>
+  <text x="400" y="104" fill="#ff9800" font-size="10" text-anchor="middle">Same XCD atomic: 116 ns   ·   Cross-XCD atomic: 202 ns   (private L2 per XCD)</text>
+
+  <!-- ─── MIDDLE: WORK DISTRIBUTION ─── -->
+  <rect x="10" y="112" width="780" height="148" rx="6" fill="#0a1628" stroke="#444" stroke-width="1"/>
+
+  <!-- Section title -->
+  <text x="400" y="130" fill="#ffffff" font-size="12" font-weight="bold" text-anchor="middle">NUMA-Aware Work Distribution</text>
+
+  <!-- s_getreg instruction banner -->
+  <rect x="30" y="138" width="740" height="22" rx="3" fill="#1a2a40" stroke="#00bcd4" stroke-width="1"/>
+  <text x="400" y="153" fill="#00e5ff" font-size="10" text-anchor="middle" font-family="'Courier New', monospace">s_getreg_b32  HW_REG_XCC_ID   →   identifies which XCD the wavefront is running on</text>
+
+  <!-- 8 per-XCD work counters -->
+  <g id="counters">
+    <!-- Counter boxes -->
+    <rect x="21"  y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="112" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="203" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="294" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="385" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="476" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="567" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+    <rect x="658" y="170" width="83" height="44" rx="4" fill="#112230" stroke="#4caf50" stroke-width="1.5"/>
+
+    <!-- Counter labels -->
+    <text x="62"  y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="62"  y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=0]</text>
+    <text x="62"  y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="153" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="153" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=1]</text>
+    <text x="153" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="244" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="244" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=2]</text>
+    <text x="244" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="335" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="335" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=3]</text>
+    <text x="335" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="426" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="426" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=4]</text>
+    <text x="426" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="517" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="517" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=5]</text>
+    <text x="517" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="608" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="608" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=6]</text>
+    <text x="608" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+
+    <text x="699" y="186" fill="#81c784" font-size="8.5" text-anchor="middle">work_counter</text>
+    <text x="699" y="198" fill="#a5d6a7" font-size="8.5" text-anchor="middle" font-weight="bold">[xcd_id=7]</text>
+    <text x="699" y="208" fill="#4caf50" font-size="7.5" text-anchor="middle">local atomic</text>
+  </g>
+
+  <!-- Connector lines from XCDs to counters -->
+  <line x1="54"  y1="78" x2="62"  y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="145" y1="78" x2="153" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="236" y1="78" x2="244" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="327" y1="78" x2="335" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="418" y1="78" x2="426" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="509" y1="78" x2="517" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="600" y1="78" x2="608" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+  <line x1="691" y1="78" x2="699" y2="170" stroke="#00bcd4" stroke-width="1" opacity="0.5"/>
+
+  <!-- Key insight line -->
+  <text x="400" y="230" fill="#a5d6a7" font-size="10" text-anchor="middle">Each XCD gets its own shot counter  →  avoids cross-XCD atomics  →  116 ns instead of 202 ns per acquire</text>
+
+  <!-- ─── BOTTOM: RESULT ─── -->
+  <rect x="10" y="270" width="780" height="120" rx="6" fill="#0a1a0a" stroke="#4caf50" stroke-width="1.5"/>
+
+  <!-- Result badge -->
+  <rect x="28" y="284" width="220" height="46" rx="5" fill="#1b3a1b" stroke="#66bb6a" stroke-width="1.5"/>
+  <text x="138" y="302" fill="#69f0ae" font-size="13" font-weight="bold" text-anchor="middle">Global-coop tier</text>
+  <text x="138" y="319" fill="#69f0ae" font-size="12" text-anchor="middle">rank = 19   →   +1.4%</text>
+
+  <!-- Result bullets -->
+  <circle cx="268" cy="291" r="3" fill="#4caf50"/>
+  <text x="278" y="295" fill="#c8e6c9" font-size="10">Cross-XCD atomic contention reduced</text>
+
+  <circle cx="268" cy="311" r="3" fill="#4caf50"/>
+  <text x="278" y="315" fill="#c8e6c9" font-size="10">Only effective at rank=19 where global atomics are frequent</text>
+
+  <circle cx="268" cy="331" r="3" fill="#ff9800"/>
+  <text x="278" y="335" fill="#ffe0b2" font-size="10">Small win: atomics are a small fraction of total execution time</text>
+
+  <!-- Before/After atomic latency comparison bar -->
+  <text x="28" y="362" fill="#888" font-size="9">Before (cross-XCD):</text>
+  <rect x="130" y="353" width="202" height="10" rx="2" fill="#b71c1c" opacity="0.8"/>
+  <text x="336" y="362" fill="#ef9a9a" font-size="9"> 202 ns</text>
+
+  <text x="28" y="378" fill="#888" font-size="9">After  (same-XCD): </text>
+  <rect x="130" y="369" width="116" height="10" rx="2" fill="#1b5e20" opacity="0.9"/>
+  <text x="249" y="378" fill="#a5d6a7" font-size="9"> 116 ns  (−43%)</text>
+
+  <!-- Title / watermark -->
+  <text x="790" y="396" fill="#333" font-size="8" text-anchor="end">MI300X NUMA XCD Optimization · clifft-rl</text>
+</svg>

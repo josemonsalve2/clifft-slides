@@ -1,0 +1,236 @@
+<svg width="800" height="500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowG" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto">
+      <path d="M0,0 L4,2 L0,4" fill="none" stroke="#00ff88" stroke-width="0.8"/>
+    </marker>
+    <marker id="arrowR" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto">
+      <path d="M0,0 L4,2 L0,4" fill="none" stroke="#ff4444" stroke-width="0.8"/>
+    </marker>
+    <marker id="arrowO" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto">
+      <path d="M0,0 L4,2 L0,4" fill="none" stroke="#ff9944" stroke-width="0.8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="#1a1a2e"/>
+
+  <!-- Title -->
+  <text x="400" y="28" text-anchor="middle" font-family="monospace" font-size="16" font-weight="bold" fill="#e0e0ff">MI300X GPU Architecture — clifft Relevance</text>
+  <text x="400" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="#8888bb">gfx942 ISA · CDNA3 Architecture · 304 CUs total · 512 VGPRs/SIMD · 64KB LDS/CU</text>
+
+  <!-- ===== SECTION 1: XCD Chiplet Layout ===== -->
+  <text x="10" y="72" font-family="monospace" font-size="11" font-weight="bold" fill="#00e5ff">[ XCD Chiplet Layout — 8 XCDs in 2×4 grid ]</text>
+
+  <!-- Row 0 -->
+  <rect x="10"  y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="51"  y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 0</text>
+  <text x="51"  y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="51"  y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="100" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="141" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 1</text>
+  <text x="141" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="141" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="190" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="231" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 2</text>
+  <text x="231" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="231" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="280" y="80" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="321" y="96"  text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 3</text>
+  <text x="321" y="108" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="321" y="120" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <!-- Row 1 -->
+  <rect x="10"  y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="51"  y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 4</text>
+  <text x="51"  y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="51"  y="180" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="100" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="141" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 5</text>
+  <text x="141" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="141" y="180" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="190" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="231" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 6</text>
+  <text x="231" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="231" y="180" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <rect x="280" y="140" width="82" height="52" rx="5" fill="#0d2137" stroke="#00e5ff" stroke-width="1.5"/>
+  <text x="321" y="156" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#00e5ff">XCD 7</text>
+  <text x="321" y="168" text-anchor="middle" font-family="monospace" font-size="8" fill="#88ccff">38 CUs</text>
+  <text x="321" y="180" text-anchor="middle" font-family="monospace" font-size="7.5" fill="#ff9944">L2 ~8MB</text>
+
+  <!-- Same-XCD interconnect — green arrows row 0 -->
+  <line x1="92"  y1="106" x2="100" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+  <line x1="182" y1="106" x2="190" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+  <line x1="272" y1="106" x2="280" y2="106" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+  <!-- Same-XCD interconnect — green arrows row 1 -->
+  <line x1="92"  y1="166" x2="100" y2="166" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+  <line x1="182" y1="166" x2="190" y2="166" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+  <line x1="272" y1="166" x2="280" y2="166" stroke="#00ff88" stroke-width="1.5" marker-end="url(#arrowG)"/>
+
+  <!-- Cross-XCD interconnect — red dashed vertical -->
+  <line x1="51"  y1="132" x2="51"  y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowR)"/>
+  <line x1="141" y1="132" x2="141" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowR)"/>
+  <line x1="231" y1="132" x2="231" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowR)"/>
+  <line x1="321" y1="132" x2="321" y2="140" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowR)"/>
+
+  <!-- Latency legend under XCD grid -->
+  <rect x="10" y="198" width="355" height="18" rx="3" fill="#0a1520"/>
+  <text x="15"  y="211" font-family="monospace" font-size="8.5" fill="#00ff88">&#9679; Same XCD: 116 ns</text>
+  <text x="135" y="211" font-family="monospace" font-size="8.5" fill="#ff4444">&#9679; Cross XCD: 202 ns</text>
+  <text x="258" y="211" font-family="monospace" font-size="8.5" fill="#ffaa00">&#9679; 8 XCDs &#215; 38 CUs</text>
+
+  <!-- ===== SECTION 2: Memory Hierarchy ===== -->
+  <text x="382" y="72" font-family="monospace" font-size="11" font-weight="bold" fill="#ff9944">[ Memory Hierarchy ]</text>
+
+  <!-- VGPRs -->
+  <rect x="382" y="80" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ff6600" stroke-width="1.5"/>
+  <text x="388" y="94"  font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">VGPRs</text>
+  <text x="388" y="108" font-family="monospace" font-size="8" fill="#ffcc88">512 / SIMD  ·  4 waves @ 128 VGPRs</text>
+
+  <line x1="478" y1="116" x2="478" y2="126" stroke="#ff9944" stroke-width="1.2" marker-end="url(#arrowO)"/>
+
+  <!-- LDS -->
+  <rect x="382" y="126" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ff9944" stroke-width="1.5"/>
+  <text x="388" y="140" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">LDS</text>
+  <text x="388" y="154" font-family="monospace" font-size="8" fill="#ffcc88">64 KB / CU  ·  shared within workgroup</text>
+
+  <line x1="478" y1="162" x2="478" y2="172" stroke="#ff9944" stroke-width="1.2" marker-end="url(#arrowO)"/>
+
+  <!-- L2 Cache -->
+  <rect x="382" y="172" width="192" height="36" rx="4" fill="#1a0a00" stroke="#ffaa44" stroke-width="1.5"/>
+  <text x="388" y="186" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff9944">L2 Cache</text>
+  <text x="388" y="200" font-family="monospace" font-size="8" fill="#ffcc88">Per-XCD  ·  ~8 MB  ·  8 instances</text>
+
+  <line x1="478" y1="208" x2="478" y2="218" stroke="#ff4444" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#arrowR)"/>
+
+  <!-- HBM3 -->
+  <rect x="382" y="218" width="192" height="36" rx="4" fill="#1a0005" stroke="#ff4444" stroke-width="1.5"/>
+  <text x="388" y="232" font-family="monospace" font-size="8.5" font-weight="bold" fill="#ff6666">HBM3</text>
+  <text x="388" y="246" font-family="monospace" font-size="8" fill="#ffaaaa">192 GB  ·  5.3 TB/s aggregate</text>
+  <text x="580" y="240" font-family="monospace" font-size="8" fill="#ff4444">&#8592; bottleneck</text>
+
+  <!-- ===== SECTION 3: Wavefront diagram ===== -->
+  <text x="10" y="232" font-family="monospace" font-size="11" font-weight="bold" fill="#00e5ff">[ Wavefront — 64 threads / wave (CDNA3 SIMT) ]</text>
+
+  <!-- 8x8 thread grid, rows 0-3 cyan, rows 4-7 steel blue -->
+  <!-- row 0 -->
+  <rect x="10"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="22"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="34"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="46"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="58"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="70"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="82"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="94"  y="240" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <!-- row 1 -->
+  <rect x="10"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="22"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="34"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="46"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="58"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="70"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="82"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="94"  y="252" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <!-- row 2 -->
+  <rect x="10"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="22"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="34"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="46"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="58"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="70"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="82"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="94"  y="264" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <!-- row 3 -->
+  <rect x="10"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="22"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="34"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="46"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="58"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="70"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="82"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <rect x="94"  y="276" width="10" height="10" rx="1" fill="#00e5ff" opacity="0.85"/>
+  <!-- row 4 -->
+  <rect x="10"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="22"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="34"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="46"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="58"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="70"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="82"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="94"  y="288" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <!-- row 5 -->
+  <rect x="10"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="22"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="34"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="46"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="58"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="70"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="82"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="94"  y="300" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <!-- row 6 -->
+  <rect x="10"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="22"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="34"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="46"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="58"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="70"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="82"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="94"  y="312" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <!-- row 7 -->
+  <rect x="10"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="22"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="34"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="46"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="58"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="70"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="82"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+  <rect x="94"  y="324" width="10" height="10" rx="1" fill="#44bbff" opacity="0.85"/>
+
+  <!-- __shfl_xor arrows — curved arcs above row 0 -->
+  <path d="M15 240 Q35 229 55 240" stroke="#00ff88" fill="none" stroke-width="1.2" stroke-dasharray="2,2"/>
+  <path d="M67 240 Q87 229 99 240" stroke="#00ff88" fill="none" stroke-width="1.2" stroke-dasharray="2,2"/>
+  <!-- short horizontal ticks between pairs -->
+  <line x1="20" y1="245" x2="22" y2="245" stroke="#00ff88" stroke-width="1" marker-end="url(#arrowG)"/>
+  <line x1="44" y1="245" x2="46" y2="245" stroke="#00ff88" stroke-width="1" marker-end="url(#arrowG)"/>
+  <line x1="68" y1="245" x2="70" y2="245" stroke="#00ff88" stroke-width="1" marker-end="url(#arrowG)"/>
+  <line x1="92" y1="245" x2="94" y2="245" stroke="#00ff88" stroke-width="1" marker-end="url(#arrowG)"/>
+
+  <!-- Wavefront annotation -->
+  <text x="112" y="252" font-family="monospace" font-size="8.5" fill="#00e5ff">64 threads execute same</text>
+  <text x="112" y="264" font-family="monospace" font-size="8.5" fill="#00e5ff">instruction (SIMT)</text>
+  <text x="112" y="280" font-family="monospace" font-size="8.5" fill="#00ff88">__shfl_xor: intra-wave register</text>
+  <text x="112" y="292" font-family="monospace" font-size="8.5" fill="#00ff88">swap — no barriers needed</text>
+  <text x="112" y="310" font-family="monospace" font-size="8" fill="#8888bb">T0–T31  (wave half 0)</text>
+  <text x="112" y="322" font-family="monospace" font-size="8" fill="#6688aa">T32–T63 (wave half 1)</text>
+
+  <!-- ===== SECTION 4: clifft relevance panel ===== -->
+  <rect x="10" y="346" width="780" height="58" rx="5" fill="#0a0f1a" stroke="#555577" stroke-width="1"/>
+  <text x="20" y="362" font-family="monospace" font-size="9.5" font-weight="bold" fill="#e0e0ff">clifft relevance on MI300X</text>
+  <text x="20" y="376" font-family="monospace" font-size="8.5" fill="#88ccff">&#8226; Keep gate kernels XCD-local &#8594; avoid 202 ns cross-XCD penalty; prefer same-XCD workgroup placement</text>
+  <text x="20" y="388" font-family="monospace" font-size="8.5" fill="#88ccff">&#8226; Pack amplitudes in VGPRs (512/SIMD) &#8594; minimize LDS spills; butterfly ops stay register-resident</text>
+  <text x="20" y="400" font-family="monospace" font-size="8.5" fill="#88ccff">&#8226; Use LDS (64 KB/CU) for sub-warp amplitude sharing; __shfl_xor for intra-wavefront reductions (no barrier)</text>
+
+  <!-- ===== SECTION 5: Legend ===== -->
+  <rect x="10" y="412" width="780" height="78" rx="5" fill="#080c18" stroke="#333355" stroke-width="1"/>
+  <text x="20" y="428" font-family="monospace" font-size="9.5" font-weight="bold" fill="#e0e0ff">Legend</text>
+
+  <rect x="20"  y="436" width="14" height="10" rx="2" fill="#00e5ff"/>
+  <text x="38"  y="446" font-family="monospace" font-size="8.5" fill="#00e5ff">Compute (XCDs / SIMT threads)</text>
+
+  <rect x="230" y="436" width="14" height="10" rx="2" fill="#ff9944"/>
+  <text x="248" y="446" font-family="monospace" font-size="8.5" fill="#ff9944">Memory hierarchy (VGPR &#8594; LDS &#8594; L2 &#8594; HBM3)</text>
+
+  <line x1="20"  y1="463" x2="48"  y2="463" stroke="#00ff88" stroke-width="2"/>
+  <text x="52"  y="467" font-family="monospace" font-size="8.5" fill="#00ff88">Fast path / same-XCD (116 ns) / __shfl_xor (barrier-free)</text>
+
+  <line x1="390" y1="463" x2="418" y2="463" stroke="#ff4444" stroke-width="2" stroke-dasharray="4,2"/>
+  <text x="422" y="467" font-family="monospace" font-size="8.5" fill="#ff4444">Bottleneck / cross-XCD (202 ns) / HBM3 access</text>
+
+  <rect x="20" y="474" width="148" height="12" rx="3" fill="#1a1a00" stroke="#ffaa00" stroke-width="1"/>
+  <text x="94" y="484" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffcc44">gfx942 &#183; CDNA3 &#183; 304 CUs total</text>
+</svg>

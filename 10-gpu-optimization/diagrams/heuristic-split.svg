@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
+    </linearGradient>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4ade80"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#fb923c"/>
+    </marker>
+    <marker id="arrowWhite" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="url(#bgGrad)"/>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- TOP SECTION: active_k sawtooth profile          -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <!-- Section label -->
+  <text x="14" y="22" font-family="monospace" font-size="11" fill="#64748b" font-weight="bold">ACTIVE-K PROFILE</text>
+
+  <!-- Chart background -->
+  <rect x="14" y="28" width="772" height="118" rx="4" fill="#0f172a" stroke="#1e3a5f" stroke-width="1"/>
+
+  <!-- Y-axis labels -->
+  <text x="8" y="33" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">10</text>
+  <text x="8" y="56" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">7</text>
+  <text x="8" y="80" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">4</text>
+  <text x="8" y="104" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">1</text>
+  <text x="8" y="144" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">0</text>
+
+  <!-- Horizontal grid lines -->
+  <line x1="18" y1="30" x2="782" y2="30" stroke="#1e3a5f" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="18" y1="53" x2="782" y2="53" stroke="#1e3a5f" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="18" y1="77" x2="782" y2="77" stroke="#1e3a5f" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="18" y1="100" x2="782" y2="100" stroke="#1e3a5f" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="18" y1="135" x2="782" y2="135" stroke="#334155" stroke-width="1"/>
+
+  <!-- k=4 threshold line -->
+  <line x1="18" y1="88" x2="782" y2="88" stroke="#4ade80" stroke-width="0.8" stroke-dasharray="5,4" opacity="0.5"/>
+  <text x="783" y="91" font-family="monospace" font-size="8" fill="#4ade80">k=4</text>
+
+  <!-- Sawtooth waveform — 3 teeth across the chart width (18 to 782, baseline y=135, peak y=30) -->
+  <!-- Tooth 1: EXPAND rises, MEAS/CONTRACT drops -->
+  <!-- Seg1 green region shade -->
+  <polygon points="18,135 18,88 165,88 165,135" fill="#4ade80" opacity="0.07"/>
+  <!-- Tooth1 rise -->
+  <polyline points="18,135 18,108 55,30 110,30 130,108 150,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+  <!-- k=0 flat at baseline after drop (seg1 low-k region) -->
+  <polyline points="150,135 210,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+
+  <!-- Tooth 2: high-k EXPAND (orange) -->
+  <!-- Seg2 orange region shade -->
+  <polygon points="210,135 210,30 420,30 420,135" fill="#fb923c" opacity="0.12"/>
+  <polyline points="210,135 210,30 420,30 420,135" stroke="#fb923c" stroke-width="2" fill="none"/>
+  <!-- brief drop to 0 and back -->
+  <polyline points="420,135 460,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+
+  <!-- Tooth 3: another sawtooth (seg3 green) -->
+  <polygon points="460,135 460,88 610,88 610,135" fill="#4ade80" opacity="0.07"/>
+  <polyline points="460,135 460,108 500,30 560,30 580,108 610,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+  <polyline points="610,135 660,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+
+  <!-- Tail: another brief high seg -->
+  <polygon points="660,135 660,77 720,77 720,135" fill="#fb923c" opacity="0.07"/>
+  <polyline points="660,135 660,77 720,77 720,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+  <polyline points="720,135 782,135" stroke="#60a5fa" stroke-width="2" fill="none"/>
+
+  <!-- 75-85% k=0 annotation band -->
+  <rect x="18" y="125" width="764" height="10" fill="#4ade80" opacity="0.08" rx="2"/>
+  <text x="400" y="133" font-family="monospace" font-size="8" fill="#4ade80" text-anchor="middle">75–85% of instructions execute at k=0 (per-thread speed)</text>
+
+  <!-- X-axis labels -->
+  <text x="18" y="147" font-family="monospace" font-size="8" fill="#475569">0</text>
+  <text x="390" y="147" font-family="monospace" font-size="8" fill="#475569" text-anchor="middle">860</text>
+  <text x="776" y="147" font-family="monospace" font-size="8" fill="#475569" text-anchor="end">1720</text>
+  <text x="400" y="158" font-family="monospace" font-size="8" fill="#475569" text-anchor="middle">instruction index</text>
+
+  <!-- Y-axis title -->
+  <text x="400" y="168" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">active_k</text>
+
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- MIDDLE SECTION: circuit split segments           -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <text x="14" y="192" font-family="monospace" font-size="11" fill="#64748b" font-weight="bold">HEURISTIC SPLIT — SEGMENT DISPATCH (Approach D)</text>
+
+  <!-- Segment 1 — green, per-thread -->
+  <rect x="14" y="200" width="215" height="64" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="2"/>
+  <text x="121" y="217" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">SEGMENT 1</text>
+  <text x="121" y="231" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle">k ≤ 4  (low entanglement)</text>
+  <rect x="22" y="238" width="199" height="18" rx="3" fill="#14532d" opacity="0.8"/>
+  <text x="121" y="250" font-family="monospace" font-size="9" fill="#4ade80" text-anchor="middle" font-weight="bold">Per-thread kernel</text>
+  <text x="121" y="260" font-family="monospace" font-size="10" fill="#a3e635" text-anchor="middle" font-weight="bold">48M shots/s</text>
+
+  <!-- Arrow seg1 → seg2 -->
+  <line x1="229" y1="232" x2="274" y2="232" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowWhite)"/>
+  <text x="251" y="225" font-family="monospace" font-size="7" fill="#64748b" text-anchor="middle">state</text>
+  <text x="251" y="243" font-family="monospace" font-size="7" fill="#64748b" text-anchor="middle">transfer</text>
+
+  <!-- Segment 2 — orange, coop -->
+  <rect x="278" y="200" width="244" height="64" rx="6" fill="#431407" stroke="#fb923c" stroke-width="2"/>
+  <text x="400" y="217" font-family="monospace" font-size="10" fill="#fb923c" text-anchor="middle" font-weight="bold">SEGMENT 2</text>
+  <text x="400" y="231" font-family="monospace" font-size="9" fill="#fdba74" text-anchor="middle">k = 10  (max entanglement)</text>
+  <rect x="286" y="238" width="228" height="18" rx="3" fill="#7c2d12" opacity="0.8"/>
+  <text x="400" y="250" font-family="monospace" font-size="9" fill="#fb923c" text-anchor="middle" font-weight="bold">Cooperative kernel</text>
+  <text x="400" y="260" font-family="monospace" font-size="10" fill="#fbbf24" text-anchor="middle" font-weight="bold">5.6M shots/s</text>
+
+  <!-- Arrow seg2 → seg3 -->
+  <line x1="522" y1="232" x2="567" y2="232" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowWhite)"/>
+  <text x="544" y="225" font-family="monospace" font-size="7" fill="#64748b" text-anchor="middle">state</text>
+  <text x="544" y="243" font-family="monospace" font-size="7" fill="#64748b" text-anchor="middle">transfer</text>
+
+  <!-- Segment 3 — green, per-thread -->
+  <rect x="571" y="200" width="215" height="64" rx="6" fill="#052e16" stroke="#4ade80" stroke-width="2"/>
+  <text x="678" y="217" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">SEGMENT 3</text>
+  <text x="678" y="231" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle">k ≤ 4  (low entanglement)</text>
+  <rect x="579" y="238" width="199" height="18" rx="3" fill="#14532d" opacity="0.8"/>
+  <text x="678" y="250" font-family="monospace" font-size="9" fill="#4ade80" text-anchor="middle" font-weight="bold">Per-thread kernel</text>
+  <text x="678" y="260" font-family="monospace" font-size="10" fill="#a3e635" text-anchor="middle" font-weight="bold">48M shots/s</text>
+
+  <!-- Split label -->
+  <text x="400" y="277" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">Split boundaries detected at MEAS/CONTRACT instruction boundaries</text>
+
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- BOTTOM SECTION: performance implication         -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <text x="14" y="299" font-family="monospace" font-size="11" fill="#64748b" font-weight="bold">PERFORMANCE IMPLICATION</text>
+
+  <!-- Without split box (red tint) -->
+  <rect x="14" y="306" width="370" height="70" rx="6" fill="#1c0a0a" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="199" y="323" font-family="monospace" font-size="10" fill="#ef4444" text-anchor="middle" font-weight="bold">WITHOUT SPLIT</text>
+  <line x1="22" y1="327" x2="376" y2="327" stroke="#ef4444" stroke-width="0.5" opacity="0.4"/>
+  <text x="199" y="342" font-family="monospace" font-size="9" fill="#fca5a5" text-anchor="middle">ALL instructions run at cooperative speed</text>
+  <text x="199" y="356" font-family="monospace" font-size="11" fill="#f87171" text-anchor="middle" font-weight="bold">5.6M shots/s  (bottlenecked)</text>
+  <text x="199" y="370" font-family="monospace" font-size="8" fill="#9ca3af" text-anchor="middle">Slowest segment dictates throughput for entire circuit</text>
+
+  <!-- Arrow between boxes -->
+  <text x="400" y="345" font-family="monospace" font-size="18" fill="#4ade80" text-anchor="middle">→</text>
+  <text x="400" y="358" font-family="monospace" font-size="8" fill="#4ade80" text-anchor="middle">split</text>
+
+  <!-- With split box (green tint) -->
+  <rect x="416" y="306" width="370" height="70" rx="6" fill="#022c22" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="601" y="323" font-family="monospace" font-size="10" fill="#4ade80" text-anchor="middle" font-weight="bold">WITH HEURISTIC SPLIT</text>
+  <line x1="424" y1="327" x2="778" y2="327" stroke="#4ade80" stroke-width="0.5" opacity="0.4"/>
+  <text x="601" y="342" font-family="monospace" font-size="9" fill="#86efac" text-anchor="middle">80% at per-thread (48M) + 20% at coop (5.6M)</text>
+  <text x="601" y="356" font-family="monospace" font-size="11" fill="#4ade80" text-anchor="middle" font-weight="bold">~3–5x improvement  (sawtooth circuits)</text>
+  <text x="601" y="370" font-family="monospace" font-size="8" fill="#9ca3af" text-anchor="middle">Each segment dispatched at optimal kernel type</text>
+
+  <!-- Speed bars -->
+  <rect x="14" y="384" width="370" height="12" rx="3" fill="#1c0a0a"/>
+  <rect x="14" y="384" width="43" height="12" rx="3" fill="#ef4444" opacity="0.8"/>
+  <text x="62" y="393" font-family="monospace" font-size="8" fill="#94a3b8">5.6M / 48M = 11.6% of max</text>
+
+  <rect x="416" y="384" width="370" height="12" rx="3" fill="#022c22"/>
+  <rect x="416" y="384" width="296" height="12" rx="3" fill="#4ade80" opacity="0.7"/>
+  <text x="720" y="393" font-family="monospace" font-size="8" fill="#94a3b8">~38M eff.</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- CAVEAT NOTE                                      -->
+  <!-- ═══════════════════════════════════════════════ -->
+
+  <rect x="14" y="404" width="772" height="44" rx="5" fill="#0f1729" stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="20" y="419" font-family="monospace" font-size="9" fill="#f59e0b" font-weight="bold">NOTE:</text>
+  <text x="60" y="419" font-family="monospace" font-size="9" fill="#cbd5e1">cultivation_d5 has NO sawtooth profile — it sustains k=10 throughout the entire circuit.</text>
+  <text x="20" y="434" font-family="monospace" font-size="9" fill="#94a3b8">Heuristic split yields only +17% on such circuits (overhead reduction only). The 3–5x gain applies to circuits with</text>
+  <text x="20" y="445" font-family="monospace" font-size="9" fill="#94a3b8">genuine sawtooth active_k profiles (EXPAND → MEAS → EXPAND patterns with significant low-k regions).</text>
+
+  <!-- Title bar -->
+  <rect x="14" y="456" width="772" height="34" rx="4" fill="#0d1b2a"/>
+  <text x="400" y="471" font-family="monospace" font-size="12" fill="#e2e8f0" text-anchor="middle" font-weight="bold">Approach D: Heuristic Split  |  +17% thread-only circuits  |  3–5x potential on sawtooth circuits</text>
+  <text x="400" y="484" font-family="monospace" font-size="9" fill="#64748b" text-anchor="middle">Split point detection: MEAS/CONTRACT instruction boundaries where active_k drops below threshold</text>
+</svg>
