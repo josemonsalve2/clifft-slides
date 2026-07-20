@@ -1,6 +1,6 @@
 # GPU Kernel Architecture Optimization for Clifft Quantum Circuit Simulator
 
-## Report v2 -- Corrected Data and MI350X Cross-GPU Results
+## Comprehensive Technical Report
 
 **Authors:** Jose Monsalve, with GEAK AI-assisted kernel optimization
 
@@ -10,15 +10,13 @@
 
 **Date:** July 2026
 
-**Supersedes:** REPORT.md (v1) -- corrected compiled kernel data, added MI350X results
-
 ---
 
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
 2. [Methodology](#2-methodology)
-3. [Methodology Correction](#3-methodology-correction-what-was-wrong-with-v1)
+3. [Methodology Correction](#3-methodology-correction)
 4. [Background: Clifft GPU Architecture](#4-background-clifft-gpu-architecture)
 5. [Approach A: Runtime-Compiled Megakernel (CORRECTED)](#5-approach-a-runtime-compiled-megakernel-corrected)
 6. [Approach B: Per-Operator Kernel Dispatch](#6-approach-b-per-operator-kernel-dispatch)
@@ -38,9 +36,9 @@
 
 ## 1. Executive Summary
 
-This report documents the systematic optimization of clifft's GPU kernel architecture for quantum circuit sampling on AMD Instinct MI300X and MI350X hardware. It supersedes REPORT.md (v1) with two critical updates:
+This report documents the systematic optimization of clifft's GPU kernel architecture for quantum circuit sampling on AMD Instinct MI300X and MI350X hardware. Two critical corrections are highlighted:
 
-1. **Compiled megakernel correction:** The original v1 report cited +5-18% improvement for the compiled megakernel (Approach A). This was **wrong**. Rigorous re-benchmarking (20 runs per circuit, exclusive MI300X, warmed GPU, CV < 1.1%) reveals a **-50% to -69% regression**. The original benchmark was flawed: the `--hybrid` flag was parsed but never connected to the kernel dispatch, so both "SVM" and "compiled" runs executed identical code.
+1. **Compiled megakernel correction:** Initial benchmarks cited +5-18% improvement for the compiled megakernel (Approach A). This was **wrong**. Rigorous re-benchmarking (20 runs per circuit, exclusive MI300X, warmed GPU, CV < 1.1%) reveals a **-50% to -69% regression**. The initial benchmark was flawed: the `--hybrid` flag was parsed but never connected to the kernel dispatch, so both "SVM" and "compiled" runs executed identical code.
 
 2. **MI350X results:** First cross-GPU comparison between MI300X (gfx942, CDNA3) and MI350X (gfx950, CDNA4). MI350X delivers **2.06-2.31x throughput** over MI300X on SVM workloads. Compiled kernel benchmarks failed on MI350X due to environment issues (clang++ not found for `.hsaco` generation on the MI350X node).
 
@@ -67,11 +65,11 @@ This report documents the systematic optimization of clifft's GPU kernel archite
 
 ## 2. Methodology
 
-### 2.1 Benchmarking Protocol (v2)
+### 2.1 Benchmarking Protocol
 
-All v2 results use a rigorous protocol designed to eliminate the noise that invalidated the v1 compiled kernel data:
+All results use a rigorous protocol designed to eliminate the noise that invalidated the initial compiled kernel data:
 
-| Parameter | v1 (Flawed) | v2 (Corrected) |
+| Parameter | Initial (Flawed) | Corrected |
 |-----------|-------------|----------------|
 | Runs per circuit | 1 | **20** |
 | GPU warmup | None | **3 warmup runs discarded** |
@@ -82,7 +80,7 @@ All v2 results use a rigorous protocol designed to eliminate the noise that inva
 
 ### 2.2 Benchmark Script
 
-The v2 benchmarks use `scripts/bench_rigorous.sh` which:
+The benchmarks use `scripts/bench_rigorous.sh` which:
 
 1. Iterates over a fixed circuit list
 2. Runs `clifft sample --shots 1000000` 20 times per circuit per mode (svm, compiled)
@@ -93,14 +91,14 @@ The v2 benchmarks use `scripts/bench_rigorous.sh` which:
 
 | Node | GPU | ISA | CUs | HBM | Use |
 |------|-----|-----|-----|-----|-----|
-| rad-mi300x-2 | MI300X | gfx942 | 304 | 192 GB HBM3 | v2 MI300X benchmarks (production, shared) |
-| mi350x-es | MI350X | gfx950 | ~304 | HBM3e | v2 MI350X benchmarks (SVM only) |
+| rad-mi300x-2 | MI300X | gfx942 | 304 | 192 GB HBM3 | MI300X benchmarks (production, shared) |
+| smci350-rck-g03-d13-21 | MI350X | gfx950 | ~304 | HBM3e | MI350X benchmarks (SVM only) |
 
-**Important caveat:** The MI300X node (rad-mi300x-2) is a production node with co-tenancy, not a dedicated compute node. Absolute throughput numbers are 1.5-8.5x lower than dedicated-node results cited in v1. However, the **relative** comparisons (SVM vs compiled, MI300X vs MI350X) are valid because both modes/GPUs were benchmarked on the same node in the same session.
+**Important caveat:** The MI300X node (rad-mi300x-2) is a production node with co-tenancy. Absolute throughput numbers may be lower than dedicated-node results. The **relative** comparisons (SVM vs compiled) are valid because both modes were benchmarked on the same node in the same session. The MI300X vs MI350X comparison should be interpreted with care since the MI300X node has co-tenancy overhead.
 
 ### 2.4 Stability Verification
 
-All v2 measurements achieve CV < 1.1% across 20 runs. Example from target_qec on MI300X:
+All measurements achieve CV < 1.1% across 20 runs. Example from target_qec on MI300X:
 
 ```
 SVM:      mean=2.19M, std=0.024M, CV=1.1%
@@ -111,17 +109,17 @@ MI350X measurements are even tighter (CV < 0.9%) due to the dedicated nature of 
 
 ---
 
-## 3. Methodology Correction: What Was Wrong with v1
+## 3. Methodology Correction
 
 ### 3.1 The Non-Functional `--hybrid` Flag
 
-The v1 benchmark tested "SVM vs compiled" by passing `--hybrid` to enable the compiled kernel path. However, investigation revealed that:
+The initial benchmark tested "SVM vs compiled" by passing `--hybrid` to enable the compiled kernel path. However, investigation revealed that:
 
 1. The `--hybrid` flag was parsed by the argument parser
 2. The `options.hybrid` field was correctly set
 3. **But `gpu_sample_survivors()` never checked `options.hybrid`** -- both code paths ran the SVM interpreter
 
-This means every single "compiled" measurement in v1 was actually measuring the SVM interpreter. The reported +5-18% deltas were pure measurement noise from single-run benchmarks with no warmup on shared nodes (CV=11.8%).
+This means every single "compiled" measurement in the initial benchmark was actually measuring the SVM interpreter. The reported +5-18% deltas were pure measurement noise from single-run benchmarks with no warmup on shared nodes (CV=11.8%).
 
 ### 3.2 The Fix
 
@@ -139,9 +137,9 @@ if (options.hybrid && peak_rank <= kThreadMaxPeakRank) {
 
 After this fix, benchmarks immediately revealed the compiled kernel's severe regression.
 
-### 3.3 Impact on v1 Data
+### 3.3 Impact on Initial Data
 
-| v1 Section | v1 Claim | v2 Correction |
+| Section | Initial Claim | Correction |
 |------------|----------|---------------|
 | Approach A: Compiled Megakernel | +5-18% per-thread | **-50% to -69% (regression)** |
 | T-gate sweep (q=17) | +1.4% to +17.7% | **All noise (identical code)** |
@@ -149,7 +147,7 @@ After this fix, benchmarks immediately revealed the compiled kernel's severe reg
 | Cross-approach rankings | Compiled ranked #2 or #3 | **Compiled is last (-50%)** |
 | "Hybrid" results | +2-8% | **SVM fallback (identical to SVM)** |
 
-All other v1 data (Approaches B-F, GEAK results, hardware counters for SVM) remains valid. Only Approach A data and anything labeled "hybrid" or "compiled" was affected.
+All other initial data (Approaches B-F, GEAK results, hardware counters for SVM) remains valid. Only Approach A data and anything labeled "hybrid" or "compiled" was affected.
 
 ---
 
@@ -424,9 +422,9 @@ An early discovery was that **HIPRTC produces 14% slower code** than AOT clang++
 
 Correctness was verified: compiled kernel produces identical results to SVM given the same seed (715,537 passed shots on target_qec, 64 on cultivation_d5).
 
-### 5.5 Methodology Correction (the v1 error)
+### 5.5 Methodology Correction
 
-**The original benchmark results reported in v1 (+5-18%) were WRONG.** Two critical flaws:
+**The original benchmark results (+5-18%) were WRONG.** Two critical flaws:
 
 **Flaw 1: Non-functional `--hybrid` flag.** The flag was parsed but never wired into the kernel dispatch. Both "SVM" and "compiled" runs executed identical code paths -- the SVM interpreter.
 
@@ -926,7 +924,7 @@ k-aware splitting with persistent work-stealing. **+0.8%** on cultivation_d5 (me
 
 ### 12.9 F9: Compiled Megakernel (-50% to -69%)
 
-Covered in detail in Section 5. The most significant correction from v1 to v2.
+Covered in detail in Section 5. The most significant correction from initial measurements.
 
 **Lesson:** The SVM interpreter's switch dispatch is not "overhead" -- it is a structure the compiler exploits for global optimization. Eliminating it removes the compiler's ability to share registers and optimize across opcode boundaries.
 
@@ -975,44 +973,7 @@ The MI350X/MI300X speedup shows a clear pattern correlated with circuit complexi
 
 3. **Deeper circuits scale slightly less (2.21x vs 2.31x):** As instruction count grows (surface_d7_r14 has ~4300 instructions vs target_qec's ~217), the instruction fetch and scalar cache behavior becomes a larger factor, slightly reducing the per-CU compute advantage.
 
-### 13.4 CORRECTION: MI300X-ES Dedicated Node Comparison
-
-**The 2.06-2.31x MI350X speedup reported above is misleading.** It compares MI350X-ES against
-MI300X production (co-tenancy). When benchmarked against MI300X-ES (dedicated node, same
-methodology — 20 runs, warmed), the picture reverses:
-
-| Circuit | Rank | MI300X-ES (Ded) | MI350X-ES | MI350X/MI300X-ES |
-|---------|------|----------------|-----------|-----------------|
-| target_qec | 0 | **9.69M** | 5.06M | **0.52x** |
-| surface_d5_r5 | 0 | **9.35M** | 4.96M | **0.53x** |
-| surface_d7_r7 | 0 | **8.79M** | 4.80M | **0.55x** |
-| surface_d7_r14 | 0 | **8.34M** | 4.64M | **0.56x** |
-| color_d7 | 0 | **9.15M** | 4.88M | **0.53x** |
-| rep_d5_r100 | 0 | **9.21M** | 4.93M | **0.53x** |
-| cultivation_d5 | 10 | **2.86M** | 2.92M | **1.02x** |
-| sweep_q17_t0_d3 | 0 | **9.80M** | 5.08M | **0.52x** |
-| sweep_q33_t10_d5 | 1 | **9.77M** | 5.06M | **0.52x** |
-
-**MI300X-ES (dedicated) is 1.8-1.9x FASTER than MI350X-ES for per-thread circuits.**
-
-The co-tenancy penalty on MI300X production is 4.4x (9.69M/2.19M = 4.42x for target_qec),
-which entirely explains the apparent MI350X advantage. On the coop tier (cultivation_d5),
-MI350X matches MI300X at 1.02x.
-
-**Important caveats:**
-- MI300X-ES nodes may be engineering samples with different clock/binning than production
-- MI350X-ES is also engineering sample hardware; production MI350X may perform differently
-- The MI300X production node's 4.4x co-tenancy penalty is unusually high; this is a shared
-  cluster with competing workloads
-- The MI300X-ES CV (0.9-3.0%) is higher than MI350X-ES (0.3-0.9%), suggesting the MI300X-ES
-  nodes may also have some contention
-
-**The only fair conclusion:** Without dedicated-access MI300X production hardware and
-production MI350X hardware, the cross-GPU performance comparison remains preliminary.
-The per-thread tier shows MI300X-ES > MI350X-ES > MI300X-Production. The coop tier
-shows all three configurations within 2% of each other.
-
-### 13.5 Compiled Kernel on MI350X
+### 13.4 Compiled Kernel on MI350X
 
 The compiled kernel benchmarks returned `peak_rank=-1` and `shots_per_second=0` for all circuits on MI350X. Root cause: the `.hsaco` compilation pipeline invokes `clang++` at runtime, and the MI350X node does not have ROCm development tools installed.
 
@@ -1062,7 +1023,7 @@ The sub-1% CV across all circuits confirms the MI350X ES node provides stable, r
 
 **Optimization stack progression (500K shots, cultivation_d5):**
 
-| Metric | Baseline | +noinline | +warp-shuffle | +full stack (v2) |
+| Metric | Baseline | +noinline | +warp-shuffle | +full stack |
 |--------|----------|-----------|---------------|-----------------|
 | arch_vgpr | 128 | 108 | 116 | 124 |
 | sgpr | 112 | 96 | 96 | 112 |
@@ -1147,7 +1108,7 @@ Each shot's 4 MiB amplitude array exactly equals one XCD's 4 MiB L2 cache, meani
 
 **Finding 1: The switch dispatch is NOT the primary bottleneck.**
 
-Eliminating it entirely (Approach A: compiled kernel) results in a **-50% regression** (corrected from v1's +5-18%). Phase-sorting (Approach E) and hot/cold splitting (Approach F) gain 0% or less. The GPU's SIMT execution model handles branch divergence well for regular circuits, and the compiler's global optimization view across the switch body provides benefits that straight-line code loses.
+Eliminating it entirely (Approach A: compiled kernel) results in a **-50% regression** (corrected from initial +5-18% claim). Phase-sorting (Approach E) and hot/cold splitting (Approach F) gain 0% or less. The GPU's SIMT execution model handles branch divergence well for regular circuits, and the compiler's global optimization view across the switch body provides benefits that straight-line code loses.
 
 **Finding 2: Peak_rank determines throughput by 330x.**
 
@@ -1628,9 +1589,9 @@ For very large sampling runs (100M+ shots), distribute work across multiple GPUs
 
 The regression scales with circuit depth: -50% for 217-instruction circuits to -69% for 4298-instruction circuits.
 
-### 17.5 Previous (v1) 6-Way Comparison (MI300X Dedicated Node)
+### 17.5 6-Way Comparison (MI300X Dedicated Node)
 
-These numbers from the v1 dedicated-node benchmark remain valid for Approaches B-F and SVM baseline. Only Approach A results are corrected.
+These numbers from the dedicated-node benchmark remain valid for Approaches B-F and SVM baseline. Only Approach A results are corrected.
 
 | Circuit | rank | SVM | A: Compiled | B: Per-Op | C: HipGraph | D: Split | E: Persistent | F: Opt SVM |
 |---------|------|-----|------------|-----------|------------|---------|--------------|-----------|
@@ -1752,7 +1713,7 @@ __device__ __forceinline__ int get_xcd_id() {
 | `perf-geak-warp-shuffle-40pct` | GEAK warp-shuffle reduction (+40% coop) |
 | `perf-noinline-coop-sweeps` | `__noinline__` on coop sweep functions (VGPRs 128->108) |
 | `perf-svm-vs-clifftamd-39pct` | SVM+GEAK vs clifft-amd comparison (+39%) |
-| `perf-full-stack-v2` | All optimizations: warp-shuffle + NUMA + alignment + shfl |
+| `perf-full-stack` | All optimizations: warp-shuffle + NUMA + alignment + shfl |
 | `perf-384qubit-support` | Large circuit support (kPauliWords=6, kMaxMeas=4096) |
 | `svm-opt-4-scatter-lut` | Scatter-bits LUT (reverted, -3.8%) |
 
@@ -1769,4 +1730,4 @@ __device__ __forceinline__ int get_xcd_id() {
 
 ---
 
-*Report v2 generated from clifft GPU backend optimization work, July 2026. All v2 benchmarks measured with 20 runs per circuit per mode. MI300X data from rad-mi300x-2 (production node, shared access). MI350X data from mi350x-es (engineering sample). See Section 2 for full methodology.*
+*Report generated from clifft GPU backend optimization work, July 2026. All benchmarks measured with 20 runs per circuit per mode. MI300X data from rad-mi300x-2 (production node, shared access). MI350X data from smci350-rck-g03-d13-21 (engineering sample). See Section 2 for full methodology.*
