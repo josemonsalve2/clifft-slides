@@ -198,12 +198,10 @@ Three properties of the workload determine everything downstream:
 1. **The hot loop is a butterfly over amplitude pairs**, not a matrix multiply.
    `ARRAY_U2` applies a 2×2 complex matrix to 2^(k-1) amplitude pairs;
    `ARRAY_U4` a 4×4 to 2^(k-2) quadruples. There is no GEMM here — which is why
-   **`SQ_INSTS_MFMA` is 0.0 in every counter block collected** (51 of 52
-   backend×circuit cells in the `20260726T182433Z_report-final-postdust` run;
-   the 52nd, `qv24_L4_seed42`'s SVM side, has an empty counter block, so it is
-   *unmeasured* rather than nonzero) — and why the matrix cores, the headline
-   feature of this chip, are simply not part of this story. §14.6 returns to
-   what that costs.
+   **`SQ_INSTS_MFMA` is 0.0 in every counter block collected** — all 52
+   backend×circuit cells of the canonical run (job 50793), with no cell missing
+   — and why the matrix cores, the headline feature of this chip, are simply
+   not part of this story. §14.6 returns to what that costs.
 2. **The working set spans four orders of magnitude.** At peak rank 0 the
    "statevector" is one complex number; at rank 24 it is 16.7 million. No single
    parallelization strategy is right for both, which is the origin of the tier

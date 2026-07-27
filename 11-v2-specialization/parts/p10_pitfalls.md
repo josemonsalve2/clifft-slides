@@ -1,8 +1,8 @@
 ## 11. Pitfalls
 
-Four things went wrong in V2 that are worth writing down, because in every case
-a *plausible* explanation was adopted, documented, and built on — and in every
-case the plausible explanation was wrong. The pattern is uniform enough to state
+Five things went wrong in V2 that are worth writing down. In four of them a
+*plausible* explanation was adopted, documented, and built on — and in every one
+of those four the plausible explanation was wrong. The pattern is uniform enough to state
 up front:
 
 > Each bug was diagnosed by analogy ("this looks like an FP problem", "this looks
@@ -178,6 +178,14 @@ with the bare `s_barrier`, once with the fence pair, same source, same flags
 | post-fix interpreter | 5,848 | 80 | 74 (92.5 %) | **0 (0.0 %)** |
 | pre/post register tier | 4,457 | 0 | — | — |
 
+The A/B was re-run from scratch for this report — same source tree, the only
+difference being `v2_barrier()`'s three-line body — and every cell above
+reproduces exactly. The "fenced" column uses a 3-instruction lookback; at a
+1-instruction lookback the post-fix figure is 73 rather than 74, which is the
+one place the definition matters and it moves nothing. The register-tier row is
+not an approximation: with `-DV2_REGISTER` the two `.s` files are **identical by
+md5**, because `v2_barrier()` compiles to nothing there (`v2_ops.h:131`).
+
 Two things fall out. **The fix is complete**: the unfenced-with-`ds`-in-flight
 count goes to exactly zero — the 6 barriers that remain unfenced have no LDS
 write pending, so the wait is correctly elided rather than missing. And the
@@ -315,7 +323,51 @@ The stale cache was **moved, not deleted**, to
 `V2_performance/history/stale_spec_cache_20260725/` — it is the evidence for
 this section.
 
-### 11.5 The common thread
+### 11.5 The same bug, in the build system, three minutes later
+
+The specializer's runtime cache was not the only thing keyed on the wrong
+inputs. `ClifftAmdgcn.cmake`'s `add_custom_command` for each `.hsaco` listed
+`DEPENDS "${_src}"` — the `.c` file alone. CMake does no implicit header
+scanning for custom commands, so editing `v2_ops.h` did not invalidate the
+output and an incremental build kept linking the previously-compiled kernel.
+
+This matters because of what those `.c` files are. `coop_interpreter.c` is
+~150 lines wrapping the entire op library; **the headers *are* the kernel**. The
+commit that fixed it (`72aee12`, 07-26 06:36) says where it was caught:
+
+> This bit during the barrier-fence fix: the first verification job would have
+> measured the pre-fix kernel and reported the fix as ineffective.
+
+Note the timestamps. The barrier fix landed at 06:33 and this landed at
+**06:36** — the staleness was hit immediately, on the very first attempt to
+measure the fix, and caught within three minutes. The specializer's cache
+(§11.4) had the identical defect and was not fixed until **22:14 the same day**,
+sixteen hours later, after it had already contaminated a full benchmark sweep.
+
+Two caches, one failure mode — *the identity of a compiled artifact omitted the
+headers that define it*. The difference in how long each survived is entirely
+explained by how loudly it failed. The build-system instance broke a
+verification the author was actively watching; the runtime instance quietly
+returned plausible numbers.
+
+The fix globs the device headers from the source's own directory and adds them
+to `DEPENDS`:
+
+```cmake
+get_filename_component(_src_dir "${_src}" DIRECTORY)
+file(GLOB _dev_hdrs "${_src_dir}/*.h" "${_src_dir}/*.inc")
+...
+DEPENDS "${_src}" ${_dev_hdrs}
+```
+
+A glob in `DEPENDS` is evaluated at configure time, so a *newly added* header
+still needs a re-configure to be tracked — an acceptable residual, since the
+three headers that matter already exist and the failure mode it removes was the
+one actually observed. The commit also records the scope constraint explicitly:
+`ClifftAmdgcn.cmake` is included only inside the `CLIFFT_ENABLE_MLIR_V2` block,
+so **no SVM or hybrid build path is touched** (§5).
+
+### 11.6 The common thread
 
 | # | plausible story | what it actually was | what settled it |
 |---|---|---|---|
@@ -323,14 +375,16 @@ this section.
 | 11.2 | (see above) | `s_barrier` orders execution, not memory | ISA audit: 92.8 % of barriers unfenced |
 | 11.3 | f32 is less precise than f64 | a threshold constant calibrated for f64, compared against f32 | two-arm A/B on the constant |
 | 11.4 | the benchmark measures current code | the cache served day-old binaries | `llvm-objdump` on the dispatched `.hsaco` |
+| 11.5 | an incremental build rebuilds what changed | `DEPENDS` omitted the headers that *are* the kernel | the fence fix measured as ineffective |
 
-Three of the four were settled by an experiment whose outcome the wrong theory
+Three of the five were settled by an experiment whose outcome the wrong theory
 *could not* produce — a self-comparison, a static audit, a controlled A/B. None
-were settled by reasoning harder about the plausible story. And the fourth was
+were settled by reasoning harder about the plausible story. The fourth was
 caught only because this report's ground rule (*trust data, not text*) required
-re-deriving an in-tree claim from the artifact instead of quoting it.
+re-deriving an in-tree claim from the artifact instead of quoting it. The fifth
+was caught for free, by being loud.
 
-**A fifth, smaller instance belongs here, because it happened while writing this
+**A sixth, smaller instance belongs here, because it happened while writing this
 chapter.** The 95.4 % figure above was quoted from `150d09f`'s commit message
 and from a comment in the script that produced it. Re-running the measurement on
 the archived binary gave 92.8 %, under every definition tried. The original

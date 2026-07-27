@@ -118,10 +118,14 @@ first place.
 >
 > Directly simulating the arithmetic instead — `fl(fl(u·a) + fl(v·b))` over
 > fp32-stored amplitudes whose exact fp64 counterparts cancel identically, via
-> `--model butterfly` — puts the real floor **~36× lower**: median 3.2e-16 at
-> rank 26, worst tail ~5e-15 at rank 1. The residual model is the conservative
-> envelope, because it assumes every term rounds at full `eps` and that the
-> errors never cancel against one another.
+> `--model butterfly` — puts the real floor **~48× lower**: median 2.9e-16 at
+> rank 26, 2.7e-16 at rank 12, and a worst tail of 2.7e-15 at rank 1 (2.9e-15
+> at 20,000 trials — a max is an order statistic and grows with the trial
+> count, so it is only comparable across rows at equal `--trials`). At rank 1
+> the median is exactly **zero**: with a single term there is nothing to cancel
+> against, so the fp32 product is either exact or it is not. The residual model
+> is the conservative envelope, because it assumes every term rounds at full
+> `eps` and that the errors never cancel against one another.
 >
 > This does not disturb the choice of `1e-11`, and it is worth being precise
 > about why. Every structural fact the threshold rests on holds under *both*
@@ -132,6 +136,10 @@ first place.
 > absolute location, and `1e-11` clears the *conservative* one by two decades —
 > so it clears the simulated one by nearly four. What the correction changes is
 > the margin, which is larger than claimed, not the decision.
+>
+> Both tables above were regenerated for this report from the committed tool,
+> whose RNG is seeded `1234 + rank` and so reproduces to the digit:
+> `dust_floor.py --model residual` and `--model butterfly`, defaults otherwise.
 
 This is worth pausing on, because it inverts the intuition the "f32 vs f64"
 framing invites. The dust floor is **rank-independent**, and the *low*-rank

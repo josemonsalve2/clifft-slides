@@ -497,12 +497,10 @@ Three properties of the workload determine everything downstream:
 1. **The hot loop is a butterfly over amplitude pairs**, not a matrix multiply.
    `ARRAY_U2` applies a 2×2 complex matrix to 2^(k-1) amplitude pairs;
    `ARRAY_U4` a 4×4 to 2^(k-2) quadruples. There is no GEMM here — which is why
-   **`SQ_INSTS_MFMA` is 0.0 in every counter block collected** (51 of 52
-   backend×circuit cells in the `20260726T182433Z_report-final-postdust` run;
-   the 52nd, `qv24_L4_seed42`'s SVM side, has an empty counter block, so it is
-   *unmeasured* rather than nonzero) — and why the matrix cores, the headline
-   feature of this chip, are simply not part of this story. §14.6 returns to
-   what that costs.
+   **`SQ_INSTS_MFMA` is 0.0 in every counter block collected** — all 52
+   backend×circuit cells of the canonical run (job 50793), with no cell missing
+   — and why the matrix cores, the headline feature of this chip, are simply
+   not part of this story. §14.6 returns to what that costs.
 2. **The working set spans four orders of magnitude.** At peak rank 0 the
    "statevector" is one complex number; at rank 24 it is 16.7 million. No single
    parallelization strategy is right for both, which is the origin of the tier
@@ -1484,7 +1482,7 @@ That last term is a repair. The key originally hashed only `csrc` — the
 *generated* C — which is barely half the translation unit: every `v2_op_*` body,
 `v2_barrier()`, and every tunable constant lives in the included headers. A
 header fix therefore produced the same key, and the stale `.hsaco` **plus its
-stale `.gate` verdict** silently won. §11.1 documents the benchmark run this
+stale `.gate` verdict** silently won. §11.4 documents the benchmark run this
 destroyed. The fix hashes the contents of all three device headers
 (`v2_ops.h`, `v2_ops_body.inc`, `device_abi.h`) into the key — content, not
 mtime, since mtimes change on every checkout and would defeat the cache for no
@@ -1589,7 +1587,8 @@ interpreter.
 This is a real hazard when reading any V2 benchmark. **With `V2_SPECIALIZE`
 unset, a benchmark measures V2's interpreter against SVM's tuned interpreter and
 reports what looks like a 2–3× regression.** Every number in this report was
-produced with it set; §11.1 shows what happens when the gate un-sets it for you.
+produced with it set; §11.4 shows what happens when a stale gate verdict un-sets
+it for you.
 
 ### 6.7 The three tier wrappers
 
@@ -4193,9 +4192,9 @@ allocation study at the rank-21/22 boundary, not a code change.
 
 ## 11. Pitfalls
 
-Four things went wrong in V2 that are worth writing down, because in every case
-a *plausible* explanation was adopted, documented, and built on — and in every
-case the plausible explanation was wrong. The pattern is uniform enough to state
+Five things went wrong in V2 that are worth writing down. In four of them a
+*plausible* explanation was adopted, documented, and built on — and in every one
+of those four the plausible explanation was wrong. The pattern is uniform enough to state
 up front:
 
 > Each bug was diagnosed by analogy ("this looks like an FP problem", "this looks
@@ -4371,6 +4370,14 @@ with the bare `s_barrier`, once with the fence pair, same source, same flags
 | post-fix interpreter | 5,848 | 80 | 74 (92.5 %) | **0 (0.0 %)** |
 | pre/post register tier | 4,457 | 0 | — | — |
 
+The A/B was re-run from scratch for this report — same source tree, the only
+difference being `v2_barrier()`'s three-line body — and every cell above
+reproduces exactly. The "fenced" column uses a 3-instruction lookback; at a
+1-instruction lookback the post-fix figure is 73 rather than 74, which is the
+one place the definition matters and it moves nothing. The register-tier row is
+not an approximation: with `-DV2_REGISTER` the two `.s` files are **identical by
+md5**, because `v2_barrier()` compiles to nothing there (`v2_ops.h:131`).
+
 Two things fall out. **The fix is complete**: the unfenced-with-`ds`-in-flight
 count goes to exactly zero — the 6 barriers that remain unfenced have no LDS
 write pending, so the wait is correctly elided rather than missing. And the
@@ -4508,7 +4515,51 @@ The stale cache was **moved, not deleted**, to
 `V2_performance/history/stale_spec_cache_20260725/` — it is the evidence for
 this section.
 
-### 11.5 The common thread
+### 11.5 The same bug, in the build system, three minutes later
+
+The specializer's runtime cache was not the only thing keyed on the wrong
+inputs. `ClifftAmdgcn.cmake`'s `add_custom_command` for each `.hsaco` listed
+`DEPENDS "${_src}"` — the `.c` file alone. CMake does no implicit header
+scanning for custom commands, so editing `v2_ops.h` did not invalidate the
+output and an incremental build kept linking the previously-compiled kernel.
+
+This matters because of what those `.c` files are. `coop_interpreter.c` is
+~150 lines wrapping the entire op library; **the headers *are* the kernel**. The
+commit that fixed it (`72aee12`, 07-26 06:36) says where it was caught:
+
+> This bit during the barrier-fence fix: the first verification job would have
+> measured the pre-fix kernel and reported the fix as ineffective.
+
+Note the timestamps. The barrier fix landed at 06:33 and this landed at
+**06:36** — the staleness was hit immediately, on the very first attempt to
+measure the fix, and caught within three minutes. The specializer's cache
+(§11.4) had the identical defect and was not fixed until **22:14 the same day**,
+sixteen hours later, after it had already contaminated a full benchmark sweep.
+
+Two caches, one failure mode — *the identity of a compiled artifact omitted the
+headers that define it*. The difference in how long each survived is entirely
+explained by how loudly it failed. The build-system instance broke a
+verification the author was actively watching; the runtime instance quietly
+returned plausible numbers.
+
+The fix globs the device headers from the source's own directory and adds them
+to `DEPENDS`:
+
+```cmake
+get_filename_component(_src_dir "${_src}" DIRECTORY)
+file(GLOB _dev_hdrs "${_src_dir}/*.h" "${_src_dir}/*.inc")
+...
+DEPENDS "${_src}" ${_dev_hdrs}
+```
+
+A glob in `DEPENDS` is evaluated at configure time, so a *newly added* header
+still needs a re-configure to be tracked — an acceptable residual, since the
+three headers that matter already exist and the failure mode it removes was the
+one actually observed. The commit also records the scope constraint explicitly:
+`ClifftAmdgcn.cmake` is included only inside the `CLIFFT_ENABLE_MLIR_V2` block,
+so **no SVM or hybrid build path is touched** (§5).
+
+### 11.6 The common thread
 
 | # | plausible story | what it actually was | what settled it |
 |---|---|---|---|
@@ -4516,14 +4567,16 @@ this section.
 | 11.2 | (see above) | `s_barrier` orders execution, not memory | ISA audit: 92.8 % of barriers unfenced |
 | 11.3 | f32 is less precise than f64 | a threshold constant calibrated for f64, compared against f32 | two-arm A/B on the constant |
 | 11.4 | the benchmark measures current code | the cache served day-old binaries | `llvm-objdump` on the dispatched `.hsaco` |
+| 11.5 | an incremental build rebuilds what changed | `DEPENDS` omitted the headers that *are* the kernel | the fence fix measured as ineffective |
 
-Three of the four were settled by an experiment whose outcome the wrong theory
+Three of the five were settled by an experiment whose outcome the wrong theory
 *could not* produce — a self-comparison, a static audit, a controlled A/B. None
-were settled by reasoning harder about the plausible story. And the fourth was
+were settled by reasoning harder about the plausible story. The fourth was
 caught only because this report's ground rule (*trust data, not text*) required
-re-deriving an in-tree claim from the artifact instead of quoting it.
+re-deriving an in-tree claim from the artifact instead of quoting it. The fifth
+was caught for free, by being loud.
 
-**A fifth, smaller instance belongs here, because it happened while writing this
+**A sixth, smaller instance belongs here, because it happened while writing this
 chapter.** The 95.4 % figure above was quoted from `150d09f`'s commit message
 and from a comment in the script that produced it. Re-running the measurement on
 the archived binary gave 92.8 %, under every definition tried. The original
@@ -4656,10 +4709,14 @@ first place.
 >
 > Directly simulating the arithmetic instead — `fl(fl(u·a) + fl(v·b))` over
 > fp32-stored amplitudes whose exact fp64 counterparts cancel identically, via
-> `--model butterfly` — puts the real floor **~36× lower**: median 3.2e-16 at
-> rank 26, worst tail ~5e-15 at rank 1. The residual model is the conservative
-> envelope, because it assumes every term rounds at full `eps` and that the
-> errors never cancel against one another.
+> `--model butterfly` — puts the real floor **~48× lower**: median 2.9e-16 at
+> rank 26, 2.7e-16 at rank 12, and a worst tail of 2.7e-15 at rank 1 (2.9e-15
+> at 20,000 trials — a max is an order statistic and grows with the trial
+> count, so it is only comparable across rows at equal `--trials`). At rank 1
+> the median is exactly **zero**: with a single term there is nothing to cancel
+> against, so the fp32 product is either exact or it is not. The residual model
+> is the conservative envelope, because it assumes every term rounds at full
+> `eps` and that the errors never cancel against one another.
 >
 > This does not disturb the choice of `1e-11`, and it is worth being precise
 > about why. Every structural fact the threshold rests on holds under *both*
@@ -4670,6 +4727,10 @@ first place.
 > absolute location, and `1e-11` clears the *conservative* one by two decades —
 > so it clears the simulated one by nearly four. What the correction changes is
 > the margin, which is larger than claimed, not the decision.
+>
+> Both tables above were regenerated for this report from the committed tool,
+> whose RNG is seeded `1234 + rank` and so reproduces to the digit:
+> `dust_floor.py --model residual` and `--model butterfly`, defaults otherwise.
 
 This is worth pausing on, because it inverts the intuition the "f32 vs f64"
 framing invites. The dust floor is **rank-independent**, and the *low*-rank
@@ -4960,45 +5021,50 @@ and `n_dispatches` is `1` for all 26 tier-5+ circuits in the corpus. So the
 4,671 ns saving is paid once, and its weight is 4,671 ns divided by the whole
 kernel time:
 
-Given two independent full-corpus runs on the same node (`f13-21`), both columns
-are shown rather than one — the spread is itself informative:
+Measured on the canonical run (job 50793), whose `n_dispatches` is **1 for all
+26 circuits** — so this is exact, not an assumption:
 
-| circuit | kernel (run A) | % | kernel (run B) | % |
-|---|---|---|---|---|
-| `four_t` | 13.2 µs | **35.4 %** | 10.1 µs | **46.3 %** |
-| `frame_h` | 13.6 µs | **34.4 %** | 10.0 µs | **46.7 %** |
-| `circuit_d3_p0.001` | 221.0 µs | 2.11 % | 224.8 µs | 2.08 % |
-| `qv10` | 1.383 ms | 0.338 % | 1.361 ms | 0.343 % |
-| `circuit_d5_p0.001` | 14.76 ms | 0.032 % | 14.87 ms | 0.031 % |
-| `cultivation_d5` | 30.15 ms | 0.016 % | 30.17 ms | 0.016 % |
-| `qv24_L4_seed42` | 7.246 s | 0.00006 % | 7.241 s | 0.00006 % |
+| circuit | tier | V2 kernel | 4,671 ns as % of it |
+|---|---|---:|---:|
+| `frame_h` | register | 12.1 µs | **38.7 %** |
+| `four_t` | register | 13.1 µs | **35.7 %** |
+| `circuit_d3_p0.001` | coop | 220.7 µs | 2.12 % |
+| `qv10` | coop | 1.386 ms | 0.337 % |
+| `circuit_d5_p0.001` | coop | 8.600 ms | 0.054 % |
+| `cultivation_d5` | coop | 16.42 ms | 0.028 % |
+| `qv24_L4_seed42` | global | 7.242 s | 0.00006 % |
 
-Run A is `20260726T014859Z_all-tier5plus`, run B is
-`20260726T182433Z_report-final-postdust`; both on `smci350-rck-g03-f13-21`.
-Everything from `circuit_d3` down agrees between them to better than 2 %, but
-`four_t` and `frame_h` differ by ~30 % — 13.2 vs 10.1 µs. At ten microseconds a
-kernel is close enough to the measurement floor that run-to-run variation is
-comparable to the effect being measured, so the short-tail percentages should be
-read as **~35–47 %**, not as a single figure. That range does not change any
-conclusion; it is large either way.
+> **An earlier version of this table was stale in a way worth recording.** It
+> quoted `circuit_d5_p0.001` at 14.76 ms and `cultivation_d5` at 30.15 ms from
+> the two `f13-21` runs. Those are **interpreter** times: both circuits map to
+> `coop_r10_n1720`, whose gate verdict was a stale pre-fence *failure* (§11.4),
+> so V2 fell back to the interpreter for exactly that shape. The canonical run
+> has the gate passing and the specializer selected, at 8.60 ms and 16.42 ms —
+> 1.72× and 1.84× faster. The percentages barely moved (0.032 % → 0.054 %) so no
+> conclusion changed, but the absolute times were measuring a different kernel
+> than the one the surrounding text describes.
 
-One thing makes these two rows unusually trustworthy despite run B having been
-affected by the stale-cache bug (§11.4): `four_t` and `frame_h` are **register
-tier** (LDS = 0, VGPR = 32), and §11.2's A/B rebuild showed the register-tier
-binary is *byte-identical* before and after the barrier fix — 4,457 instructions,
-zero barriers, nothing to fence. The stale cache therefore served the correct
-kernel for exactly these circuits, so both columns are valid measurements of the
-same code.
+The two register-tier rows carry the effect and deserve a stability note: at
+12–13 µs a kernel is close enough to the measurement floor that run-to-run
+variation is comparable to the effect. The two earlier `f13-21` runs put
+`four_t` at 13.2 and 10.1 µs and `frame_h` at 13.6 and 10.0 µs, spanning
+34–47 %. Read the short-tail figure as **~35–47 %**, not as a single number.
+Those two circuits are also unaffected by the stale cache in the first place:
+they are register tier (LDS = 0, VGPR = 32), and §11.2's A/B rebuild showed the
+register-tier binary is **byte-identical by md5** before and after the barrier
+fix — 4,457 instructions, zero barriers, nothing to fence. So all three runs
+measured the same code for these rows.
 
 The conclusion is unambiguous and cuts against a naive reading of §13.3:
 **for V2's production workloads, the HSA-vs-HIP dispatch difference is
-negligible.** At the median circuit it is 0.03 % of kernel time. The 1.74× is a
+negligible.** At the median circuit it is well under 0.1 % of kernel time. The 1.74× is a
 real property of the dispatch path and it is not where V2's speedup comes from
 — §14 attributes that to the kernel.
 
 Where it *does* matter is the short tail. `four_t` and `frame_h` run for 10–13 µs,
 so a single HIP dispatch would add 35–47 % to their cost, and the ~198 µs naive
-path would have cost **15–20× the kernel itself**. Those two circuits are also
+path would have cost **15–20× the kernel itself** (16.4× and 15.1× on the
+canonical run's 12.1 and 13.1 µs). Those two circuits are also
 exactly the ones a user iterates on interactively. And the correctness gate
 (§9) dispatches per validation, as does any future per-batch structure.
 

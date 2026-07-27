@@ -249,7 +249,7 @@ That last term is a repair. The key originally hashed only `csrc` — the
 *generated* C — which is barely half the translation unit: every `v2_op_*` body,
 `v2_barrier()`, and every tunable constant lives in the included headers. A
 header fix therefore produced the same key, and the stale `.hsaco` **plus its
-stale `.gate` verdict** silently won. §11.1 documents the benchmark run this
+stale `.gate` verdict** silently won. §11.4 documents the benchmark run this
 destroyed. The fix hashes the contents of all three device headers
 (`v2_ops.h`, `v2_ops_body.inc`, `device_abi.h`) into the key — content, not
 mtime, since mtimes change on every checkout and would defeat the cache for no
@@ -354,7 +354,8 @@ interpreter.
 This is a real hazard when reading any V2 benchmark. **With `V2_SPECIALIZE`
 unset, a benchmark measures V2's interpreter against SVM's tuned interpreter and
 reports what looks like a 2–3× regression.** Every number in this report was
-produced with it set; §11.1 shows what happens when the gate un-sets it for you.
+produced with it set; §11.4 shows what happens when a stale gate verdict un-sets
+it for you.
 
 ### 6.7 The three tier wrappers
 

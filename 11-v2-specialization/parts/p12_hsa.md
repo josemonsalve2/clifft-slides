@@ -196,45 +196,50 @@ and `n_dispatches` is `1` for all 26 tier-5+ circuits in the corpus. So the
 4,671 ns saving is paid once, and its weight is 4,671 ns divided by the whole
 kernel time:
 
-Given two independent full-corpus runs on the same node (`f13-21`), both columns
-are shown rather than one — the spread is itself informative:
+Measured on the canonical run (job 50793), whose `n_dispatches` is **1 for all
+26 circuits** — so this is exact, not an assumption:
 
-| circuit | kernel (run A) | % | kernel (run B) | % |
-|---|---|---|---|---|
-| `four_t` | 13.2 µs | **35.4 %** | 10.1 µs | **46.3 %** |
-| `frame_h` | 13.6 µs | **34.4 %** | 10.0 µs | **46.7 %** |
-| `circuit_d3_p0.001` | 221.0 µs | 2.11 % | 224.8 µs | 2.08 % |
-| `qv10` | 1.383 ms | 0.338 % | 1.361 ms | 0.343 % |
-| `circuit_d5_p0.001` | 14.76 ms | 0.032 % | 14.87 ms | 0.031 % |
-| `cultivation_d5` | 30.15 ms | 0.016 % | 30.17 ms | 0.016 % |
-| `qv24_L4_seed42` | 7.246 s | 0.00006 % | 7.241 s | 0.00006 % |
+| circuit | tier | V2 kernel | 4,671 ns as % of it |
+|---|---|---:|---:|
+| `frame_h` | register | 12.1 µs | **38.7 %** |
+| `four_t` | register | 13.1 µs | **35.7 %** |
+| `circuit_d3_p0.001` | coop | 220.7 µs | 2.12 % |
+| `qv10` | coop | 1.386 ms | 0.337 % |
+| `circuit_d5_p0.001` | coop | 8.600 ms | 0.054 % |
+| `cultivation_d5` | coop | 16.42 ms | 0.028 % |
+| `qv24_L4_seed42` | global | 7.242 s | 0.00006 % |
 
-Run A is `20260726T014859Z_all-tier5plus`, run B is
-`20260726T182433Z_report-final-postdust`; both on `smci350-rck-g03-f13-21`.
-Everything from `circuit_d3` down agrees between them to better than 2 %, but
-`four_t` and `frame_h` differ by ~30 % — 13.2 vs 10.1 µs. At ten microseconds a
-kernel is close enough to the measurement floor that run-to-run variation is
-comparable to the effect being measured, so the short-tail percentages should be
-read as **~35–47 %**, not as a single figure. That range does not change any
-conclusion; it is large either way.
+> **An earlier version of this table was stale in a way worth recording.** It
+> quoted `circuit_d5_p0.001` at 14.76 ms and `cultivation_d5` at 30.15 ms from
+> the two `f13-21` runs. Those are **interpreter** times: both circuits map to
+> `coop_r10_n1720`, whose gate verdict was a stale pre-fence *failure* (§11.4),
+> so V2 fell back to the interpreter for exactly that shape. The canonical run
+> has the gate passing and the specializer selected, at 8.60 ms and 16.42 ms —
+> 1.72× and 1.84× faster. The percentages barely moved (0.032 % → 0.054 %) so no
+> conclusion changed, but the absolute times were measuring a different kernel
+> than the one the surrounding text describes.
 
-One thing makes these two rows unusually trustworthy despite run B having been
-affected by the stale-cache bug (§11.4): `four_t` and `frame_h` are **register
-tier** (LDS = 0, VGPR = 32), and §11.2's A/B rebuild showed the register-tier
-binary is *byte-identical* before and after the barrier fix — 4,457 instructions,
-zero barriers, nothing to fence. The stale cache therefore served the correct
-kernel for exactly these circuits, so both columns are valid measurements of the
-same code.
+The two register-tier rows carry the effect and deserve a stability note: at
+12–13 µs a kernel is close enough to the measurement floor that run-to-run
+variation is comparable to the effect. The two earlier `f13-21` runs put
+`four_t` at 13.2 and 10.1 µs and `frame_h` at 13.6 and 10.0 µs, spanning
+34–47 %. Read the short-tail figure as **~35–47 %**, not as a single number.
+Those two circuits are also unaffected by the stale cache in the first place:
+they are register tier (LDS = 0, VGPR = 32), and §11.2's A/B rebuild showed the
+register-tier binary is **byte-identical by md5** before and after the barrier
+fix — 4,457 instructions, zero barriers, nothing to fence. So all three runs
+measured the same code for these rows.
 
 The conclusion is unambiguous and cuts against a naive reading of §13.3:
 **for V2's production workloads, the HSA-vs-HIP dispatch difference is
-negligible.** At the median circuit it is 0.03 % of kernel time. The 1.74× is a
+negligible.** At the median circuit it is well under 0.1 % of kernel time. The 1.74× is a
 real property of the dispatch path and it is not where V2's speedup comes from
 — §14 attributes that to the kernel.
 
 Where it *does* matter is the short tail. `four_t` and `frame_h` run for 10–13 µs,
 so a single HIP dispatch would add 35–47 % to their cost, and the ~198 µs naive
-path would have cost **15–20× the kernel itself**. Those two circuits are also
+path would have cost **15–20× the kernel itself** (16.4× and 15.1× on the
+canonical run's 12.1 and 13.1 µs). Those two circuits are also
 exactly the ones a user iterates on interactively. And the correctness gate
 (§9) dispatches per validation, as does any future per-batch structure.
 
