@@ -1,0 +1,1083 @@
+
+    <!-- ================= 7. What V2 specializes — eight classes ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">7</div>
+      <h1>What V2 specializes</h1>
+      <div class="section-sub">Eight classes, eight experiments. Each one gets its own op body, its own two
+      call forms, and its own assembly diff &mdash; including the two that barely gain and the one that
+      does not gain at all.</div>
+    </section>
+
+    <section>
+      <h2>7.1 &nbsp;The experiment: one source, two builds</h2>
+      <p class="lede">Each case is a single <code>.c</code> file compiled <b>twice from the same
+      source</b>, calling the <b>identical</b> <code>v2_op_*</code> body out of <code>v2_ops.h</code>:</p>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h"><code>-DSPEC_FORM=0</code> &mdash; interpreter form</div>
+          <div class="d">Operands arrive in a <code>CV2Instr</code> loaded from <b>device memory</b> at a
+          runtime <code>pc</code>, exactly as <code>coop_interpreter.c</code>'s <code>for(pc) switch</code>
+          supplies them.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h"><code>-DSPEC_FORM=1</code> &mdash; specialized form</div>
+          <div class="d">Operands are the <b>literal constants</b> <code>v2_specializer.cc</code> emits for
+          that instruction.</div>
+        </div>
+      </div>
+      <div class="insight">The two forms differ in <b>exactly one variable</b>: whether the operands were
+      compile-time constants. The op body, the tier macro, the compiler and the flags are all held fixed
+      &mdash; and the flags are the <em>production</em> flags copied out of
+      <code>v2_compile_cache.cc</code>.</div>
+      <pre><code>clang --target=amdgcn-amd-amdhsa -mcpu=gfx950 -ffreestanding -nostdlib -nogpulib \
+      -std=c23 -O2 -ffp-contract=off -I&lt;root&gt;/src -S</code></pre>
+    </section>
+
+    <section>
+      <h2>The interpreter form is not a strawman</h2>
+      <p class="lede">One methodology point deserves quoting, because getting it wrong would have inflated
+      every number in this chapter. From <code>spec_examples/harness.h</code>:</p>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="d" style="font-size:0.78em;">The interpreter form reads its operands out of
+        <code>instrs</code>, a plain <code>const CV2Instr*</code> kernel argument indexed by a runtime
+        <code>pc</code>, which is exactly how <code>coop_interpreter.c</code>'s <code>for(pc)switch</code>
+        supplies them. <b>NOT volatile:</b> marking it volatile would force system-coherent
+        (<code>sc0 sc1</code>) reads the real interpreter never issues and would <em>overstate</em> the
+        interpreter's cost. The operands are unknowable at compile time simply because <code>instrs</code>
+        points at device memory.</div>
+      </div>
+      <p class="lede">The harness kernel signature is identical in both builds:</p>
+      <pre><code><span class="kw">#define</span> CASE_KERNEL_HEAD                                                    \
+    __attribute__((visibility(<span class="st">"default"</span>))) __attribute__((amdgpu_kernel))   \
+    <span class="kw">void</span> <span class="fn">case_kernel</span>(V2State* st, CV2Complex* v, CV2Complex* scratch,       \
+                     <span class="kw">const</span> CV2Instr* instrs, u32 pc,                        \
+                     <span class="kw">const</span> CV2FusedU2Entry* fused_u2, ...)
+
+<span class="kw">#define</span> IN(n) (instrs[pc + (n)])   <span class="cm">// the interpreter's access pattern</span></code></pre>
+      <div class="footnote">Metrics are scraped from the emitted assembly by <code>build_examples.sh</code>.
+      Raw output is <code>lowering/spec_examples/stats.csv</code>; the <code>.s</code> files for
+      <em>both</em> forms of all eight cases are checked in alongside it, and the script reproduces all
+      sixteen byte-for-byte.</div>
+    </section>
+
+    <section>
+      <h2>7.2 &nbsp;A measurement note, because an earlier draft got this wrong</h2>
+      <p class="lede">The first harness reported an <b>ISA line count</b> &mdash; <code>wc -l</code> of the
+      <code>.s</code> file. That number is dominated by directives, comments, labels and the AMDGPU metadata
+      block: <b>199&ndash;316 non-instruction lines per case</b>, which for these small kernels is
+      <b>41&ndash;82%</b> of the file.</p>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>Case</th><th class="num">line ratio (wrong)</th><th class="num">instruction ratio (right)</th></tr></thead>
+            <tbody>
+              <tr><td>S1</td><td class="num lose">1.37&times;</td><td class="num win">2.89&times;</td></tr>
+              <tr><td>S2</td><td class="num lose">1.59&times;</td><td class="num win">2.94&times;</td></tr>
+              <tr><td>S3</td><td class="num lose">1.30&times;</td><td class="num win">1.98&times;</td></tr>
+              <tr><td>S4</td><td class="num lose">1.23&times;</td><td class="num win">1.38&times;</td></tr>
+              <tr><td>S5</td><td class="num lose">1.44&times;</td><td class="num win">2.56&times;</td></tr>
+              <tr><td>S6</td><td class="num lose">1.26&times;</td><td class="num win">1.71&times;</td></tr>
+              <tr><td>S7</td><td class="num lose">1.07&times;</td><td class="num win">1.10&times;</td></tr>
+              <tr><td>S8</td><td class="num lose">1.14&times;</td><td class="num win">1.35&times;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">The overhead is nearly constant across the two forms</div>
+            <div class="d">It differs by 4&ndash;23 lines where the <em>instruction</em> counts differ by up
+            to <b>126</b>. So it diluted every ratio toward 1.0 and systematically <b>understated</b> the
+            effect this chapter is about. Every case moved the same direction.</div>
+          </div>
+          <div class="card card-hl">
+            <div class="h">The corrected table counts instructions</div>
+            <div class="d">Tab-indented lines that are neither <code>.directive</code> nor
+            <code>; comment</code>.</div>
+          </div>
+        </div>
+      </div>
+      <div class="insight"><b>This is the ground rule applied to our own harness.</b> The error made V2 look
+      <em>worse</em> than it is, which is the direction that does not trigger suspicion &mdash; and is
+      exactly why it survived a draft.</div>
+    </section>
+
+    <section>
+      <h2>Two more scraping bugs, both worth naming</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Resource columns read from the wrong place</div>
+          <div class="d">They were scraped from the <code>; NumVgprs:</code> comment, which LLVM emits as a
+          <b>symbolic expression</b> (<code>max(56, amdgpu.max_num_vgpr)</code>) for any kernel that calls
+          an external function.
+          <hr/>
+          So <b>S7</b> &mdash; which calls <code>__ocml_log_f64</code> &mdash; scraped to <b>0</b> and
+          appeared to use <em>no vector registers at all</em>, when it in fact uses <b>56 in both
+          forms</b>. And <code>; NumSgprs:</code> does not appear in this LLVM's output at all (only
+          <code>; TotalNumSgprs:</code>, itself symbolic), so that column read 0 for all sixteen files.
+          <b>All three are read from the <code>.set</code> directives now.</b></div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">The subtle one &mdash; a <em>plausible</em> wrong answer</div>
+          <div class="d"><code>build_examples.sh:38-42</code>:
+          <div style="font-family:'JetBrains Mono',monospace; font-size:0.85em; margin-top:0.4em; color:var(--warn);">
+          "A literal tab, not the escape: <code>/usr/bin/grep</code> here is <b>ugrep</b>, which does not
+          expand <code>\t</code> inside an ERE when the script runs non-interactively (it does when typed at
+          a prompt &mdash; so this silently counted 0 in batch and the right number by hand)."</div>
+          <hr/>
+          <b>An instruction count that reads 0 in the CSV and the correct value when checked by hand at a
+          prompt is worse than one that is simply wrong.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The eight cases, at a glance</h2>
+      <div class="diff">
+<span class="ctx">S1_frame_cnot    instrs  136-&gt;47   (2.89x)  vgpr   8-&gt;3    v_alu   44-&gt;8    (5.50x)  branch   6-&gt;4</span>
+<span class="ctx">S2_meas_dormant  instrs  206-&gt;70   (2.94x)  vgpr  25-&gt;14   v_alu   86-&gt;19   (4.53x)  branch  18-&gt;0</span>
+<span class="ctx">S3_expand_rank   instrs  164-&gt;83   (1.98x)  vgpr  18-&gt;8    v_alu   67-&gt;27   (2.48x)  branch   9-&gt;6</span>
+<span class="ctx">S4_meas_active   instrs  331-&gt;240  (1.38x)  vgpr  24-&gt;14   v_alu  139-&gt;96   (1.45x)  branch  15-&gt;7</span>
+<span class="ctx">S5_array_cnot    instrs  207-&gt;81   (2.56x)  vgpr  16-&gt;8    v_alu   84-&gt;33   (2.55x)  branch  10-&gt;8</span>
+<span class="ctx">S6_array_u2      instrs  147-&gt;86   (1.71x)  vgpr  24-&gt;18   v_alu   54-&gt;42   (1.29x)  branch  10-&gt;2</span>
+<span class="del">S7_noise_block   instrs  447-&gt;407  (1.10x)  vgpr  56-&gt;56   v_alu  214-&gt;210  (1.02x)  branch  23-&gt;20</span>
+<span class="ctx">S8_apply_pauli   instrs  185-&gt;137  (1.35x)  vgpr  22-&gt;21   v_alu   71-&gt;63   (1.13x)  branch   3-&gt;3</span>
+      </div>
+      <table class="tight">
+        <thead><tr><th>Case</th><th>Class</th><th>Tier</th><th class="num">instrs</th><th class="num">VALU</th><th class="num">VGPR</th><th class="num">SGPR</th><th class="num"><code>s_load</code></th><th class="num"><code>ds_*</code></th><th class="num">branch</th></tr></thead>
+        <tbody>
+          <tr><td>S1</td><td>frame operand folding</td><td>register</td><td class="num">136&rarr;47 <b class="win">2.89&times;</b></td><td class="num">44&rarr;8 <b class="win">5.50&times;</b></td><td class="num">8&rarr;3</td><td class="num">14&rarr;12</td><td class="num">6&rarr;3</td><td class="num">0&rarr;0</td><td class="num">6&rarr;4</td></tr>
+          <tr><td>S2</td><td>flag folding</td><td>register</td><td class="num">206&rarr;70 <b class="win">2.94&times;</b></td><td class="num">86&rarr;19 <b class="win">4.53&times;</b></td><td class="num">25&rarr;14</td><td class="num lose">13&rarr;26</td><td class="num">9&rarr;4</td><td class="num">0&rarr;0</td><td class="num win">18&rarr;0</td></tr>
+          <tr><td>S3</td><td>static rank tracking</td><td>coop</td><td class="num">164&rarr;83 <b>1.98&times;</b></td><td class="num">67&rarr;27 <b>2.48&times;</b></td><td class="num">18&rarr;8</td><td class="num">16&rarr;10</td><td class="num">6&rarr;4</td><td class="num">0&rarr;0</td><td class="num">9&rarr;6</td></tr>
+          <tr><td>S4</td><td>rank-folded reduction</td><td>coop</td><td class="num">331&rarr;240 <b>1.38&times;</b></td><td class="num">139&rarr;96 <b>1.45&times;</b></td><td class="num">24&rarr;14</td><td class="num">30&rarr;26</td><td class="num">7&rarr;5</td><td class="num lose">4&rarr;4</td><td class="num">15&rarr;7</td></tr>
+          <tr><td>S5</td><td>scatter-index folding</td><td>coop</td><td class="num">207&rarr;81 <b class="win">2.56&times;</b></td><td class="num">84&rarr;33 <b class="win">2.55&times;</b></td><td class="num">16&rarr;8</td><td class="num">24&rarr;10</td><td class="num win">4&rarr;1</td><td class="num">0&rarr;0</td><td class="num">10&rarr;8</td></tr>
+          <tr><td>S6</td><td>fused-matrix lookup</td><td>coop</td><td class="num">147&rarr;86 <b>1.71&times;</b></td><td class="num">54&rarr;42 <b>1.29&times;</b></td><td class="num">24&rarr;18</td><td class="num">23&rarr;16</td><td class="num">12&rarr;7</td><td class="num">0&rarr;0</td><td class="num win">10&rarr;2</td></tr>
+          <tr><td class="lose">S7</td><td class="lose">noise runtime loop</td><td>register</td><td class="num lose">447&rarr;407 1.10&times;</td><td class="num lose">214&rarr;210 1.02&times;</td><td class="num lose">56&rarr;56</td><td class="num">86&rarr;85</td><td class="num">9&rarr;5</td><td class="num">0&rarr;0</td><td class="num">23&rarr;20</td></tr>
+          <tr><td>S8</td><td>Pauli-mask index</td><td>register</td><td class="num">185&rarr;137 <b>1.35&times;</b></td><td class="num">71&rarr;63 <b>1.13&times;</b></td><td class="num">22&rarr;21</td><td class="num">44&rarr;42</td><td class="num">17&rarr;11</td><td class="num">0&rarr;0</td><td class="num">3&rarr;3</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Finding 1: the mechanism is <em>deletion</em>, not substitution</h2>
+      <p class="lede">An earlier draft claimed the deleted VALU work was <em>replaced by scalar work</em>
+      &mdash; "the same computation moved from the vector pipe to the scalar pipe." <b>That claim is wrong,
+      and the data in this very table refutes it.</b> Counting scalar instructions the same way:</p>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>Case</th><th class="num">SALU</th><th class="num">ratio</th><th class="num">VALU</th><th class="num">ratio</th></tr></thead>
+            <tbody>
+              <tr><td>S1</td><td class="num">74&rarr;35</td><td class="num">2.11&times;</td><td class="num">44&rarr;8</td><td class="num">5.50&times;</td></tr>
+              <tr><td>S2</td><td class="num">93&rarr;45</td><td class="num">2.07&times;</td><td class="num">86&rarr;19</td><td class="num">4.53&times;</td></tr>
+              <tr><td>S3</td><td class="num">84&rarr;48</td><td class="num">1.75&times;</td><td class="num">67&rarr;27</td><td class="num">2.48&times;</td></tr>
+              <tr><td>S4</td><td class="num">133&rarr;93</td><td class="num">1.43&times;</td><td class="num">139&rarr;96</td><td class="num">1.45&times;</td></tr>
+              <tr><td>S5</td><td class="num">102&rarr;33</td><td class="num win"><b>3.09&times;</b></td><td class="num">84&rarr;33</td><td class="num">2.55&times;</td></tr>
+              <tr><td>S6</td><td class="num">83&rarr;36</td><td class="num win"><b>2.31&times;</b></td><td class="num">54&rarr;42</td><td class="num">1.29&times;</td></tr>
+              <tr><td>S7</td><td class="num">177&rarr;141</td><td class="num">1.26&times;</td><td class="num">214&rarr;210</td><td class="num">1.02&times;</td></tr>
+              <tr><td>S8</td><td class="num">87&rarr;49</td><td class="num win"><b>1.78&times;</b></td><td class="num">71&rarr;63</td><td class="num">1.13&times;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card card-success">
+            <div class="h">Scalar instructions fall in <em>all eight</em> cases</div>
+            <div class="d">And in <b>S5, S6 and S8</b> they fall <em>faster</em> than vector instructions.
+            Nothing moved to the scalar pipe; scalar work was <b>deleted too</b>, and on the array ops it
+            was deleted harder.</div>
+          </div>
+          <div class="card card-hl">
+            <div class="h">&sect;14.3 confirms this at corpus scale</div>
+            <div class="d">SALU falls faster than VALU on <b>26 of 26</b> circuits, and the <em>absolute</em>
+            number of scalar instructions removed exceeds the vector count removed by <b>~3.8&times;</b> on
+            the surface family.</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">What survives of the original observation</div>
+            <div class="d">The <em>register</em> column can go up where the <em>instruction</em> column goes
+            down (S2's SGPR 13&rarr;26), because straight-line scalar code holding many folded literals
+            needs somewhere to hold them. That is a <b>register-pressure</b> effect, not a
+            <b>work-migration</b> effect.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Findings 2&ndash;4</h2>
+      <div class="card card-accent">
+        <div class="h">2. &nbsp;The spread is enormous &mdash; 5.50&times; down to 1.02&times; on VALU</div>
+        <div class="d" style="font-size:0.75em;">Specialization is <b>not a uniform multiplier</b>. It is
+        worth a great deal on frame/flag/index ops and almost nothing on data-dependent ops. <em>Which
+        opcodes a circuit is made of therefore predicts its speedup</em> &mdash; and &sect;14 confirms that
+        it does.</div>
+      </div>
+      <div class="card card-accent">
+        <div class="h">3. &nbsp;S7 is the negative result, and it is in the table <em>on purpose</em></div>
+        <div class="d" style="font-size:0.75em;">1.10&times; instructions, 1.02&times; VALU, and &mdash; now
+        that the column is read correctly &mdash; <b>VGPR 56&rarr;56, unchanged</b>. The noise block is
+        genuinely data-dependent; there is nothing to fold, and specialization does not even relieve
+        register pressure. <b>This is the case that predicts the <code>circuit_d5</code> regression in
+        &sect;11.1</b>, and the corrected register number <em>strengthens</em> that prediction.</div>
+      </div>
+      <div class="card card-warn">
+        <div class="h">4. &nbsp;S2 is the one case where SGPR pressure goes <em>up</em>, 13&rarr;26</div>
+        <div class="d" style="font-size:0.75em;">While its scalar <em>instruction</em> count falls
+        93&rarr;45 and its branch count falls to <b>zero</b>. Fewer scalar instructions, more scalar
+        registers: the eighteen deleted branches were replaced by <code>s_cselect</code>s over folded
+        literals, and those literals have to live somewhere. On the register tier this is a good trade
+        &mdash; SGPRs are not the occupancy limiter there &mdash; but it is <b>the one place specialization
+        measurably costs something</b>, and the reason register and instruction columns must be read
+        separately.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Per-class gains</h2>
+      <figure>
+        <img src="diagrams/spec-classes-gains.svg" alt="Per-class specialization gains" />
+        <figcaption><b>Figure 7.1</b> &mdash; Per-class gains, three bars per case: instructions, VALU and
+        SALU, ordered by VALU ratio. All three fall in all eight cases; on S5, S6 and S8 the <b>SALU bar is
+        the tallest</b>, which is the microbenchmark form of the corpus-scale finding in &sect;14.3. S7
+        (noise) is flat on all three, and flat on registers too.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ---------------- S1 ---------------- -->
+    <section>
+      <h2>S1 &mdash; frame operand folding <span style="font-size:0.6em;color:var(--dim);">register tier &middot; 2.89&times; instrs &middot; 5.50&times; VALU</span></h2>
+      <p class="lede"><b>The op.</b> <code>OP_FRAME_CNOT</code> touches only the Pauli frame. Two bit reads,
+      two bit XORs, at word/bit offsets derived from the axes (<code>v2_ops_body.inc:12-19</code>):</p>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_frame_cnot</span>(V2State* st, u32 ctrl, u32 tgt) {
+    u32 t = v2_tid();
+    <span class="kw">if</span> (IS_OWNER) {
+        <span class="kw">int</span> px_c = fget(st-&gt;px, ctrl), pz_tt = fget(st-&gt;pz, tgt);
+        fxor(st-&gt;px, tgt, px_c); fxor(st-&gt;pz, ctrl, pz_tt);
+    }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">Constant axis</div>
+          <div class="d"><code>a &gt;&gt; 6</code> and <code>a &amp; 63</code> are compile-time &mdash; the
+          word index becomes a <b>fixed offset</b> and the bit becomes a <b>fixed mask</b>.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">Runtime axis</div>
+          <div class="d">Each access costs a shift/mask chain <em>plus a dynamic index</em> into
+          <code>st-&gt;px</code> / <code>st-&gt;pz</code>.</div>
+        </div>
+      </div>
+      <div class="diff-title">The two forms &mdash; <b>cases/S1_frame_cnot.c</b></div>
+      <div class="diff">
+<span class="add">#if SPEC_FORM</span>
+<span class="add">    v2_op_frame_cnot(st, 3u, 10u);</span>
+<span class="add">    v2_op_frame_cnot(st, 3u, 12u);</span>
+<span class="add">    v2_op_frame_cz(st, 3u, 6u);</span>
+<span class="ctx">#else</span>
+<span class="del">    CV2Instr i0 = IN(0), i1 = IN(1), i2 = IN(2);</span>
+<span class="del">    v2_op_frame_cnot(st, i0.axis_1, i0.axis_2);</span>
+<span class="del">    v2_op_frame_cnot(st, i1.axis_1, i1.axis_2);</span>
+<span class="del">    v2_op_frame_cz(st, i2.axis_1, i2.axis_2);</span>
+<span class="ctx">#endif</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>S1 &mdash; the clearest assembly diff in the study</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b class="win">specialized</b> &mdash; every access is a literal mask on the scalar unit</div>
+          <div class="diff">
+<span class="ctx">case_kernel:</span>
+<span class="ctx">  s_load_dwordx2 s[0:1], s[0:1], 0x0</span>
+<span class="ctx">  s_mov_b32   s7, 0</span>
+<span class="ctx">  s_waitcnt   lgkmcnt(0)</span>
+<span class="ctx">  s_load_dwordx2 s[4:5], s[0:1], 0x0</span>
+<span class="ctx">  s_load_dwordx2 s[2:3], s[0:1], 0x28</span>
+<span class="ctx">  s_waitcnt   lgkmcnt(0)</span>
+<span class="add">  s_and_b32   s6, s4, 8         ; fget(px,3) — const mask</span>
+<span class="ctx">  s_cmp_eq_u64 s[6:7], 0</span>
+<span class="ctx">  s_cbranch_scc1 .LBB0_2</span>
+<span class="add">  s_xor_b32   s4, s4, 0x400     ; fxor(px,10) — const mask</span>
+<span class="ctx">  v_mov_b32_e32 v2, 0</span>
+<span class="ctx">  v_mov_b64_e32 v[0:1], s[4:5]</span>
+<span class="ctx">  global_store_dwordx2 v2, v[0:1], s[0:1]</span>
+<span class="add">  s_and_b32   s6, s2, 0x400</span>
+          </div>
+          <div class="card card-success">
+            <div class="h">All 8 surviving VALU instructions are <code>v_mov</code></div>
+            <div class="d">Four <code>v_mov_b32_e32 v2, 0</code> supplying the zero address offset and four
+            <code>v_mov_b64_e32</code> staging a scalar result for <code>global_store</code>. <b>Not one
+            arithmetic vector instruction survives.</b> The frame logic has left the vector pipe entirely.
+            <hr/>
+            The full mask set is <code>8</code>, <code>0x400</code>, <code>0x1000</code>, <code>64</code>
+            &mdash; bits 3, 10, 12, 6, each exactly where the source says.</div>
+          </div>
+        </div>
+        <div>
+          <div class="diff-title"><b class="lose">interpreter</b> &mdash; instruction fetch, then dynamic bit math</div>
+          <div class="diff">
+<span class="del">  s_load_dword s6, s[0:1], 0x20       ; pc</span>
+<span class="del">  s_load_dwordx2 s[2:3], s[0:1], 0x18 ; instrs</span>
+<span class="ctx">  v_mov_b32_e32 v3, 0</span>
+<span class="del">  s_mul_i32 s7, s6, 40                ; pc * sizeof(CV2Instr)</span>
+<span class="del">  s_mul_hi_u32 s5, s6, 40</span>
+<span class="del">  s_add_u32 s4, s2, s7</span>
+<span class="del">  s_addc_u32 s5, s3, s5</span>
+<span class="del">  global_load_dword v0, v3, s[4:5] offset:2</span>
+<span class="note">  … v_readfirstlane_b32 s9, v0  after s_waitcnt vmcnt(0)</span>
+<span class="del">  v_lshrrev_b32_e32 v2, 3, v0    ; a&gt;&gt;6 word idx, DYNAMIC</span>
+<span class="del">  v_and_b32_e32 v2, 0x1ff8, v2</span>
+<span class="del">  v_readfirstlane_b32 s2, v2</span>
+<span class="del">  s_load_dwordx2 s[6:7], s[0:1], s2 offset:0x0</span>
+<span class="del">  v_lshlrev_b64 v[0:1], v0, 1    ; 1&lt;&lt;(a&amp;63), DYNAMIC</span>
+<span class="del">  v_and_b32_e32 v4, s6, v0</span>
+<span class="del">  v_and_b32_e32 v5, s7, v1</span>
+<span class="del">  v_cmp_eq_u64_e32 vcc, 0, v[4:5]</span>
+          </div>
+          <div class="card card-accent">
+            <div class="h"><b>2</b> <code>s_waitcnt</code> vs <b>15</b></div>
+            <div class="d">The interpreter's operand arrives from memory, so the dependent address math
+            cannot issue until the load retires &mdash; and the frame word it then addresses is itself a
+            <em>second dependent load</em>. The specialized form's masks are immediates in the encoding;
+            both of its two waits guard the unavoidable kernarg &rarr; <code>st</code> &rarr; frame-word
+            chain.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>S1 &mdash; three costs, all three deleted</h2>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">1. Instruction fetch</div>
+          <div class="d"><code>s_mul_i32 s7, s6, 40</code> plus a <code>global_load_dword</code>, <b>per
+          instruction</b>. The bytecode itself is a memory operand.
+          <hr/>
+          <code>40</code> is <code>sizeof(CV2Instr)</code>, which <code>device_abi_checks.cc:58</code> pins
+          equal to <code>sizeof(GpuInstr)</code>. A runtime <code>pc</code> needs a 64-bit product &mdash;
+          hence the <code>s_mul_i32</code>/<code>s_mul_hi_u32</code> pair and the
+          <code>s_add_u32</code>/<code>s_addc_u32</code> that follow.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">2. <code>v_readfirstlane_b32</code></div>
+          <div class="d">The operand arrives in a <em>vector</em> register &mdash; it came from a
+          <code>global_load</code> whose address is uniform but whose result the compiler must materialize
+          in a VGPR &mdash; so it must be moved to the scalar unit before it can be used as an address.
+          <b>A cross-pipe transfer per operand.</b></div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">3. Dynamic bit math on the vector pipe</div>
+          <div class="d"><code>v_lshrrev_b32</code> / <code>v_and_b32</code> / <code>v_lshlrev_b64</code> to
+          compute the word index and the bit mask. Under specialization these are <b>literals in the
+          instruction encoding</b>.</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">44 &rarr; 8 VALU (5.50&times;) is the sum of (2) and (3)</div>
+          <div class="d">The whole kernel falls 136 &rarr; 47 instructions &mdash; the largest
+          instruction-level gain in the study. VGPR 8 &rarr; 3: with operands and masks resolved the op
+          needs almost no vector registers, which <b>directly raises tier occupancy</b> (&sect;9).</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">Scalar <em>registers</em> barely move, 14 &rarr; 12</div>
+          <div class="d">The same frame words are still read and XORed &mdash; just addressed by literal
+          masks. But the scalar <em>instruction</em> count falls <b>74 &rarr; 35 (2.11&times;)</b>: the
+          address arithmetic, the readfirstlane destinations and the mask construction were <b>scalar work
+          as much as vector work</b>.</div>
+        </div>
+      </div>
+      <div class="insight"><b>This is the mechanism behind the SALU finding in &sect;14.3, and it is a
+      deletion mechanism.</b> The interpreter's operand fetch, dispatch and address arithmetic are
+      <em>pure overhead with respect to the simulation</em>, and constants delete them outright.</div>
+    </section>
+
+    <!-- ---------------- S2 ---------------- -->
+    <section>
+      <h2>S2 &mdash; flag folding on dormant measurements <span style="font-size:0.6em;color:var(--dim);">register &middot; 2.94&times; instrs &middot; 18 branches &rarr; 0</span></h2>
+      <p class="lede"><b>The op.</b> <code>OP_MEAS_DORMANT_STATIC</code> writes a measurement slot without
+      touching the amplitude array. <code>flags</code> selects between a constant-outcome path and a
+      frame-read path, and supplies the sign XOR (<code>v2_ops_body.inc:53-65</code>):</p>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_meas_dormant_static</span>(V2State* st, u32 axis, u32 slot, u8 flags) {
+    u32 t = v2_tid();
+    <span class="kw">if</span> (IS_OWNER) {
+        u8 mval;
+        <span class="kw">if</span> (flags &amp; FLAG_IDENTITY) mval = (flags &amp; FLAG_SIGN) ? <span class="lit">1u</span> : <span class="lit">0u</span>;
+        <span class="kw">else</span> {
+            u8 outcome = (u8)fget(st-&gt;px, axis);
+            mval = outcome ^ (u8)((flags &amp; FLAG_SIGN) != <span class="lit">0</span>);
+        }
+        <span class="kw">if</span> (slot &lt; V2_MAX_MEAS) mset(st-&gt;meas, slot, mval);
+    }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="grid-3">
+        <div class="card card-success"><div class="h">Constant <code>flags</code></div><div class="d">Deletes
+        one of the two paths <b>outright</b> &mdash; not <em>predicts</em> it, <em>deletes</em> it &mdash;
+        along with the test that chose between them.</div></div>
+        <div class="card card-success"><div class="h">Constant <code>slot</code></div><div class="d">Deletes
+        the <code>slot &lt; V2_MAX_MEAS</code> bounds check.</div></div>
+        <div class="card card-success"><div class="h">Constant both</div><div class="d"><code>mset(st-&gt;meas,
+        slot, ...)</code> on a bit-packed array becomes a fixed word and a fixed mask, exactly as in
+        S1.</div></div>
+      </div>
+      <div class="verdict verdict-good">A <code>grep</code> for <code>s_cbranch</code> or
+      <code>s_branch</code> over the <em>whole</em> specialized file returns <b>zero</b> &mdash; against
+      <b>18</b> in the interpreter form. What remains is a straight scalar sequence.</div>
+    </section>
+
+    <section>
+      <h2>S2 &mdash; even the genuinely random outcome is if-converted</h2>
+      <p class="lede"><code>spec/S2_meas_dormant.s:49-65</code>, with intervening stores and
+      <code>v_mov</code> staging elided:</p>
+      <div class="diff">
+<span class="ctx">  v_cvt_f64_u32_e32 v[8:9], s11       ; xoshiro output hi -&gt; double</span>
+<span class="ctx">  v_cvt_f64_u32_e32 v[10:11], s10     ; ... and lo</span>
+<span class="ctx">  v_ldexp_f64  v[0:1], v[8:9], 32     ; hi * 2^32</span>
+<span class="ctx">  v_add_f64    v[0:1], v[0:1], v[10:11]</span>
+<span class="ctx">  v_ldexp_f64  v[0:1], v[0:1], s18    ; * 2^-53</span>
+<span class="ctx">  v_cmp_gt_f64_e32 vcc, 0.5, v[0:1]   ; rng_uniform(st-&gt;rng) &lt; 0.5</span>
+<span class="ctx">  s_and_b64    s[2:3], vcc, exec</span>
+<span class="add">  s_cselect_b32 s18, 0, 0x2000        ; resolved with a SELECT, not a branch</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">Why a select is possible on a <em>random</em> outcome</div>
+          <div class="d">With constant <code>axis</code>/<code>slot</code>, <b>both arms write the same
+          fixed bit</b> &mdash; so the compiler can pick the <em>value</em> rather than the <em>path</em>.
+          The neighbouring <code>s_bitset0_b32 s12, 13</code> is the same fold in its purest form:
+          <code>mset</code> of a constant slot on a bit-packed array is <b>one instruction with the bit
+          number in the encoding</b>.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">Why branch removal matters more on a GPU than the count suggests</div>
+          <div class="d">On AMDGCN a taken <code>s_cbranch</code> inside a divergent region forces
+          <code>s_and_saveexec_b64</code> / <code>s_or_b64 exec</code> mask manipulation and
+          <b>serializes the two sides</b>. Eighteen of those in a three-instruction sequence is pure
+          interpretive overhead &mdash; and dormant measurements are <em>extremely</em> common in
+          surface-code circuits, which is why the surface family shows some of the largest gains in
+          &sect;14.</div>
+        </div>
+      </div>
+      <div class="footnote">VALU falls 86&rarr;19 (4.53&times;) and the kernel 206&rarr;70 instructions.
+      <b>2.94&times; is the largest instruction ratio of the eight</b>, though S1's 5.50&times; remains the
+      largest VALU ratio. S2 is also the one case where SGPR usage <em>doubles</em>, 13&rarr;26 &mdash; the
+      price of straight-lining, not the destination of migrated work: its scalar instruction count falls
+      93&rarr;45 at the same time.</div>
+    </section>
+
+    <!-- ---------------- S3 ---------------- -->
+    <section>
+      <h2>S3 &mdash; static rank tracking <span style="font-size:0.6em;color:var(--dim);">coop &middot; the load-bearing one</span></h2>
+      <p class="lede">The case file's own header comment states the claim:</p>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="d" style="font-size:0.8em;">S3 &mdash; <b>STATIC RANK TRACKING.</b> This is the
+        load-bearing specialization: the specializer knows <code>active_k</code> at every program point, so
+        <code>half = 1u &lt;&lt; active_k</code> becomes a literal and the strided sweep gets a compile-time
+        trip count. The interpreter must re-read <code>st-&gt;active_k</code> after every rank-changing op.
+        <b>Note what is NOT happening: the sweep is still a LOOP. V1 unrolled it.</b></div>
+      </div>
+      <div class="verdict verdict-good">That last sentence is the entire difference between V1 and V2 in one
+      line &mdash; and &sect;5 already showed what unrolling cost.</div>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b class="win">specializer</b> &mdash; maintains <code>k</code> as it walks</div>
+          <pre style="margin-top:0.2em;"><code><span class="kw">case</span> Opcode::OP_EXPAND:
+    o &lt;&lt; <span class="st">"v2_op_expand(st, v, "</span> &lt;&lt; *k &lt;&lt; <span class="st">"u);"</span>; <span class="lit">++*k</span>; <span class="kw">break</span>;
+<span class="kw">case</span> Opcode::OP_MEAS_ACTIVE_INTERFERE:
+    o &lt;&lt; <span class="st">"…, "</span> &lt;&lt; *k &lt;&lt; <span class="st">"u, …"</span>;
+    <span class="kw">if</span> (*k) <span class="lit">--*k</span>; <span class="kw">break</span>;</code></pre>
+        </div>
+        <div>
+          <div class="diff-title"><b class="lose">interpreter</b> &mdash; re-reads it every iteration</div>
+          <pre style="margin-top:0.2em;"><code><span class="kw">for</span> (u32 pc = <span class="lit">0</span>; pc &lt; num_instrs; ++pc) {
+    CV2Instr ins = instrs[pc];
+    u32 k = st-&gt;active_k;    <span class="cm">// &lt;- a LOAD, every instruction</span>
+    <span class="kw">switch</span> (ins.opcode) {</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>S3 &mdash; the op and the two forms</h2>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_expand_t</span>(V2State* st, CV2Complex* v, u32 active_k, u32 axis, <span class="kw">int</span> dagger) {
+    u32 t = v2_tid();
+    u32 half = <span class="lit">1u</span> &lt;&lt; active_k;
+    <span class="kw">int</span> px = fget(st-&gt;px, axis);
+    <span class="kw">double</span> imag = dagger ? -V2_INV_SQRT2 : V2_INV_SQRT2;
+    <span class="kw">if</span> (px) imag = -imag;
+    CV2Complex phase; phase.re = (<span class="kw">float</span>)V2_INV_SQRT2; phase.im = (<span class="kw">float</span>)imag;
+    <span class="kw">for</span> (u32 i = t; i &lt; half; i += V2_STRIDE) v[i + half] = cmul(v[i], phase);
+    <span class="fn">v2_barrier</span>();
+    <span class="kw">if</span> (IS_OWNER) st-&gt;active_k = active_k + <span class="lit">1</span>;
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="diff-title">Only the <b>third argument</b> changes &mdash; <b>cases/S3_expand_rank.c</b></div>
+      <div class="diff">
+<span class="add">#if SPEC_FORM</span>
+<span class="add">    v2_op_expand_t(st, v, 0u, 0u, 1);      &lt;- the specializer tracked the rank…</span>
+<span class="add">    v2_op_expand_t(st, v, 1u, 3u, 0);      &lt;- …so the compiler sees it GROW</span>
+<span class="add">    v2_op_expand  (st, v, 2u);             &lt;- …statically, across the program</span>
+<span class="ctx">#else</span>
+<span class="del">    v2_op_expand_t(st, v, st-&gt;active_k, i0.axis_1, 1);</span>
+<span class="del">    v2_op_expand_t(st, v, st-&gt;active_k, i1.axis_1, 0);</span>
+<span class="del">    v2_op_expand  (st, v, st-&gt;active_k);</span>
+<span class="ctx">#endif</span>
+      </div>
+      <div class="grid-3">
+        <div class="card card-success"><div class="h">Literal loop bound</div><div class="d"><code>1u &lt;&lt;
+        active_k</code> is a constant, so the sweep's <b>trip count is known</b>.</div></div>
+        <div class="card card-success"><div class="h">Sign folded at compile time</div><div class="d">A
+        literal <code>dagger</code> makes the <code>?:</code> and the negate both <b>disappear</b>.</div></div>
+        <div class="card card-success"><div class="h">Constant displacement</div><div class="d">The store
+        address <code>v[i + half]</code> gets a <b>constant offset</b> instead of a computed one.</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>S3 &mdash; the <code>s_load</code> accounting: 6&rarr;4, but not by simple deletion</h2>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>load</th><th class="num">interp</th><th class="num">spec</th></tr></thead>
+            <tbody>
+              <tr><td><code>0x20</code> &mdash; <code>pc</code></td><td class="num lose">yes</td><td class="num">&mdash;</td></tr>
+              <tr><td><code>0x18</code> &mdash; <code>instrs</code></td><td class="num lose">yes</td><td class="num">&mdash;</td></tr>
+              <tr><td><code>0x0</code> &mdash; kernarg block</td><td class="num">yes</td><td class="num">yes</td></tr>
+              <tr><td><b><code>0x278</code> &mdash; <code>st-&gt;active_k</code></b></td><td class="num lose">yes</td><td class="num win">&mdash;</td></tr>
+              <tr><td>dynamically-indexed frame word</td><td class="num lose">yes &times;2</td><td class="num win">&mdash;</td></tr>
+              <tr><td><code>st-&gt;px</code> / phase at <em>fixed</em> offsets</td><td class="num">&mdash;</td><td class="num">yes &times;3</td></tr>
+            </tbody>
+          </table>
+          <div class="card card-hl">
+            <div class="h">The character of what remains is the point</div>
+            <div class="d">Three interpreter-only loads (<code>pc</code>, <code>instrs</code>,
+            <code>active_k</code>) and <em>both</em> dynamically-indexed frame reads disappear; three
+            <b>statically-addressed</b> loads appear in their place. Net 6&rarr;4 &mdash; but <b>every
+            surviving load in the specialized form has a compile-time address.</b></div>
+          </div>
+        </div>
+        <div>
+          <div class="stat-callout">
+            <div class="stat-num">1</div>
+            <div class="stat-label">the interpreter form contains exactly one
+            <code>s_load_dword ..., 0x278</code> &mdash; <code>active_k</code>'s offset in
+            <code>V2State</code>. The specialized form contains <b>none</b>.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">What it does <em>not</em> buy &mdash; and this is the point</div>
+            <div class="d"><b>The loop is still there.</b> At rank 8 with <code>V2_STRIDE = 256</code> it is
+            a handful of iterations; at rank 22 it is thousands.
+            <hr/>
+            V1 tried to emit those iterations <em>as code</em> (&sect;5.3) and produced 20 MB of IR that
+            took 221 s to compile. V2 emits <b>one loop with a known bound</b>, which is what LLVM's loop
+            optimizer actually wants.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h">164&rarr;83 instrs &middot; VALU 67&rarr;27 &middot; VGPR 18&rarr;8 &middot; SGPR 16&rarr;10</div>
+            <div class="d">Every column falls, and the register columns fall hardest &mdash; a known trip
+            count lets the allocator size the loop body instead of guarding for the worst case.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Static rank tracking, through a whole program</h2>
+      <figure>
+        <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" />
+        <figcaption><b>Figure 7.2</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
+        so every rank-dependent bound is a literal <em>at its use site</em>. The interpreter must reload
+        <code>st-&gt;active_k</code> at every instruction because any preceding op could have changed
+        it.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ---------------- S4 ---------------- -->
+    <section>
+      <h2>S4 &mdash; rank-folded cooperative reduction <span style="font-size:0.6em;color:var(--dim);">coop &middot; the most expensive opcode in the ISA</span></h2>
+      <pre><code><span class="kw">static inline</span> V2_NOISE_ATTR <span class="kw">void</span> <span class="fn">v2_op_meas_active_interfere</span>(V2State* st, CV2Complex* v, u32 active_k,
+                                               u32 axis, u32 slot, u8 flags) {
+    u32 t = v2_tid();
+    u32 half = <span class="lit">1u</span> &lt;&lt; (active_k - <span class="lit">1u</span>);
+    <span class="kw">int</span> pz = fget(st-&gt;pz, axis);
+    <span class="kw">double</span> lp = <span class="lit">0.0</span>, lm = <span class="lit">0.0</span>;
+    <span class="kw">for</span> (u32 i = t; i &lt; half; i += V2_STRIDE) {          <span class="cm">// sweep 1: accumulate</span>
+        CV2Complex vi = v[i], vh = v[i + half];
+        lp += cnorm(cadd(vi, vh)); lm += cnorm(csub(vi, vh));
+    }
+    <span class="kw">double</span> p_plus, p_minus; <span class="fn">V2_REDUCE2</span>(t, lp, lm, &amp;p_plus, &amp;p_minus);
+    <span class="kw">if</span> (IS_OWNER) {
+        u8 b = sample_branch(st-&gt;rng, p_plus, p_minus, p_plus + p_minus);   <span class="cm">// PRNG draw</span>
+        st-&gt;branch = b;  <span class="cm">/* … mset(st->meas, slot, …) … */</span>
+    }
+    <span class="fn">v2_barrier</span>();
+    <span class="kw">for</span> (u32 i = t; i &lt; half; i += V2_STRIDE) {          <span class="cm">// sweep 2: fold</span>
+        CV2Complex vi = v[i], vh = v[i + half];
+        CV2Complex folded = (st-&gt;branch == <span class="lit">0</span>) ? cadd(vi, vh) : csub(vi, vh);
+        v[i] = cscale(folded, V2_INV_SQRT2);
+    }
+    <span class="fn">v2_barrier</span>();
+    <span class="kw">if</span> (IS_OWNER) { st-&gt;active_k = active_k - <span class="lit">1</span>; <span class="cm">/* … fset px/pz … */</span> }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="footnote">Two full sweeps over <code>2^(k-1)</code> amplitudes with an <b>f64 two-way
+      reduction</b> between them, and a PRNG draw at the branch point. The two forms are a single call:
+      <code>v2_op_meas_active_interfere(st, v, <b>8u, 5u, 12u, 0u</b>)</code> against
+      <code>(st, v, <b>st-&gt;active_k, i0.axis_1, i0.a, i0.flags</b>)</code>.</div>
+    </section>
+
+    <section>
+      <h2>S4 &mdash; the <code>ds_*</code> column stays at 4, and that is the point</h2>
+      <p class="lede"><b>331&rarr;240 instructions (1.38&times;), VALU 139&rarr;96, branches 15&rarr;7, VGPR
+      24&rarr;14.</b> Constant <code>k</code> fixes both trip counts and the LDS offsets the reduction
+      indexes with; constant <code>slot</code>/<code>flags</code> folds the bounds check and the sign XOR as
+      in S2. But:</p>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th></th><th class="num">interpreter</th><th class="num">specialized</th></tr></thead>
+            <tbody>
+              <tr><td><code>ds_bpermute_b32</code></td><td class="num">32</td><td class="num">32</td></tr>
+              <tr><td><code>ds_write2_b64</code> / <code>ds_read2_b64</code></td><td class="num">2 / 2</td><td class="num">2 / 2</td></tr>
+            </tbody>
+          </table>
+          <div class="card card-hl">
+            <div class="h"><b>32 <code>ds_bpermute_b32</code> in both forms, exactly</b></div>
+            <div class="d">That is the butterfly: six XOR steps at offsets 32/16/8/4/2/1, two f64 values
+            per step, two 32-bit halves per f64 &mdash; and the second, four-lane reduction on top. Every
+            one survives specialization <b>unchanged, in the same order</b>.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-warn">
+            <div class="h">That is deliberate &mdash; <code>v2_ops.h:235-236</code></div>
+            <div class="d" style="font-size:0.75em;">"MUST reproduce SVM <code>coop_reduce2</code>'s exact
+            summation order or f64 rounding diverges at measurement branch points."
+            <hr/>
+            <b>The reduction is part of the ABI.</b> If specialization had reassociated it, V2 would
+            compute different <code>p_plus</code>/<code>p_minus</code> in the last bits,
+            <code>sample_branch</code> would take a different branch on some shot, the PRNG streams would
+            desync, and the outputs would stop being byte-exact. <b>The <code>4&rarr;4</code> in that column
+            is the evidence that it did not.</b></div>
+          </div>
+          <div class="card card-success">
+            <div class="h">This is why the compile line carries <code>-ffp-contract=off</code></div>
+            <div class="d">FMA contraction would change the summation the same way a reassociation
+            would.</div>
+          </div>
+        </div>
+      </div>
+      <div class="insight"><b>VALU 1.45&times; is the lowest gain among the array ops, and that is
+      expected.</b> Most of the 139 vector instructions are the actual complex arithmetic &mdash;
+      <code>cadd</code>, <code>csub</code>, <code>cnorm</code>, <code>cmul</code> &mdash; which is
+      <em>real work</em>, not interpretive overhead. There is nothing to fold in an f32 multiply.
+      <b>Specialization removes the addressing around the arithmetic, not the arithmetic.</b></div>
+    </section>
+
+    <section>
+      <h2>The cooperative reduction, unchanged by specialization</h2>
+      <figure>
+        <img src="diagrams/warp-shuffle-reduction.svg" alt="Butterfly reduction across wavefronts" />
+        <figcaption>The two-stage butterfly: six <code>ds_bpermute</code> XOR
+        steps within each wavefront, then a cross-wave combine through LDS. Specialization folds the
+        <em>offsets</em> to literals and leaves the <em>order</em> untouched &mdash; because the order is
+        part of the ABI.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ---------------- S5 ---------------- -->
+    <section>
+      <h2>S5 &mdash; scatter-index folding <span style="font-size:0.6em;color:var(--dim);">coop &middot; 2.56&times; instrs &middot; <code>s_load</code> 4&rarr;1</span></h2>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_array_cnot</span>(V2State* st, CV2Complex* v, u32 active_k, u32 c, u32 tg) {
+    u32 t = v2_tid();
+    u64 c_bit = <span class="lit">1ull</span> &lt;&lt; c, t_bit = <span class="lit">1ull</span> &lt;&lt; tg;
+    u64 iters = <span class="lit">1ull</span> &lt;&lt; (active_k - <span class="lit">2u</span>);
+    <span class="kw">for</span> (u64 i = t; i &lt; iters; i += V2_STRIDE) {
+        u64 base = <span class="fn">scatter_bits_2</span>(i, c, tg) | c_bit;
+        CV2Complex a = v[base], b = v[base | t_bit];
+        v[base] = b; v[base | t_bit] = a;
+    }
+    <span class="fn">v2_barrier</span>();
+    <span class="kw">if</span> (IS_OWNER) { <span class="cm">/* … frame update … */</span> }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="insight"><code>scatter_bits_2(i, a, b)</code> inserts two zero bits at positions
+      <code>a</code> and <code>b</code> &mdash; the standard "enumerate all indices with these two bits
+      cleared" trick. With <b>runtime</b> axes it is a <code>min</code>/<code>max</code> plus two
+      variable-shift mask constructions plus three shift/or steps, <b>all on 64-bit values, per
+      iteration</b>.</div>
+      <div class="footnote">The two forms: <code>v2_op_array_cnot(st, v, <b>8u, 2u, 5u</b>)</code> against
+      <code>v2_op_array_cnot(st, v, <b>st-&gt;active_k, i0.axis_1, i0.axis_2</b>)</code>, plus an
+      <code>array_cz</code> alongside it.</div>
+    </section>
+
+    <section>
+      <h2>S5 &mdash; the index computation collapses to five constant masks</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b class="win">specialized</b> &mdash; <code>k=8, c=2, t=5</code></div>
+          <div class="diff">
+<span class="add">  v_cmp_gt_u32_e64 s[0:1], 64, v0   ; iters = 1&lt;&lt;(8-2), a LITERAL</span>
+<span class="ctx">  v_lshlrev_b32_e32 v3, 1, v0</span>
+<span class="add">  v_and_b32_e32 v2, 3, v0           ; scatter_bits_2 collapsed to</span>
+<span class="add">  v_and_b32_e32 v3, 24, v3          ;   three constant masks</span>
+<span class="add">  v_and_b32_e32 v4, 0xc0, v1        ;   and one v_or3</span>
+<span class="add">  v_or3_b32     v2, v3, v2, v4</span>
+<span class="ctx">  v_lshlrev_b32_e32 v6, 3, v2</span>
+<span class="add">  global_load_dwordx2 v[2:3], v6, s[6:7] offset:288</span>
+<span class="add">  global_load_dwordx2 v[4:5], v6, s[6:7] offset:32</span>
+          </div>
+          <div class="card card-success">
+            <div class="h">The paired access becomes a <em>constant displacement</em></div>
+            <div class="d"><code>t_bit = 1 &lt;&lt; 5</code> at 8 bytes per amplitude is
+            <code>offset:288</code> versus <code>offset:32</code> &mdash; folded into the memory
+            instruction's <b>encoding</b>. <b>No second address register, no add.</b></div>
+          </div>
+        </div>
+        <div>
+          <div class="diff-title"><b class="lose">interpreter</b> &mdash; builds all of it at runtime</div>
+          <div class="diff">
+<span class="del">  s_load_dword s23, s[4:5], 0x278  ; st-&gt;active_k — a round trip</span>
+<span class="del">  s_add_i32 s23, s23, -2           ; k - 2</span>
+<span class="del">  v_lshrrev_b64 v[4:5], s23, v[0:1]; iters, by VARIABLE shift</span>
+<span class="del">  v_cmp_eq_u64_e32 vcc, 0, v[4:5]</span>
+<span class="note">  … then the index math, once per loop entry:</span>
+<span class="del">  s_min_u32 s10, s22, s21          ; scatter_bits_2: min/max</span>
+<span class="del">  s_max_u32 s14, s22, s21</span>
+<span class="del">  v_and_b32_e32 v2, 0xffff, v2</span>
+<span class="del">  s_and_b32 s8, 0xffff, s21</span>
+<span class="del">  s_lshl_b64 s[10:11], -1, s10     ; variable-shift masks</span>
+<span class="del">  s_lshl_b64 s[14:15], -1, s14</span>
+<span class="del">  v_lshlrev_b64 v[2:3], v2, 1      ; 1 &lt;&lt; c, on the VECTOR pipe</span>
+<span class="del">  s_lshl_b64 s[8:9], 1, s8</span>
+<span class="note">  … plus two s_not_b64 to complete the masks — TWICE</span>
+          </div>
+          <div class="card card-accent">
+            <div class="h">Those two <code>s_not_b64</code> appear <em>twice</em></div>
+            <div class="d">At <code>:49-50</code> and again at <code>:151-152</code> &mdash; once per call
+            site, since <code>array_cnot</code> and <code>array_cz</code> each rebuild the masks &mdash; and
+            <b>zero</b> times in the specialized file.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>S5 &mdash; the largest scalar-load reduction in the study</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b class="lose">interpreter</b> &mdash; four <code>s_load</code>s</div>
+          <div class="diff">
+<span class="del">:9   s_load_dword   s6,     s[0:1], 0x20   ; pc</span>
+<span class="del">:10  s_load_dwordx2 s[2:3], s[0:1], 0x18   ; the instrs pointer</span>
+<span class="ctx">:27  s_load_dwordx4 s[4:7], s[0:1], 0x0    ; the kernel argument block</span>
+<span class="del">:31  s_load_dword   s23,    s[4:5], 0x278  ; st-&gt;active_k</span>
+          </div>
+          <div class="diff-title"><b class="win">specialized</b> &mdash; exactly one</div>
+          <div class="diff">
+<span class="ctx">:9   s_load_dwordx4 s[4:7], s[0:1], 0x0    ; the kernel argument block</span>
+          </div>
+        </div>
+        <div>
+          <div class="card card-success">
+            <div class="h">Only the third survives</div>
+            <div class="d">It is the kernel argument pointer, which <b>nothing</b> can remove. The other
+            three are, precisely, the three things specialization knows:
+            <ul style="margin-left:0.9em; margin-top:0.3em;">
+              <li><b>where in the program we are</b> (<code>pc</code>);</li>
+              <li><b>what the instruction says</b> (<code>instrs</code>);</li>
+              <li><b>what the rank is</b> (<code>active_k</code>).</li>
+            </ul></div>
+          </div>
+          <div class="stat-callout">
+            <div class="stat-num">16 &rarr; 8</div>
+            <div class="stat-label">VGPR halving. On the coop tier VGPR count sets <b>waves-per-SIMD
+            occupancy</b>, and array two-qubit ops dominate the register pressure of any circuit with a lot
+            of entangling gates. &sect;9 traces how this fed into the LDS/occupancy work.</div>
+          </div>
+        </div>
+      </div>
+      <div class="footnote">Full result: 207&rarr;81 instructions (2.56&times;), VALU 84&rarr;33
+      (2.55&times;), SGPR 24&rarr;10, <code>s_load</code> <b>4&rarr;1</b>. SALU falls <b>3.09&times;</b>
+      &mdash; faster than VALU, and the largest SALU ratio of the eight.</div>
+    </section>
+
+    <section>
+      <h2>Scatter-index folding, visualized</h2>
+      <figure>
+        <img src="diagrams/scatter-index-folding.svg" alt="scatter_bits_2 with runtime vs constant axes" />
+        <figcaption><code>scatter_bits_2</code> with runtime axes builds its masks
+        with <code>min</code>/<code>max</code> and variable shifts on 64-bit values; with constant axes the
+        whole construction is three literal <code>v_and</code> masks and a <code>v_or3</code>, and the
+        partner amplitude becomes a constant displacement in the load encoding.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ---------------- S6 ---------------- -->
+    <section>
+      <h2>S6 &mdash; fused-matrix table lookup <span style="font-size:0.6em;color:var(--dim);">coop &middot; a <em>bounded</em> gain</span></h2>
+      <p class="lede">This case exists to establish an <b>upper bound on what specialization can do for a
+      data-dependent op</b>, and the case file says so:</p>
+      <div class="card card-warn" style="padding:0.8em;">
+        <div class="d" style="font-size:0.78em;">S6 &mdash; fused-matrix table lookup.
+        <code>v2_op_array_u2</code> indexes <code>fused_u2[cp]</code> then picks
+        <code>matrices[in_state]</code> where <code>in_state</code> comes from the <b>LIVE Pauli frame</b>,
+        so the row is <b>NOT foldable</b> &mdash; only the table entry <code>cp</code> and the axis
+        are.</div>
+      </div>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_array_u2</span>(V2State* st, CV2Complex* v, u32 active_k, u32 axis,
+                                  <span class="kw">const</span> CV2FusedU2Entry* fused_u2, u32 cp) {
+    <span class="kw">int</span> in_state = (fget(st-&gt;pz, axis) ? <span class="lit">2</span> : <span class="lit">0</span>) | (fget(st-&gt;px, axis) ? <span class="lit">1</span> : <span class="lit">0</span>);
+    <span class="kw">const</span> CV2Complex* mat = fused_u2[cp].matrices[in_state];    <span class="cm">// &lt;- in_state is RUNTIME</span>
+    <span class="kw">if</span> (axis &lt; active_k) {
+        u64 axis_bit = <span class="lit">1ull</span> &lt;&lt; axis;
+        u64 iters = <span class="lit">1ull</span> &lt;&lt; (active_k - <span class="lit">1u</span>);
+        <span class="kw">for</span> (u64 i = t; i &lt; iters; i += V2_STRIDE) {
+            u64 i0 = <span class="fn">scatter_bits_1</span>(i, axis), i1 = i0 | axis_bit;
+            CV2Complex a = v[i0], b = v[i1];
+            v[i0] = cadd(cmul(a, mat[<span class="lit">0</span>]), cmul(b, mat[<span class="lit">1</span>]));
+            v[i1] = cadd(cmul(a, mat[<span class="lit">2</span>]), cmul(b, mat[<span class="lit">3</span>]));
+        }
+    }
+    <span class="cm">/* … v2_barrier(); frame update from fused_u2[cp].out_states[in_state] … */</span>
+}</code></pre>
+      <div class="verdict verdict-mixed"><code>in_state</code> is read from the Pauli frame <em>at execution
+      time</em>. The frame depends on measurement outcomes, which depend on the PRNG, which depends on the
+      shot. <b>No amount of static analysis recovers it.</b> The matrix row stays a runtime load in both
+      forms.</div>
+    </section>
+
+    <section>
+      <h2>S6 &mdash; what <em>did</em> fold: branches 10&rarr;2</h2>
+      <p class="lede"><b>147&rarr;86 instructions (1.71&times;), VALU 54&rarr;42 (1.29&times;),
+      <code>s_load</code> 12&rarr;7, SGPR 23&rarr;16 &mdash; but branches 10&rarr;2.</b></p>
+      <div class="grid-3">
+        <div class="card card-success"><div class="h"><code>cp</code> &mdash; the table entry</div><div class="d">A
+        fixed displacement into <code>fused_u2</code>.</div></div>
+        <div class="card card-success"><div class="h"><code>axis</code></div><div class="d">So
+        <code>scatter_bits_1</code> and <code>axis_bit</code> become constant masks, as in S5.</div></div>
+        <div class="card card-success"><div class="h">Crucially: <code>axis &lt; active_k</code></div><div class="d">The
+        case calls <code>v2_op_array_u2(st, v, <b>8u</b>, <b>4u</b>, fused_u2, 17u)</code> &mdash; with both
+        constant the guard is <b>decided at compile time</b> and the <code>if</code> is entered
+        unconditionally.</div></div>
+      </div>
+      <div class="insight">That single fold is <b>most of the 10&rarr;2 branch drop</b>. The two survivors
+      are at <code>:22</code> and <code>:73</code> and are both <code>s_cbranch_execz</code> &mdash; the
+      loop's own exec-mask guards, which <em>no</em> amount of constant folding removes.</div>
+      <div class="verdict verdict-mixed">The VALU ratio of <b>1.29&times;</b> is the honest ceiling for this
+      class. Four complex multiplies and two adds per amplitude pair are <em>irreducible arithmetic</em>.
+      Same shape as S4: <b>specialization removes the scaffolding, not the math.</b></div>
+    </section>
+
+    <!-- ---------------- S7 ---------------- -->
+    <section>
+      <h2>S7 &mdash; the noise runtime loop <span style="font-size:0.6em;color:var(--accent);">the negative result</span></h2>
+      <pre><code><span class="kw">static inline</span> V2_NOISE_ATTR <span class="kw">void</span> <span class="fn">v2_op_noise_block</span>(V2State* st, <span class="kw">const</span> CV2NoiseSite* sites, <span class="kw">const</span> CV2Channel* channels,
+                                     <span class="kw">const double</span>* hazards, u32 num_sites, u32 start, u32 count) {
+    u32 t = v2_tid();
+    <span class="kw">if</span> (IS_OWNER) {
+        u32 end = start + count;
+        <span class="kw">while</span> (st-&gt;next_noise &gt;= start &amp;&amp; st-&gt;next_noise &lt; end) {
+            u32 site_idx = st-&gt;next_noise;
+            <span class="fn">apply_noise_site</span>(st, sites, channels, site_idx);
+            st-&gt;next_noise = site_idx + <span class="lit">1u</span>;
+            <span class="fn">draw_next_noise</span>(st, hazards, num_sites);   <span class="cm">// ocml_log_f64 hazard draw</span>
+        }
+    }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="insight"><code>OP_NOISE_BLOCK</code> covers the half-open site range <code>[start,
+      start+count)</code>, but it <b>consumes only those sites the PRNG selects</b>.
+      <code>draw_next_noise</code> advances <code>st-&gt;next_noise</code> by a <em>random</em> amount.
+      <b>The loop's trip count is a function of the random stream.</b> It stays a loop in <em>both</em>
+      forms; specialization folds only <code>start</code> and <code>count</code>.</div>
+      <div class="verdict verdict-bad">447&rarr;407 instructions (1.10&times;) &middot; VALU 214&rarr;210
+      (1.02&times;) &middot; branches 23&rarr;20 &middot; <b>VGPR 56&rarr;56</b> &middot; SGPR 86&rarr;85</div>
+      <div class="footnote">The register columns say something stronger than "no gain": <b>specialization
+      does not reduce this op's register pressure at all.</b> 56 VGPRs in both forms. That matters for
+      &sect;11.1, because register pressure is <em>precisely</em> the cost that straight-lining hundreds of
+      these into one function <b>adds</b>.</div>
+    </section>
+
+    <section>
+      <h2>S7 &mdash; the entire win is four scalar instructions</h2>
+      <div class="diff-title">What changed &mdash; only the range test (<b>interp:11-38</b> vs <b>spec:15-25</b>)</div>
+      <div class="diff">
+<span class="del">-  s_load_dword s0, s[4:5], 0x20           ; pc</span>
+<span class="del">-  s_mul_i32 s6, s0, 40                    ; instruction address</span>
+<span class="del">-  s_load_dwordx2 s[70:71], s[4:5], 0x8    ; ins.a = start, ins.b = count</span>
+<span class="del">-  s_add_i32 s69, s71, s70                 ; end = start + count, at RUNTIME</span>
+<span class="del">-  s_cmp_lt_u32 s0, s70                    ; next_noise &lt; start</span>
+<span class="del">-  s_cselect_b64 s[2:3], -1, 0</span>
+<span class="del">-  s_cmp_ge_u32 s0, s69                    ; next_noise &gt;= end</span>
+<span class="del">-  s_cselect_b64 s[4:5], -1, 0</span>
+<span class="del">-  s_or_b64 s[2:3], s[2:3], s[4:5]</span>
+<span class="ctx">   s_load_dword s0, s[64:65], 0x27c        ; st-&gt;next_noise — in BOTH forms</span>
+<span class="add">+  s_add_i32 s1, s0, 0xffffff7d            ; next_noise - 131</span>
+<span class="add">+  s_cmp_gt_u32 s1, 56                     ; single unsigned compare vs 56</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">The classic <code>(x - lo) &gt; (hi - lo)</code> idiom</div>
+          <div class="d">The two-compare range test becomes one unsigned compare. <b>That is the whole win:
+          four scalar instructions.</b></div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">The 210 surviving VALU instructions do not care what <code>start</code> was</div>
+          <div class="d">They are <code>apply_noise_site</code> and the <code>ocml_log_f64</code> hazard
+          draw. There is nothing in them for a constant to touch.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Why this negative result is the most important slide in &sect;7</h2>
+      <p class="lede">It is the <b>first-principles prediction</b> of the <code>circuit_d5</code> regression
+      in &sect;11.1. <code>coop_circuit_d5.c</code> contains <b>1,720</b> <code>v2_op_*</code> calls.
+      Counting them by opcode gives the mix directly:</p>
+      <table class="tight">
+        <thead><tr><th>Opcode family</th><th class="num">calls</th><th class="num">share</th><th>S7 verdict</th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_cnot</code>/<code>_cz</code>/<code>_h</code>/<code>_swap</code></td><td class="num">757</td><td class="num">44.0%</td><td class="win">folds well (S1)</td></tr>
+          <tr><td><code>meas_dormant_static</code>/<code>_random</code></td><td class="num">215</td><td class="num">12.5%</td><td class="win">folds well (S2)</td></tr>
+          <tr><td><b><code>noise</code>/<code>noise_block</code>/<code>readout_noise</code></b></td><td class="num lose"><b>329</b></td><td class="num lose"><b>19.1%</b></td><td class="lose"><b>does not fold (S7)</b></td></tr>
+          <tr><td><code>apply_pauli</code></td><td class="num">135</td><td class="num">7.8%</td><td>bounded (S8)</td></tr>
+          <tr><td><code>detector</code>/<code>observable</code></td><td class="num">109</td><td class="num">6.3%</td><td>&mdash;</td></tr>
+          <tr><td>array ops (<code>array_t</code>, <code>multi_cnot</code>, <code>cnot</code>, <code>s</code>, <code>multi_cz</code>)</td><td class="num">136</td><td class="num">7.9%</td><td>bounded (S5, S6)</td></tr>
+          <tr><td><code>expand_t</code>/<code>swap_meas_interfere</code></td><td class="num">39</td><td class="num">2.3%</td><td class="win">folds (S3, S4)</td></tr>
+        </tbody>
+      </table>
+      <div class="insight"><b>Nearly a fifth of the program is in the one class S7 measured at
+      1.02&times;</b> &mdash; and that class is by far the most <em>expensive</em> per call (447
+      instructions in the interpreter form, against 136 for a frame op), so its share of <em>runtime</em> is
+      much larger than its share of call sites. The frame and measurement ops that <em>do</em> fold well are
+      individually cheap.</div>
+      <div class="verdict verdict-bad">That is the regression in one table: <b>the ops worth specializing
+      are the ones that cost little, and the op that dominates the time is the one specialization cannot
+      touch.</b> &sect;11.1 shows what happened when it was specialized anyway.</div>
+    </section>
+
+    <!-- ---------------- S8 ---------------- -->
+    <section>
+      <h2>S8 &mdash; Pauli-mask index folding <span style="font-size:0.6em;color:var(--dim);">register &middot; bounded, for a <em>different</em> reason</span></h2>
+      <pre><code><span class="kw">static inline</span> __attribute__((always_inline)) <span class="kw">void</span> <span class="fn">v2_op_apply_pauli</span>(V2State* st, <span class="kw">const</span> CV2Mask* pauli_masks, u32 cp, u32 cond_slot) {
+    u32 t = v2_tid();
+    <span class="kw">if</span> (IS_OWNER &amp;&amp; mget(st-&gt;meas, cond_slot) != <span class="lit">0</span>) {
+        <span class="kw">const</span> CV2Mask* m = &amp;pauli_masks[cp];
+        <span class="kw">for</span> (u32 w = <span class="lit">0</span>; w &lt; CLIFFT_V2_PAULI_WORDS; ++w) { st-&gt;px[w] ^= m-&gt;x[w]; st-&gt;pz[w] ^= m-&gt;z[w]; }
+    }
+    <span class="fn">v2_barrier</span>();
+}</code></pre>
+      <div class="card card-warn" style="padding:0.8em;">
+        <div class="d" style="font-size:0.8em;">The case comment states the boundary precisely: <b>the mask
+        INDEX and the measurement slot fold, the mask CONTENTS do not</b> (they live in a device
+        buffer).</div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b class="lose">interpreter</b> &mdash; a computed index</div>
+          <div class="diff">
+<span class="del">:32  s_load_dwordx2 s[4:5], s[34:35], s7 offset:0x50   ; index in a REGISTER</span>
+          </div>
+        </div>
+        <div>
+          <div class="diff-title"><b class="win">specialized</b> &mdash; three literal displacements</div>
+          <div class="diff">
+<span class="add">:19   s_load_dwordx16 s[0:15], s[36:37], 0x0</span>
+<span class="add">:74   s_load_dwordx16 s[0:15], s[36:37], 0x58   ; pauli_masks[1]</span>
+<span class="add">:118  s_load_dwordx16 s[0:15], s[36:37], 0xb0   ; pauli_masks[2]</span>
+          </div>
+        </div>
+      </div>
+      <div class="footnote"><code>0x58</code> is 88 bytes = <code>sizeof(CV2Mask)</code> for
+      <code>CLIFFT_V2_PAULI_WORDS = 5</code> &mdash; two arrays of five <code>uint64_t</code> plus a sign
+      byte, padded to 8. <b>The stride between the three constants is exactly one mask.</b> That is the
+      <code>s_load</code> 17&rarr;11 drop. But the five words still have to be <em>loaded</em> and XORed
+      into the frame, and the number of loads is set by <b>the mask width, not the operand</b>.</div>
+    </section>
+
+    <section>
+      <h2>S8 &mdash; the branch count does not move, but two of three change <em>kind</em></h2>
+      <p class="lede"><b>185&rarr;137 instructions (1.35&times;), VALU 71&rarr;63 (1.13&times;), VGPR
+      22&rarr;21, SGPR 44&rarr;42, <code>s_load</code> 17&rarr;11, branches 3&rarr;3.</b> The more
+      interesting fact is in the <em>kind</em>:</p>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>form</th><th>branches</th></tr></thead>
+            <tbody>
+              <tr><td class="lose">interpreter</td><td>1&times; <code>s_cbranch_scc1</code> + <b>2&times; <code>s_cbranch_vccnz</code></b></td></tr>
+              <tr><td class="win">specialized</td><td>3&times; <code>s_cbranch_scc1</code></td></tr>
+            </tbody>
+          </table>
+          <div class="card card-hl">
+            <div class="h"><code>vccnz</code> tests the <em>vector</em> condition code</div>
+            <div class="d">The lane-mask result of a <code>v_cmp</code>. <code>scc1</code> tests the
+            <em>scalar</em> condition code. Specialization did not delete the branch &mdash; it <b>moved the
+            predicate that drives it off the vector pipe</b>, exactly as S1 described for the
+            arithmetic.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">What it could <em>not</em> do</div>
+            <div class="d">Remove the branch entirely, because the condition
+            <code>mget(st-&gt;meas, cond_slot) != 0</code> tests a <b>runtime measurement outcome</b>.
+            <hr/>
+            <b>Same wall as S6's <code>in_state</code></b>: data that only exists once the shot is running.
+            Constant <code>cond_slot</code> fixes <em>which bit</em> is tested; nothing fixes its
+            value.</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">A different shape of bounded gain from S6</div>
+            <div class="d">In S6 the <em>arithmetic</em> was irreducible. Here the <b>memory traffic</b>
+            is.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The taxonomy &mdash; and the chapter's conclusion</h2>
+      <div class="grid-2">
+        <div>
+          <h4 style="color:var(--success);">Specialization folds</h4>
+          <div class="card card-success">
+            <div class="h">Operand-derived address and mask arithmetic <span class="src">S1, S5</span></div>
+            <div class="d"><b>Large win</b> &mdash; up to 5.50&times; VALU.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h">Control flow selected by constant flags and bounds <span class="src">S2, S3, S6's guard</span></div>
+            <div class="d"><b>Large win</b>, and the branch removal matters more on a GPU than the count
+            suggests.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h">Loop trip counts from a statically-tracked rank <span class="src">S3, S4, S5</span></div>
+            <div class="d"><b>The structural win</b> &mdash; and the one V1 tried to get by <em>unrolling</em>
+            instead.</div>
+          </div>
+        </div>
+        <div>
+          <h4 style="color:var(--accent);">It does not fold</h4>
+          <div class="card card-accent">
+            <div class="h">Floating-point arithmetic on amplitudes <span class="src">S4, S6</span></div>
+            <div class="d">There is nothing to fold in an f32 multiply.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">Anything indexed by the live Pauli frame or a measurement outcome <span class="src">S6, S8</span></div>
+            <div class="d">Data that only exists once the shot is running.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">Anything whose trip count depends on the PRNG <span class="src">S7</span></div>
+            <div class="d">The negative result, and the one that predicts &sect;11.1.</div>
+          </div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">That taxonomy predicts the per-circuit results in &sect;14 well
+      enough to state as the chapter's conclusion: <b>a circuit's speedup under V2 is a function of how much
+      of its instruction mix falls in the first list.</b></div>
+    </section>

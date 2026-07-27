@@ -1,0 +1,698 @@
+
+    <!-- ================= 8. Progressive lowering ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">8</div>
+      <h1>Progressive lowering</h1>
+      <div class="section-sub">What the compiler does with it &mdash; a whole circuit followed down both
+      pipelines, stage by stage, rendered as diffs.</div>
+    </section>
+
+    <section>
+      <h2>A note on framing, before any diffs</h2>
+      <p class="lede">The project's own documentation is misleading here, and the ground rule of this report
+      is to <b>trust data over text</b>.</p>
+      <div class="verdict verdict-bad"><b>V2 does not emit MLIR.</b></div>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">The directory name is the only MLIR left</div>
+          <div class="d"><code>src/clifft/gpu/mlir/v2/</code> is historical.
+          <code>v2_specializer.cc:127</code> emits a <b>C translation unit</b> whose first line is
+          <code>#include "clifft/gpu/mlir/v2/v2_ops.h"</code>, and the path to <code>.hsaco</code> is
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.85em;margin-top:0.3em;color:var(--highlight);">
+          C &rarr; clang &rarr; llvm-link &rarr; opt &rarr; llc &rarr; ld.lld</div></div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">&sect;5 established the matching fact about V1</div>
+          <div class="d">Its MLIR was <b>100% <code>llvm</code> dialect</b>, it authored <b>zero</b> custom
+          passes, and one of the three stock passes it ran is a <b>complete no-op</b>.</div>
+        </div>
+      </div>
+      <div class="insight">So this chapter cannot show "the diff each MLIR pass we introduced produces,"
+      <b>because no such pass exists.</b> What it <em>can</em> show &mdash; and does &mdash; is the real
+      progressive lowering of both pipelines, rendered as diffs. Which turns out to be a more useful
+      comparison anyway: it shows <em>where each pipeline's representation actually collapses</em>, and
+      V1's and V2's collapse in <b>completely different places</b>.</div>
+    </section>
+
+    <section>
+      <h2>8.1 &nbsp;The corpus &mdash; thirteen stage pairs</h2>
+      <table class="tight">
+        <thead><tr><th>Pipeline</th><th>Circuit</th><th>Chain</th></tr></thead>
+        <tbody>
+          <tr><td><code>v1</code></td><td><code>frame_h</code>, <code>circuit_d3</code></td><td><code>emitted.mlir</code> &rarr; <code>opt.mlir</code> &rarr; <code>translate.ll</code> &rarr; <code>optO2.ll</code> &rarr; <code>isa.s</code></td></tr>
+          <tr><td><code>v2</code></td><td><code>circuit_d3</code></td><td><code>emitted.c</code> &rarr; <code>clangO0.ll</code> &rarr; <code>clangO2.ll</code> &rarr; <code>isa.s</code></td></tr>
+          <tr><td><code>v1pass</code></td><td><code>frame_h</code></td><td><code>canonicalize</code> &rarr; <code>cse</code> &rarr; <code>convert-func-to-llvm</code></td></tr>
+        </tbody>
+      </table>
+      <p class="lede">Each is rendered both as a hunk-scoped <code>.diff</code> (greppable, for the report)
+      and a colorized side-by-side <code>.html</code> (for this deck). The renderer,
+      <code>lowering/render_diffs.py</code>, documents its own methodology:</p>
+      <div class="card card-hl" style="padding:0.8em;">
+        <div class="d" style="font-size:0.78em;"><b>Why not just <code>diff -u</code>:</b> the stage files
+        are up to 20k lines and the interesting change is almost never at the top. <code>--window</code>
+        extracts the N largest contiguous change hunks so the report can quote a hunk that actually shows
+        the transform, rather than the first one alphabetically.
+        <hr/>
+        Stage files are <b>NOT line-aligned</b> across a lowering boundary (MLIR SSA names get renumbered by
+        every pass), so a raw line diff between <code>.mlir</code> and <code>.ll</code> is noise. That is
+        intentional: <b>the diff is evidence of <em>how much</em> the representation changed</b>, and the
+        hunk excerpts show <em>what kind</em> of change.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Diff sizes are themselves a signal</h2>
+      <div class="diff">
+<span class="del">   16  v1pass.frame_h.1_cse__2_convert-func-to-llvm.diff     &lt;- the no-op</span>
+<span class="ctx">  189  v1.circuit_d3.4_optO2__5_isa.diff</span>
+<span class="ctx">  189  v1.frame_h.4_optO2__5_isa.diff</span>
+<span class="ctx">  189  v2.circuit_d3.3_clangO2__4_isa.diff</span>
+<span class="ctx">  248  v1.circuit_d3.2_opt__3_translate.diff</span>
+<span class="ctx">  248  v1.frame_h.2_opt__3_translate.diff</span>
+<span class="ctx">  255  v1.circuit_d3.1_emitted__2_opt.diff</span>
+<span class="ctx">  255  v1.frame_h.1_emitted__2_opt.diff</span>
+<span class="ctx">  328  v2.circuit_d3.1_emitted__2_clangO0.diff</span>
+<span class="ctx">  404  v1.frame_h.3_translate__4_optO2.diff</span>
+<span class="add">  456  v2.circuit_d3.2_clangO0__3_clangO2.diff</span>
+<span class="ctx">  488  v1.circuit_d3.3_translate__4_optO2.diff</span>
+<span class="add">  576  v1pass.frame_h.0_canonicalize__1_cse.diff</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Smallest in the corpus: <b>16 lines</b></div>
+          <div class="d">V1's <code>convert-func-to-llvm</code> &mdash; and all 16 are context. <b>Nothing
+          changed.</b></div>
+        </div>
+        <div class="card card-success">
+          <div class="h">Largest two: <b>576</b> and <b>456</b></div>
+          <div class="d">V1's <code>cse</code> pass (cleaning up after its own emitter) and V2's
+          <code>-O0</code>&rarr;<code>-O2</code> boundary (where all the real work is).</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8.2 &nbsp;Line counts through both pipelines &mdash; two opposite shapes</h2>
+      <p class="lede">Same circuit: <code>circuit_d3</code>, 344 instructions, register tier.</p>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>V1 stage</th><th class="num">lines</th></tr></thead>
+            <tbody>
+              <tr><td><code>1_emitted.mlir</code></td><td class="num lose"><b>23,002</b></td></tr>
+              <tr><td><code>2_opt.mlir</code></td><td class="num">14,257</td></tr>
+              <tr><td><code>3_translate.ll</code></td><td class="num">14,875</td></tr>
+              <tr><td><code>4_optO2.ll</code></td><td class="num">13,747</td></tr>
+              <tr><td><code>5_isa.s</code></td><td class="num lose"><b>17,802</b></td></tr>
+            </tbody>
+          </table>
+          <div class="card card-accent">
+            <div class="h">V1 starts huge and shrinks</div>
+            <div class="d">23,002 lines of <code>llvm</code>-dialect MLIR for 344 instructions. <b>Every
+            optimization stage is <em>recovering</em> from the emitter.</b></div>
+          </div>
+        </div>
+        <div>
+          <table class="tight">
+            <thead><tr><th>V2 stage</th><th class="num">lines</th></tr></thead>
+            <tbody>
+              <tr><td><code>1_emitted.c</code></td><td class="num win"><b>383</b></td></tr>
+              <tr><td><code>2_clangO0.ll</code></td><td class="num">19,551</td></tr>
+              <tr><td><code>3_clangO2.ll</code></td><td class="num">8,132</td></tr>
+              <tr><td colspan="2" style="color:var(--dim);">&nbsp;</td></tr>
+              <tr><td><code>4_isa.s</code></td><td class="num win"><b>10,398</b></td></tr>
+            </tbody>
+          </table>
+          <div class="card card-success">
+            <div class="h">V2 starts tiny, expands, then collapses</div>
+            <div class="d">383 lines of C &rarr; 19,551 of unoptimized IR (<code>-O0</code> gives every
+            local an <code>alloca</code> and every access an <code>addrspacecast</code>) &rarr; 8,132 at
+            <code>-O2</code>. <b>The expansion is a compiler artifact, not something the emitter wrote
+            down</b> &mdash; and <code>-O2</code> removes it entirely.</div>
+          </div>
+        </div>
+      </div>
+      <div class="stat-callout">
+        <div class="stat-num">17,802 &nbsp;vs&nbsp; 10,398</div>
+        <div class="stat-label">ISA lines for the same circuit. <b>V2 produces a 1.7&times; smaller kernel
+        from a 60&times; smaller source.</b></div>
+      </div>
+      <div class="footnote">V1's small circuit <code>frame_h</code> (4 instructions), for scale: 947 &rarr;
+      606 &rarr; 562 &rarr; 275 &rarr; 524. V2's emitted C for the same circuit is <b>43 lines</b>.</div>
+    </section>
+
+    <section>
+      <h2>The two pipelines side by side</h2>
+      <figure>
+        <img src="diagrams/lowering-pipelines.svg" alt="V1 and V2 lowering pipelines with per-stage sizes" />
+        <figcaption><b>Figure 8.1</b> &mdash; The two pipelines with per-stage line counts for
+        <code>circuit_d3</code>. V1's representation is largest <b>where a human wrote it</b>; V2's is
+        largest where the compiler expanded it at <code>-O0</code> and smallest again after
+        <code>-O2</code>.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>8.3 &nbsp;V1's MLIR stage: what <code>canonicalize</code> actually did</h2>
+      <p class="lede"><code>mlir_codegen.cc:65-67</code> runs exactly three passes. Snapshots taken with
+      <code>mlir-opt --mlir-print-ir-tree-dir</code>, so each pass's output is a separate file:</p>
+      <pre><code>0_canonicalize.mlir            736 lines
+1_cse.mlir                     608 lines
+2_convert-func-to-llvm.mlir    608 lines      <span class="cm">// from an emitted 947</span></code></pre>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>Op</th><th class="num">emitted</th><th class="num">after opt</th></tr></thead>
+            <tbody>
+              <tr><td><code>llvm.mlir.constant</code></td><td class="num lose">240</td><td class="num">59</td></tr>
+              <tr><td><code>llvm.and</code></td><td class="num">54</td><td class="num">9</td></tr>
+              <tr><td><code>llvm.shl</code></td><td class="num">73</td><td class="num">34</td></tr>
+              <tr><td><code>llvm.xor</code></td><td class="num">68</td><td class="num">29</td></tr>
+              <tr><td><code>llvm.ptr</code> &dagger;</td><td class="num">192</td><td class="num">160</td></tr>
+            </tbody>
+          </table>
+          <div class="footnote">&dagger; <code>llvm.ptr</code> is a <em>type</em>, not an op, and occurs
+          several times on some lines (each <code>getelementptr</code> mentions it twice). Its row counts
+          occurrences where the op rows count one per line; by line it is 136 &rarr; 118. The other four
+          rows are unambiguous.</div>
+        </div>
+        <div>
+          <div class="stat-callout">
+            <div class="stat-num">240 &rarr; 59</div>
+            <div class="stat-label">constant ops, for a <b>four-instruction</b> circuit. The emitter
+            materialized the same constant over and over.</div>
+          </div>
+          <div class="verdict verdict-mixed">This is not a sophisticated transform. <b>It is cleanup after
+          a naive emitter.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><code>cse</code> &mdash; the largest diff in the corpus, and what it removed</h2>
+      <p class="lede">The <code>0_canonicalize &rarr; 1_cse</code> diff is 576 lines. The hunk it selects is
+      a PRNG update inside the shot loop that had been emitted <b>twice</b>:</p>
+      <div class="diff">
+<span class="ctx">     %138 = llvm.load %45 : !llvm.ptr -&gt; i64</span>
+<span class="del">-    %139 = llvm.getelementptr inbounds %45[1] : (!llvm.ptr) -&gt; !llvm.ptr, i64</span>
+<span class="del">-    %140 = llvm.load %139 : !llvm.ptr -&gt; i64</span>
+<span class="del">-    %141 = llvm.getelementptr inbounds %45[2] : (!llvm.ptr) -&gt; !llvm.ptr, i64</span>
+<span class="del">-    %142 = llvm.load %141 : !llvm.ptr -&gt; i64</span>
+<span class="del">-    %145 = llvm.add %138, %144 : i64</span>
+<span class="del">-    %146 = llvm.shl %145, %16 : i64</span>
+<span class="del">-    %147 = llvm.lshr %145, %15 : i64</span>
+<span class="del">-    %148 = llvm.or %146, %147 : i64        ; xoshiro256++ rotate</span>
+<span class="del">-    %151 = llvm.xor %142, %138 : i64</span>
+<span class="del">-    %152 = llvm.xor %144, %140 : i64</span>
+<span class="note">     ...</span>
+<span class="del">-    %165 = llvm.lshr %33, %35 : i64        ; frame word index, computed</span>
+<span class="del">-    %166 = llvm.getelementptr inbounds %49[%165] : ...</span>
+<span class="del">-    %175 = llvm.lshr %33, %35 : i64        ; ...and computed AGAIN</span>
+<span class="del">-    %176 = llvm.getelementptr inbounds %51[%175] : ...</span>
+      </div>
+      <div class="insight">Note the last four lines: <code>llvm.lshr %33, %35</code> appears <b>twice with
+      identical operands</b> &mdash; once for <code>px</code>, once for <code>pz</code>. The emitter had no
+      notion of a common subexpression, so it wrote the word-index computation out separately for each frame
+      array. <b>This is exactly the class of redundancy that does not exist in V2's C</b>, because there it
+      is written once in <code>fget</code> and inlined by clang after constant-folding the index away
+      entirely (&sect;7).</div>
+    </section>
+
+    <section>
+      <h2><code>convert-func-to-llvm</code> did nothing at all</h2>
+      <p class="lede">The <b>full</b> rendered diff. Not an excerpt &mdash; all 16 lines. The only change is
+      the pass-name banner:</p>
+      <div class="diff">
+<span class="del">-// -----// IR Dump After CSE (cse) //----- //</span>
+<span class="add">+// -----// IR Dump After ConvertFuncToLLVMPass (convert-func-to-llvm) //----- //</span>
+<span class="ctx"> module attributes {llvm.target_triple = "amdgcn-amd-amdhsa"} {</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.workitem.id.x() -&gt; i32</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.workgroup.id.x() -&gt; i32</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.s.barrier()</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.ds.bpermute(i32, i32) -&gt; i32</span>
+<span class="ctx">   llvm.func @clifft_log(%arg0: f64) -&gt; f64 {</span>
+      </div>
+      <div class="verdict verdict-bad">608 lines in, 608 lines out, <b>byte-identical below the
+      banner.</b></div>
+      <div class="insight">There is no <code>func</code> dialect to convert <b>because the emitter never
+      produced any</b> &mdash; everything was already <code>llvm.func</code>. This is the clearest single
+      piece of evidence that V1 was not using MLIR as a multi-level IR: <b>the pass whose entire job is to
+      lower a higher abstraction level found nothing to lower.</b></div>
+      <div class="card card-warn" style="padding:0.8em;">
+        <div class="h">What this means for the "MLIR passes" material</div>
+        <div class="d" style="font-size:0.78em;">The report's goal asked for progressive-lowering diffs of
+        the passes introduced. The honest answer is that the value MLIR added to V1 was <em>two stock
+        cleanup passes recovering from the emitter's own verbosity</em>. That is a real thing to show, and
+        it is shown above &mdash; but <b>it is not a compiler-engineering contribution</b>, and V2 got the
+        same cleanup for free by writing C and letting clang's front end never emit the redundancy in the
+        first place.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8.4 &nbsp;V1: <code>translate</code> &rarr; <code>opt -O2</code>, where the real work happened</h2>
+      <p class="lede">MLIR's contribution ended at 608 lines. The transform that mattered happened in LLVM:
+      <code>frame_h.3_translate.ll</code> (562) &rarr; <code>4_optO2.ll</code> (275), a <b>2&times;
+      collapse</b>.</p>
+      <div class="diff">
+<span class="del">-define amdgpu_kernel void @compiled_mlir_kernel(i64 inreg %0, ..., i32 inreg %9) {</span>
+<span class="del">-  %11 = alloca i32, align 4, addrspace(5)</span>
+<span class="del">-  %12 = addrspacecast ptr addrspace(5) %11 to ptr</span>
+<span class="del">-  %13 = alloca i64, i32 4, align 8, addrspace(5)</span>
+<span class="del">-  %14 = addrspacecast ptr addrspace(5) %13 to ptr</span>
+<span class="del">-  %15 = alloca i64, align 8, addrspace(5)</span>
+<span class="note">-  ...</span>
+<span class="del">-  %27 = alloca i8, i32 4096, align 1, addrspace(5)     ; &lt;- 4 KB of scratch</span>
+<span class="del">-  %28 = addrspacecast ptr addrspace(5) %27 to ptr</span>
+<span class="del">-  %31 = call i32 @llvm.amdgcn.workitem.id.x()</span>
+<span class="add">+; Function Attrs: mustprogress nofree norecurse nounwind willreturn</span>
+<span class="add">+define amdgpu_kernel void @compiled_mlir_kernel(..., ptr noalias captures(none) %3,</span>
+<span class="add">+       ptr noalias readnone captures(none) %4, ...) local_unnamed_addr #4 {</span>
+<span class="add">+  %.global = addrspacecast ptr %3 to ptr addrspace(1)</span>
+<span class="add">+  %11 = tail call i32 @llvm.amdgcn.workitem.id.x()</span>
+      </div>
+      <div class="verdict verdict-good">Ten <code>alloca</code>/<code>addrspacecast</code> pairs &mdash; the
+      emitter's model of local state as stack slots &mdash; promoted to SSA registers by SROA/mem2reg, plus
+      <code>nofree norecurse nounwind willreturn</code> and <code>noalias readnone captures(none)</code> on
+      the pointers. <b>LLVM did this, not MLIR.</b> The MLIR stage had the same <code>alloca</code>s in
+      front of it for two passes and left every one standing.</div>
+    </section>
+
+    <section>
+      <h2>&hellip;except at size, where the optimizer was switched off</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h"><code>circuit_d3</code>: 14,875 &rarr; 13,747 &mdash; only <b>7.6%</b></div>
+          <div class="d">That is the size-adaptive detuning from &sect;5.3 starting to bite. At 20 MB of IR,
+          LLVM's own pass pipeline gets throttled (<code>mlir_kernel_cache.cc:104-141</code>), and <b>the
+          very optimizations that rescued <code>frame_h</code> stop being affordable</b>.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">The final stage <em>grows</em> the file</div>
+          <div class="d"><code>optO2 &rarr; isa</code>: 275 &rarr; 524 for <code>frame_h</code>, 13,747
+          &rarr; 17,802 for <code>circuit_d3</code>. Normal &mdash; one IR instruction becomes several
+          machine instructions plus directives &mdash; but it means <b>V1 shipped 17,802 lines of ISA for a
+          344-instruction circuit</b>.</div>
+        </div>
+      </div>
+      <div class="insight">The two facts compose into V1's death spiral: <b>the emitter's verbosity made the
+      IR large; the large IR made the optimizer detune; the detuned optimizer left the verbosity in.</b>
+      <code>frame_h</code> got a 2&times; cleanup. <code>circuit_d3</code> got 7.6%.</div>
+    </section>
+
+    <section>
+      <h2>8.5 &nbsp;V2: <code>emitted.c</code> &rarr; <code>clangO0</code>, a 51&times; expansion</h2>
+      <p class="lede">383 &rarr; 19,551 lines, and the diff shows exactly why:</p>
+      <div class="diff">
+<span class="del">-  %pauli_masks.addr.ascast = addrspacecast ptr addrspace(5) %pauli_masks.addr to ptr</span>
+<span class="del">-  %readout_noise.addr.ascast = addrspacecast ptr addrspace(5) %readout_noise.addr to ptr</span>
+<span class="del">-  %shot_id.ascast = addrspacecast ptr addrspace(5) %shot_id to ptr</span>
+<span class="del">-  store ptr %instrs, ptr %instrs.addr.ascast, align 8</span>
+<span class="del">-  store i32 %num_instrs, ptr %num_instrs.addr.ascast, align 4</span>
+<span class="note">-  ...</span>
+<span class="del">-  %0 = load i32, ptr %peak_rank.addr.ascast, align 4</span>
+<span class="del">-  %1 = load i32, ptr %num_instrs.addr.ascast, align 4</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">At <code>-O0</code>, clang gives everything a stack slot</div>
+          <div class="d">Every parameter and local gets an <code>alloca</code> in
+          <code>addrspace(5)</code>, an <code>addrspacecast</code> to generic, a store on entry, and a load
+          at each use. For a function with 20-odd parameters and 344 instructions' worth of inlined bodies,
+          <b>that is thousands of ops</b>.</div>
+        </div>
+        <div>
+          <table class="tight">
+            <thead><tr><th>Op at <code>2_clangO0</code></th><th class="num">count</th></tr></thead>
+            <tbody>
+              <tr><td><code>load</code></td><td class="num">4,898</td></tr>
+              <tr><td><code>store</code></td><td class="num">2,488</td></tr>
+              <tr><td><b><code>alloca</code></b></td><td class="num lose"><b>2,271</b></td></tr>
+              <tr><td><b><code>addrspacecast</code></b></td><td class="num lose"><b>2,262</b></td></tr>
+              <tr><td><code>call</code></td><td class="num">1,770</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed">None of this is in the emitted C. <b>It is a compiler artifact of
+      <code>-O0</code>, and <code>-O2</code> is about to delete essentially all of it.</b></div>
+    </section>
+
+    <section>
+      <h2><code>clangO0.ll</code> &rarr; <code>clangO2.ll</code>: 19,551 &rarr; 8,132</h2>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>Op</th><th class="num"><code>-O0</code></th><th class="num"><code>-O2</code></th></tr></thead>
+            <tbody>
+              <tr><td><code>alloca</code></td><td class="num">2,271</td><td class="num win"><b>3</b></td></tr>
+              <tr><td><code>addrspacecast</code></td><td class="num">2,262</td><td class="num win"><b>8</b></td></tr>
+              <tr><td><code>call</code></td><td class="num">1,770</td><td class="num win">72</td></tr>
+              <tr><td><code>load</code></td><td class="num">4,898</td><td class="num">1,014</td></tr>
+              <tr><td><code>store</code></td><td class="num">2,488</td><td class="num">1,103</td></tr>
+              <tr><td><code>fmul</code></td><td class="num">12</td><td class="num lose"><b>448</b></td></tr>
+              <tr><td><code>shufflevector</code></td><td class="num">0</td><td class="num lose"><b>459</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card card-success">
+            <div class="h"><code>call</code> 1,770 &rarr; 72</div>
+            <div class="d">The <code>always_inline</code> op bodies are inlined; the 72 survivors are the
+            <code>noinline</code> noise ops from <code>V2_NOISE_ATTR</code> plus ocml calls.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h"><code>fmul</code> <em>rises</em>, and <code>shufflevector</code> appears</div>
+            <div class="d">That is the <b>SLP vectorizer</b> packing complex arithmetic into
+            <code>&lt;2 x float&gt;</code> operations. In the final ISA:
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.9em;margin-top:0.3em;color:var(--success);">
+            v_pk_add_f32 &nbsp;431<br/>v_pk_mul_f32 &nbsp;416</div>
+            <b>Packed</b> f32 math &mdash; two complex components per instruction.</div>
+          </div>
+        </div>
+      </div>
+      <div class="insight">That throughput win is only available <b>because the amplitudes ended up in
+      registers rather than in a stack array</b> &mdash; which in turn is only possible because the
+      specializer wrote a straight-line body with <em>statically-known indices</em>. The chain runs all the
+      way back to &sect;7.</div>
+    </section>
+
+    <section>
+      <h2>A correction, and a caution about the tooling</h2>
+      <p class="lede">An earlier draft of that table read <code>alloca</code> <b>2,268 &rarr; 0</b>, taken
+      from <code>stage_stats.csv</code>. <b>Both numbers were wrong, in the same direction, for two
+      different reasons</b> &mdash; and the raw <code>.ll</code> files disagree with the CSV.</p>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">The <code>-O2</code> zero was a truncation artifact</div>
+          <div class="d"><code>stage_stats.sh</code> emits only <code>hist | head -30</code>. At
+          <code>-O2</code>, <code>alloca</code> ranks <b>36th</b> with 3 occurrences, so it falls off the
+          histogram. <b>The CSV recorded "absent from the top 30" and the draft read it as "zero."</b>
+          <hr/>
+          That is the most dangerous shape a tooling bug can take: <b>a truncation that produces exactly the
+          number the story wanted.</b></div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">The <code>-O0</code> count was a regex miss</div>
+          <div class="d">2,268 misses 3 <code>%atomic-temp*</code> / <code>%.atomictmp*</code> slots, which
+          the script's regex drops because clang names them with a leading <code>.</code> and a
+          <code>-</code> that the <code>[0-9a-zA-Z_.]</code> character class does not accept.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">Both were found by counting <code>' = alloca '</code> in the raw IR
+      instead of reading the summary. The corrected numbers do not weaken the point &mdash; <b>2,271 &rarr;
+      3 is a 99.87% elimination</b> &mdash; but <b>"3" is a more interesting fact than "0"</b>.</div>
+    </section>
+
+    <section>
+      <h2>The three surviving <code>alloca</code>s, and why they matter</h2>
+      <pre><code><span class="cm">; the only allocas left in clifft_v2_spec after -O2</span>
+%st   = alloca %struct.V2State,           align 8, addrspace(5)
+%vloc = alloca [16 x %struct.CV2Complex], align 8, addrspace(5)
+%sloc = alloca [8  x %struct.CV2Complex], align 8, addrspace(5)</code></pre>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">All three are aggregates whose address <em>escapes</em></div>
+          <div class="d"><code>%st</code> is passed by pointer to every <code>v2_op_*</code> that SROA could
+          not fully inline away (the <code>noinline</code> noise ops); <code>%vloc</code>/<code>%sloc</code>
+          are the fixed-size complex staging arrays. <b>SROA promotes scalars and small aggregates with
+          non-escaping addresses; these are neither.</b></div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">This is the <code>private=336</code> segment in the dispatch log</div>
+          <div class="d">And the mechanism behind the scratch traffic discussed in &sect;10.</div>
+        </div>
+      </div>
+      <div class="insight"><b>The interesting claim is not that <code>alloca</code> reached zero &mdash; it
+      did not &mdash; but that what remains is a fixed, per-kernel constant rather than something that
+      scales with circuit length.</b> 2,271 grew with the instruction count; <b>3 does not.</b></div>
+    </section>
+
+    <section>
+      <h2><code>clangO2.ll</code> &rarr; <code>isa.s</code>: where V2's own cost shows</h2>
+      <p class="lede">8,132 &rarr; 10,398 &mdash; instruction selection and register allocation. The top of
+      the file is the one place V2 pays:</p>
+      <div class="diff">
+<span class="ctx">v2_op_noise_block:                      ; @v2_op_noise_block</span>
+<span class="ctx">	s_mov_b32 s33, s32</span>
+<span class="del">	scratch_store_dword off, v63, s33 offset:68 ; 4-byte Folded Spill</span>
+<span class="del">	scratch_store_dword off, v40, s33 offset:64 ; 4-byte Folded Spill</span>
+<span class="del">	scratch_store_dword off, v41, s33 offset:60 ; 4-byte Folded Spill</span>
+<span class="note">	... 15 more spills ...</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">Why: <code>v2_op_noise_block</code> is emitted <code>noinline</code></div>
+          <div class="d">(&sect;7, &sect;11.1.) So it is a real function with a real prologue and a
+          callee-saved spill sequence. <b>That is the price of the FP-scheduling fence.</b></div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">In the <code>circuit_d3</code> ISA census</div>
+          <div class="d">406 <code>scratch_store_dwordx2</code> + 303 <code>scratch_store_dwordx4</code>.
+          One of the two reasons V2's register-tier ScratchSize is <b>928 bytes</b> where V1's was
+          <b>156</b> &mdash; the other being the shot-packed register layout of &sect;9.1.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">&sect;11 returns to whether that trade is worth it. The short answer,
+      from the gate results: <b>it is, because the alternative is a correctness failure rather than a slower
+      kernel.</b></div>
+    </section>
+
+    <section>
+      <h2>8.6 &nbsp;The f64 gulf &mdash; the most misreadable number in the corpus</h2>
+      <table class="tight">
+        <thead><tr><th><code>circuit_d3</code> final ISA</th><th class="num">V1</th><th class="num">V2</th></tr></thead>
+        <tbody>
+          <tr><td><code>v_*_f64</code></td><td class="num lose"><b>4,347</b></td><td class="num win"><b>187</b></td></tr>
+          <tr><td><code>v_*_f32</code></td><td class="num">1,586</td><td class="num">858</td></tr>
+          <tr><td><code>v_pk_*_f32</code> (packed)</td><td class="num lose"><b>0</b></td><td class="num win"><b>847</b></td></tr>
+          <tr><td>total instructions</td><td class="num">16,675</td><td class="num">9,421</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad">The obvious reading &mdash; V1 did its amplitude arithmetic in double
+      and V2 dropped to single, trading accuracy for speed &mdash; <b>is wrong</b>. And it matters that it
+      is wrong, because &sect;12 rests on both backends being byte-exact against the same interpreter.</div>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b>V2</b> &mdash; <code>v2_ops.h:206</code></div>
+          <pre style="margin-top:0.2em;"><code><span class="cm">// f64 scalar multiply then narrow — byte-exact</span>
+<span class="cm">// with SVM cscale. Do NOT relax.</span>
+<span class="kw">static inline</span> CV2Complex <span class="fn">cscale</span>(CV2Complex a, <span class="kw">double</span> s) {
+    CV2Complex r;
+    r.re = (<span class="kw">float</span>)((<span class="kw">double</span>)a.re * s);
+    r.im = (<span class="kw">float</span>)((<span class="kw">double</span>)a.im * s);
+    <span class="kw">return</span> r;
+}
+<span class="kw">static inline double</span> <span class="fn">cnorm</span>(CV2Complex v) {
+    <span class="kw">double</span> re = (<span class="kw">double</span>)v.re, im = (<span class="kw">double</span>)v.im;
+    <span class="kw">return</span> re * re + im * im;
+}</code></pre>
+        </div>
+        <div>
+          <div class="diff-title"><b>V1</b> &mdash; <code>mlir_emit.cc:826</code>, inside <code>emit_cnorm</code></div>
+          <pre style="margin-top:0.2em;"><code><span class="cm">// Match gold cnorm (hip_sampler.hip): extend each</span>
+<span class="cm">// f32 component to f64, then square and sum in f64.</span>
+<span class="cm">// Squaring in f32 first (then extending) loses</span>
+<span class="cm">// precision and flips borderline stabilizer</span>
+<span class="cm">// measurement branches on RNG-path-dependent shots.</span></code></pre>
+          <div class="verdict verdict-good">Same rule, same reason, two backends. Both carry amplitudes as
+          <b>f32 pairs</b> and widen to f64 in exactly the same two places.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The A/B experiment: where 4,347 f64 instructions come from</h2>
+      <p class="lede"><code>lowering/f64_attribution.sh</code> compiles V1's own stage-3 IR twice through
+      V1's own pipeline (<code>opt -O2 | llc -O2</code>), changing <b>exactly one thing</b>:</p>
+      <div class="grid-2">
+        <div class="card card-hl"><div class="h">A &mdash; as-is</div><div class="d">Asserted to reproduce
+        <code>v1/circuit_d3.5_isa.s</code> <b>byte-for-byte</b>.</div></div>
+        <div class="card card-hl"><div class="h">B &mdash; one attribute changed</div><div class="d"><code>clifft_log</code>
+        and <code>clifft_draw_next_noise</code> marked <code>noinline</code>. Same amplitude arithmetic,
+        same PRNG, but the transcendental stays a call.</div></div>
+      </div>
+      <div class="diff">
+<span class="ctx">variant, isa_lines, isa_total_instrs, v_f64, v_f32, v_pk_f32, scratch_ops, scratch_bytes, log_expansions</span>
+<span class="del">A,           17802,            16675,  4347,  1586,        0,          56,           156,             54</span>
+<span class="add">B,           12038,            11148,  1380,  1586,        0,         477,           224,              1</span>
+      </div>
+      <div class="stat-callout">
+        <div class="stat-num">1,586 = 1,586</div>
+        <div class="stat-label"><code>v_*_f32</code> is <b>identical</b> across A and B. <b>The amplitude
+        arithmetic never moved.</b> What moved is 2,967 f64 instructions &mdash; <b>68% of V1's entire f64
+        volume</b> &mdash; and 5,527 total instructions. All of it the log polynomial.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Where V1's f64 went</h2>
+      <figure>
+        <img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" />
+        <figcaption><b>Figure 8.2</b> &mdash; V1's f64 volume for <code>circuit_d3</code>, decomposed by the
+        A/B experiment. <b>68% is 54 inlined copies of a hand-written log polynomial</b>; the 1,380 that
+        remain are the same PRNG, <code>cnorm</code> and <code>cscale</code> sites V2 has. V2 keeps
+        <code>log()</code> as a call to <code>__ocml_log_f64</code> because it links ROCm device bitcode; V1
+        had no such link and had to write the polynomial in MLIR.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>The count is exact, not estimated</h2>
+      <p class="lede"><code>0x3FD5555555555555</code> is a coefficient unique to that polynomial, so it
+      counts expansions directly:</p>
+      <div class="diff">
+<span class="ctx">per-coefficient occurrence count in the V1 kernel body (circuit_d3.4_optO2.ll):</span>
+<span class="add">  0x3FE62E42FEFA39EF  x54     &lt;- ln 2</span>
+<span class="add">  0x3FA1A7B9611A7B96  x54</span>
+<span class="add">  0x3FD5555555555555  x54     &lt;- the marker the script counts</span>
+      </div>
+      <div class="insight">The count is <b>uniform across every coefficient</b>, which is what makes it a
+      count of <em>whole expansions</em> rather than of incidental constants: <b>54 copies</b>, one per
+      <code>clifft_log</code> inlined into the kernel.</div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Where 54 comes from</div>
+          <div class="d">The emitter wrote <b>48</b> <code>clifft_draw_next_noise</code> call sites (each
+          containing a <code>clifft_log</code> call) plus one direct <code>clifft_log</code> site, against a
+          <b>single shared <code>@clifft_log</code> definition</b>. LLVM inlined all of them and <b>cloned
+          five more</b> while unrolling the surrounding loops.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">Why 68% at ISA level and 63.6% at IR level</div>
+          <div class="d">At 37 f64 ops per copy that is 1,998 IR-level ops &mdash; 63.6% of the kernel's
+          3,141 &mdash; <b>before</b> instruction selection turns each <code>fdiv double</code> into the
+          <code>v_rcp_f64</code> / <code>v_div_scale_f64</code> / <code>v_div_fmas_f64</code> /
+          <code>v_div_fixup_f64</code> sequence that pushes the ISA-level share to 68%.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What is actually left &mdash; and it is the same three sites V2 has</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b>V1</b>, log expansion stripped, classified by dataflow component</div>
+          <table class="tight">
+            <thead><tr><th>what it is</th><th class="num">ops</th><th class="num">share</th></tr></thead>
+            <tbody>
+              <tr><td>PRNG: <code>u64 &rarr; f64 &times; 2<sup>-53</sup></code></td><td class="num">465</td><td class="num">45.5%</td></tr>
+              <tr><td><code>cnorm</code> &mdash; f64 |a|&sup2; accumulation</td><td class="num">390</td><td class="num">38.1%</td></tr>
+              <tr><td><code>cscale</code> &mdash; f32 &rarr; f64 &times; 1/&radic;2 &rarr; f32</td><td class="num">168</td><td class="num">16.4%</td></tr>
+              <tr><td></td><td class="num"><b>1,023</b></td><td class="num"></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="diff-title"><b>V2</b>, whole module &mdash; 101 f64 ops</div>
+          <table class="tight">
+            <thead><tr><th>function</th><th class="num">f64</th><th class="num">PRNG</th><th class="num">ext/trunc</th></tr></thead>
+            <tbody>
+              <tr><td><code>clifft_v2_spec</code></td><td class="num">56</td><td class="num">18</td><td class="num">0 / 0</td></tr>
+              <tr><td><code>v2_op_noise</code></td><td class="num">10</td><td class="num">2</td><td class="num">0 / 0</td></tr>
+              <tr><td><code>v2_op_noise_block</code></td><td class="num">10</td><td class="num">2</td><td class="num">0 / 0</td></tr>
+              <tr><td><code>v2_op_swap_meas_interfere</code></td><td class="num">22</td><td class="num">1</td><td class="num">4 / 2</td></tr>
+              <tr><td><code>v2_op_readout_noise</code></td><td class="num">3</td><td class="num">1</td><td class="num">0 / 0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="insight">The specialized body itself touches f64 <b>only</b> to turn random bits into a
+      uniform &mdash; <b>every <code>fpext</code>/<code>fptrunc</code> pair in the module is inside one
+      <code>noinline</code> measurement helper</b>. Identical semantics to V1, three orders of magnitude
+      apart in count, <b>because V2's loops stayed runtime loops and V1's were unrolled.</b></div>
+    </section>
+
+    <section>
+      <h2>Why V1 had a hand-written log at all</h2>
+      <p class="lede">V1's pipeline is <code>opt</code> &rarr; <code>llc</code> &rarr; <code>ld.lld</code>
+      (<code>mlir_kernel_cache.cc:124-150</code>). <b>There is no <code>llvm-link</code> step and no ROCm
+      device bitcode, so <code>log()</code> simply does not exist as a symbol.</b> The emitter had to write
+      the polynomial itself, in MLIR, by hand. Its author saw the size problem coming and hoisted it:</p>
+      <pre><code><span class="cm">// Emit the standalone @clifft_log(f64)-&gt;f64 function definition ONCE per</span>
+<span class="cm">// module. Inlining the ~64-line log body at every noise draw produced</span>
+<span class="cm">// hundreds of thousands of IR lines for large noisy circuits (e.g.</span>
+<span class="cm">// surface_d9_t5: 1444 OP_NOISE × ~317 lines). Hoisting to a called function</span>
+<span class="cm">// collapses that to one definition + short call sites.</span>
+<span class="kw">void</span> <span class="fn">emit_log_function_def</span>(std::ostringstream&amp; out) {          <span class="cm">// mlir_emit.cc:1422</span></code></pre>
+      <div class="verdict verdict-mixed">The hoist worked <em>at emission</em> &mdash; one
+      <code>@clifft_log</code> definition, 48 short call sites, and that is what kept
+      <code>surface_d9_t5</code> emittable at all. <b>Then <code>opt -O2</code> inlined all 54 copies
+      back.</b> The emitter controlled its own output and had no way to control what the optimizer did
+      next.</div>
+    </section>
+
+    <section>
+      <h2>V2 has the symbol, because it links the device libraries</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><code>v2_ops.h:262</code></div>
+          <pre style="margin-top:0.2em;"><code><span class="kw">extern double</span> <span class="fn">__ocml_log_f64</span>(<span class="kw">double</span>);
+<span class="kw">static inline double</span> <span class="fn">ocml_log_f64</span>(<span class="kw">double</span> x) {
+    <span class="kw">return</span> <span class="fn">__ocml_log_f64</span>(x);
+}</code></pre>
+          <div class="diff-title"><code>v2_compile_cache.cc:161</code> &mdash; step 2 of 5</div>
+          <pre style="margin-top:0.2em;"><code><span class="fn">run</span>(llvmlink + <span class="st">" -o "</span> + linked + <span class="st">" "</span> + bc + <span class="st">" "</span> +
+    ctl + <span class="st">"/ocml.bc "</span> + ctl + <span class="st">"/ockl.bc "</span> + ...);</code></pre>
+        </div>
+        <div>
+          <div class="diff-title">In V2's final ISA the call survives as a relocation, <b>three times</b></div>
+          <div class="diff">
+<span class="add">	s_getpc_b64 s[0:1]</span>
+<span class="add">	s_add_u32   s0, s0, __ocml_log_f64@rel32@lo+4</span>
+<span class="add">	s_addc_u32  s1, s1, __ocml_log_f64@rel32@hi+12</span>
+<span class="add">	s_swappc_b64 s[30:31], s[0:1]</span>
+          </div>
+          <div class="stat-callout">
+            <div class="stat-num">3 vs 54</div>
+            <div class="stat-label">Three call sites, one shared body &mdash; against V1's 54
+            expansions.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The one <em>real</em> arithmetic difference, which the f64 noise was hiding</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h"><code>v_pk_*_f32</code> is <b>0</b> in V1</div>
+          <div class="d">In <em>both</em> variant A and variant B &mdash; <b>so the log expansion was never
+          what blocked it.</b> V1 simply never vectorized.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">And <b>847</b> in V2</div>
+          <div class="d">Counting packed instructions as two lanes, V2 covers <b>1,705 f32 lanes in 858
+          instructions</b> where V1 needs <b>1,586 instructions for 1,586 lanes</b>.</div>
+        </div>
+      </div>
+      <p class="lede">That is the <code>shufflevector</code> &rarr; <code>v_pk_add_f32</code> chain of
+      &sect;8.5, and it is available to V2 for the reason &sect;8.5 gives: <b>the amplitudes are in
+      registers, not in a stack array.</b></p>
+      <div class="verdict verdict-good"><b>The honest summary: V1's f64 volume was a
+      transcendental-inlining artifact, not a numerical choice. Both backends compute the same quantities at
+      the same widths. The real instruction-level win is packing, and it is 2&times; on the f32 path &mdash;
+      not 23&times; on the f64 one.</b></div>
+    </section>
+
+    <section>
+      <h2>8.7 &nbsp;What the two pipelines' diffs collectively show</h2>
+      <table class="tight" style="font-size:0.78em;">
+        <thead><tr><th></th><th>V1</th><th>V2</th></tr></thead>
+        <tbody>
+          <tr><td>Where the representation is largest</td><td class="lose">at emission (23,002 lines, <b>human</b>-authored)</td><td class="win">at <code>-O0</code> (19,551, <b>compiler</b>-authored, thrown away)</td></tr>
+          <tr><td>What the "MLIR stage" contributed</td><td>constant dedup + CSE; one pass a no-op</td><td>n/a &mdash; no MLIR</td></tr>
+          <tr><td>Where <code>alloca</code>s die</td><td>LLVM <code>-O2</code>, <b>and only on small circuits</b></td><td class="win">clang <code>-O2</code>, 2,271 &rarr; <b>3</b> (99.87%); a fixed residue, not circuit-scaling</td></tr>
+          <tr><td>Does the optimizer stay enabled?</td><td class="lose"><b>no</b> &mdash; detuned by IR size above threshold</td><td class="win"><b>yes</b> &mdash; IR never gets large enough to matter</td></tr>
+          <tr><td>Vectorization</td><td class="lose">none &mdash; 0 packed ops, with or without the log inlining</td><td class="win">459 <code>shufflevector</code> &rarr; 431 <code>v_pk_add_f32</code>, 416 <code>v_pk_mul_f32</code></td></tr>
+          <tr><td><code>log()</code></td><td class="lose">hand-written in MLIR, re-inlined <b>54&times;</b> by <code>opt</code></td><td class="win"><code>__ocml_log_f64</code>, one call, three relocations</td></tr>
+          <tr><td>f64 instructions, <code>circuit_d3</code></td><td class="lose">4,347 &mdash; <b>68% of it inlined log</b></td><td class="win">187</td></tr>
+          <tr><td>Final ISA, <code>circuit_d3</code></td><td class="lose">17,802 lines</td><td class="win"><b>10,398 lines</b></td></tr>
+          <tr><td>Compile time, <code>circuit_d3</code></td><td class="lose">3.58 s</td><td class="win"><b>2.04 s</b></td></tr>
+          <tr><td>Compile time, <code>surface_d7_t19</code></td><td class="lose"><b>221.48 s</b></td><td class="win">V2 emits the same circuit in ~4,346 C lines &mdash; see &sect;9</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>V1 asked the compiler to clean up after the emitter, and past a
+      certain size the compiler declined. V2 gave the compiler something it was already good at.</b></div>
+    </section>
