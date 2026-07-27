@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| Hardware | AMD Instinct MI350X (`gfx950`), node `smci350-rck-g03-f13-21` |
+| Hardware | AMD Instinct MI350X (`gfx950`), `mi350x-es` partition — **node varies by run, see below** |
 | Software | ROCm 7.2.3, LLVM `upstream_05082025` |
 | Repository | `unitaryfoundation/clifft`, branch `mlir-v2` |
 | Benchmark corpus | 26 circuits — see the provenance notice below |
@@ -32,6 +32,16 @@
 >
 > This notice exists because the report's own rule demands it: *trust data, not
 > text* applies to the report's own numbers first.
+>
+> **Which node.** `mi350x-es` is heterogeneous, so "MI350X" is not a sufficient
+> provenance statement and this table deliberately does not give one node. The
+> authoritative run — job 50793, §15 — ran on `smci350-rck-g03-d13-21`, recorded
+> in `V2_performance/runs/20260727T125310Z_report-final-allfixtures/node.json`.
+> Runs on `smci350-rck-g03-f13-21` appear in §9.6 (columns 9–12, job varies) and
+> §12.3 (job 50444), and are marked where they appear. §13's dispatch benchmark
+> is on `d13-21` (job 50507). **Ratios are never compared across
+> the two.** An earlier version of this header named `f13-21` as *the* hardware,
+> which was wrong: the corpus every headline number resolves to ran on `d13-21`.
 
 ---
 
