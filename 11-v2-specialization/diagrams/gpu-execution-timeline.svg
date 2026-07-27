@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="400" viewBox="0 0 900 400">
+  <!-- Dark background -->
+  <rect width="900" height="400" fill="#1a1a2e"/>
+
+  <!-- Title -->
+  <text x="450" y="28" text-anchor="middle" font-family="monospace" font-size="13" fill="#e0e0e0" font-weight="bold">cultivation_d5: 1720 instructions, rank=10, ~40% of time in measurement reduction</text>
+
+  <!-- Subtitle row -->
+  <text x="450" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="#888">Horizontal axis = instruction time (not to scale). Phases repeat per measurement round.</text>
+
+  <!-- ===== TIMELINE LANE ===== -->
+  <!-- Lane background -->
+  <rect x="30" y="65" width="840" height="60" rx="4" fill="#12122a" stroke="#333" stroke-width="1"/>
+
+  <!-- Phase 1: FRAME ops (cyan) — 60% of instructions → ~504px wide, repeated twice framing each round -->
+  <!-- Round 1: Frame A -->
+  <rect x="36"  y="72" width="180" height="46" rx="3" fill="#00bcd4" opacity="0.85"/>
+  <text x="126" y="91"  text-anchor="middle" font-family="monospace" font-size="9" fill="#002028" font-weight="bold">FRAME</text>
+  <text x="126" y="103" text-anchor="middle" font-family="monospace" font-size="8" fill="#002028">px/pz bit flips</text>
+  <text x="126" y="113" text-anchor="middle" font-family="monospace" font-size="8" fill="#003038">k=0 (no array)</text>
+
+  <!-- Phase 2: EXPAND (orange) — narrow -->
+  <rect x="220" y="72" width="38" height="46" rx="3" fill="#ff9800" opacity="0.9"/>
+  <text x="239" y="91"  text-anchor="middle" font-family="monospace" font-size="8" fill="#1a0a00" font-weight="bold">EXP</text>
+  <text x="239" y="102" text-anchor="middle" font-family="monospace" font-size="7" fill="#1a0a00">k rises</text>
+  <text x="239" y="112" text-anchor="middle" font-family="monospace" font-size="7" fill="#1a0a00">to 10</text>
+
+  <!-- Phase 3: ARRAY sweep (green) -->
+  <rect x="262" y="72" width="145" height="46" rx="3" fill="#4caf50" opacity="0.85"/>
+  <text x="334" y="88"  text-anchor="middle" font-family="monospace" font-size="9" fill="#001a00" font-weight="bold">Array Sweep</text>
+  <text x="334" y="100" text-anchor="middle" font-family="monospace" font-size="8" fill="#001a00">2^k FMAs (1024 elems)</text>
+  <text x="334" y="112" text-anchor="middle" font-family="monospace" font-size="7" fill="#002200">4 waves/SIMD</text>
+
+  <!-- Phase 4: MEASUREMENT (red) -->
+  <rect x="411" y="72" width="135" height="46" rx="3" fill="#f44336" opacity="0.88"/>
+  <text x="478" y="88"  text-anchor="middle" font-family="monospace" font-size="9" fill="#fff0f0" font-weight="bold">MEAS</text>
+  <text x="478" y="100" text-anchor="middle" font-family="monospace" font-size="8" fill="#fff0f0">coop_reduce2()</text>
+  <text x="478" y="111" text-anchor="middle" font-family="monospace" font-size="7" fill="#ffd0d0">8 barriers  →  1 barrier</text>
+
+  <!-- Phase 5: CONTRACT (purple) — small -->
+  <rect x="550" y="72" width="30" height="46" rx="3" fill="#9c27b0" opacity="0.85"/>
+  <text x="565" y="91"  text-anchor="middle" font-family="monospace" font-size="7.5" fill="#f0e0ff" font-weight="bold">CON</text>
+  <text x="565" y="103" text-anchor="middle" font-family="monospace" font-size="7" fill="#f0e0ff">deact</text>
+  <text x="565" y="113" text-anchor="middle" font-family="monospace" font-size="7" fill="#e0c0ff">qubit</text>
+
+  <!-- Round 2: Frame B -->
+  <rect x="585" y="72" width="140" height="46" rx="3" fill="#00bcd4" opacity="0.85"/>
+  <text x="655" y="91"  text-anchor="middle" font-family="monospace" font-size="9" fill="#002028" font-weight="bold">FRAME</text>
+  <text x="655" y="103" text-anchor="middle" font-family="monospace" font-size="8" fill="#002028">px/pz bit flips</text>
+  <text x="655" y="113" text-anchor="middle" font-family="monospace" font-size="8" fill="#003038">k=0 (no array)</text>
+
+  <!-- Ellipsis -->
+  <text x="745" y="100" font-family="monospace" font-size="18" fill="#666">···</text>
+
+  <!-- End cap: next EXPAND hint -->
+  <rect x="780" y="72" width="30" height="46" rx="3" fill="#ff9800" opacity="0.7"/>
+  <text x="795" y="91"  text-anchor="middle" font-family="monospace" font-size="7" fill="#1a0a00">EXP</text>
+  <rect x="815" y="72" width="48" height="46" rx="3" fill="#4caf50" opacity="0.5"/>
+  <text x="839" y="99"  text-anchor="middle" font-family="monospace" font-size="7.5" fill="#001a00">sweep…</text>
+
+  <!-- ===== ANNOTATION ARROWS AND LABELS ===== -->
+
+  <!-- Annotation: k=0 above Frame A -->
+  <line x1="126" y1="65" x2="126" y2="56" stroke="#00bcd4" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="126" y="52" text-anchor="middle" font-family="monospace" font-size="9" fill="#00bcd4">k=0</text>
+
+  <!-- Annotation: k rises above EXPAND -->
+  <line x1="239" y1="65" x2="239" y2="50" stroke="#ff9800" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="239" y="46" text-anchor="middle" font-family="monospace" font-size="8" fill="#ff9800">k↑10</text>
+
+  <!-- Annotation: k=10 array sweep -->
+  <line x1="334" y1="65" x2="334" y2="50" stroke="#4caf50" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="334" y="46" text-anchor="middle" font-family="monospace" font-size="8" fill="#4caf50">k=10: 1024-elem sweep</text>
+
+  <!-- ===== OCCUPANCY / RATIO ROW ===== -->
+  <!-- Row background -->
+  <rect x="30" y="145" width="840" height="36" rx="4" fill="#0d0d20" stroke="#333" stroke-width="1"/>
+  <text x="40" y="157" font-family="monospace" font-size="9" fill="#888">Wavefront occupancy</text>
+
+  <!-- Occupancy: low during frame -->
+  <rect x="36"  y="162" width="180" height="14" rx="2" fill="#00bcd4" opacity="0.3"/>
+  <text x="126" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#aaeeff">SALU-heavy (frame bits)</text>
+
+  <!-- Occupancy: high during array sweep -->
+  <rect x="262" y="162" width="145" height="14" rx="2" fill="#4caf50" opacity="0.55"/>
+  <text x="334" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#ccffcc">4 waves/SIMD (peak VALU)</text>
+
+  <!-- Occupancy: stall during meas -->
+  <rect x="411" y="162" width="135" height="14" rx="2" fill="#f44336" opacity="0.4"/>
+  <text x="478" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffcccc">barrier stalls</text>
+
+  <!-- ===== SALU/VALU ROW ===== -->
+  <rect x="30" y="195" width="840" height="36" rx="4" fill="#0d0d20" stroke="#333" stroke-width="1"/>
+  <text x="40" y="208" font-family="monospace" font-size="9" fill="#888">SALU / VALU ratio</text>
+
+  <!-- Bar: SALU/VALU ratio indicator at rank=10 -->
+  <!-- background bar -->
+  <rect x="262" y="207" width="145" height="18" rx="2" fill="#222244"/>
+  <!-- SALU portion: 1.81/(1+1.81) ≈ 64% -->
+  <rect x="262" y="207" width="93"  height="18" rx="2" fill="#ff6f00" opacity="0.8"/>
+  <!-- VALU portion: remaining 36% -->
+  <rect x="355" y="207" width="52"  height="18" rx="2" fill="#1565c0" opacity="0.7"/>
+  <text x="308" y="219" text-anchor="middle" font-family="monospace" font-size="8" fill="#fff">SALU 64%</text>
+  <text x="381" y="219" text-anchor="middle" font-family="monospace" font-size="8" fill="#cce">VALU 36%</text>
+  <text x="334" y="230" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#ffcc80">1.81x SALU/VALU at rank=10 (address computation dominates)</text>
+
+  <!-- ===== BEFORE / AFTER GEAK PANEL ===== -->
+  <rect x="30" y="248" width="840" height="82" rx="4" fill="#0d0d20" stroke="#444" stroke-width="1"/>
+
+  <!-- Before label -->
+  <text x="42" y="264" font-family="monospace" font-size="10" fill="#f44336" font-weight="bold">BEFORE GEAK — Measurement phase (bottleneck)</text>
+
+  <!-- Barrier blocks: 8 barriers shown as red ticks -->
+  <text x="42" y="280" font-family="monospace" font-size="9" fill="#999">coop_reduce2():</text>
+  <!-- 8 narrow barrier markers -->
+  <rect x="160" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="172" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="184" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="196" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="208" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="220" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="232" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <rect x="244" y="271" width="8" height="16" rx="1" fill="#f44336" opacity="0.9"/>
+  <text x="256" y="282" font-family="monospace" font-size="9" fill="#f44336">  8 barriers per meas  →  ~40% of total time</text>
+
+  <!-- After label -->
+  <text x="42" y="305" font-family="monospace" font-size="10" fill="#4caf50" font-weight="bold">AFTER GEAK  — fused cooperative reduction</text>
+  <!-- 1 barrier marker -->
+  <text x="42" y="322" font-family="monospace" font-size="9" fill="#999">coop_reduce2():</text>
+  <rect x="160" y="313" width="8" height="16" rx="1" fill="#4caf50" opacity="0.9"/>
+  <text x="172" y="324" font-family="monospace" font-size="9" fill="#4caf50">  1 barrier per meas  →  barrier overhead collapsed by GEAK fusion</text>
+
+  <!-- ===== LEGEND ===== -->
+  <rect x="30" y="345" width="840" height="45" rx="4" fill="#12122a" stroke="#333" stroke-width="1"/>
+  <text x="42" y="360" font-family="monospace" font-size="9" fill="#aaa" font-weight="bold">Legend:</text>
+
+  <!-- FRAME -->
+  <rect x="95" y="350" width="14" height="10" rx="2" fill="#00bcd4"/>
+  <text x="113" y="359" font-family="monospace" font-size="9" fill="#00bcd4">FRAME (Clifford px/pz)</text>
+
+  <!-- EXPAND -->
+  <rect x="255" y="350" width="14" height="10" rx="2" fill="#ff9800"/>
+  <text x="273" y="359" font-family="monospace" font-size="9" fill="#ff9800">EXPAND (grow active_k)</text>
+
+  <!-- ARRAY SWEEP -->
+  <rect x="415" y="350" width="14" height="10" rx="2" fill="#4caf50"/>
+  <text x="433" y="359" font-family="monospace" font-size="9" fill="#4caf50">ARRAY SWEEP (2^k FMAs)</text>
+
+  <!-- MEAS -->
+  <rect x="95" y="366" width="14" height="10" rx="2" fill="#f44336"/>
+  <text x="113" y="375" font-family="monospace" font-size="9" fill="#f44336">MEAS (coop_reduce2, barriers)</text>
+
+  <!-- CONTRACT -->
+  <rect x="315" y="366" width="14" height="10" rx="2" fill="#9c27b0"/>
+  <text x="333" y="375" font-family="monospace" font-size="9" fill="#ce93d8">CONTRACT (deactivate qubit)</text>
+
+  <!-- GEAK note -->
+  <text x="540" y="359" font-family="monospace" font-size="9" fill="#ffcc80">GEAK: barrier fusion reduces meas overhead</text>
+  <text x="540" y="375" font-family="monospace" font-size="9" fill="#888">~60% FRAME  ·  narrow EXPAND  ·  ~40% time in MEAS (pre-opt)</text>
+</svg>

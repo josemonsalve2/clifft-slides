@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="550" viewBox="0 0 800 550" role="img" aria-labelledby="title desc">
+  <title id="title">Warp-Shuffle Reduction vs Tree Reduction</title>
+  <desc id="desc">Comparison of an eight-barrier tree reduction with a one-barrier warp-shuffle reduction, yielding forty percent higher throughput.</desc>
+
+  <defs>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00d4ff"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#44ff88"/>
+    </marker>
+    <marker id="arrowCyanStart" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M8,0 L0,4 L8,8 Z" fill="#00d4ff"/>
+    </marker>
+    <linearGradient id="barrierGradient" x1="0" x2="1">
+      <stop offset="0%" stop-color="#ff4444"/>
+      <stop offset="100%" stop-color="#44ff88"/>
+    </linearGradient>
+    <pattern id="threadsPattern" width="12" height="14" patternUnits="userSpaceOnUse">
+      <rect x="1" y="1" width="9" height="10" rx="1" fill="#7184aa" stroke="#9eb1d2" stroke-width=".5"/>
+    </pattern>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="800" height="550" fill="#1a1a2e"/>
+
+  <!-- Title bar -->
+  <rect x="0" y="0" width="800" height="72" fill="#101023"/>
+  <path d="M0 71.5 H800" stroke="#34436c"/>
+  <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700">Warp-Shuffle Reduction vs Tree Reduction</text>
+  <text x="400" y="54" text-anchor="middle" fill="#c7d2ee" font-family="Arial, Helvetica, sans-serif" font-size="14">GEAK optimization: <tspan fill="#ff7777" font-weight="700">8 barriers</tspan><tspan fill="#ffffff"> → </tspan><tspan fill="#44ff88" font-weight="700">1 barrier</tspan></text>
+
+  <!-- Panels -->
+  <rect x="8" y="80" width="382" height="404" rx="10" fill="#16213e" stroke="#405177" stroke-width="1.5"/>
+  <rect x="410" y="80" width="382" height="404" rx="10" fill="#0f3460" stroke="#3074a2" stroke-width="1.5"/>
+
+  <!-- Left panel heading -->
+  <text x="199" y="107" text-anchor="middle" fill="#ff6b4a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">BEFORE: Tree Reduction (8 barriers)</text>
+  <path d="M22 116 H376" stroke="#ff4444" stroke-opacity=".35"/>
+
+  <!-- Left tree connectors -->
+  <g fill="none" stroke="#8798bd" stroke-width="1.2" opacity=".75">
+    <path d="M52 378 L72 350 M92 378 L72 350 M100 378 L120 350 M140 378 L120 350 M148 378 L168 350 M188 378 L168 350 M196 378 L216 350 M236 378 L216 350 M244 378 L264 350 M284 378 L264 350"/>
+    <path d="M72 350 L96 322 M120 350 L96 322 M168 350 L192 322 M216 350 L192 322 M264 350 L288 322 M312 350 L288 322"/>
+    <path d="M96 322 L144 294 M192 322 L144 294 M288 322 L240 294"/>
+    <path d="M144 294 L192 266 M240 294 L192 266"/>
+    <path d="M192 266 L192 238 L192 210 L192 182 L192 154"/>
+  </g>
+
+  <!-- Tree reduction nodes -->
+  <g fill="#8da1c8" stroke="#c6d4ef" stroke-width=".8">
+    <circle cx="52" cy="378" r="3"/><circle cx="92" cy="378" r="3"/>
+    <circle cx="100" cy="378" r="3"/><circle cx="140" cy="378" r="3"/>
+    <circle cx="148" cy="378" r="3"/><circle cx="188" cy="378" r="3"/>
+    <circle cx="196" cy="378" r="3"/><circle cx="236" cy="378" r="3"/>
+    <circle cx="244" cy="378" r="3"/><circle cx="284" cy="378" r="3"/>
+    <circle cx="312" cy="378" r="3"/>
+    <circle cx="72" cy="350" r="4"/><circle cx="120" cy="350" r="4"/><circle cx="168" cy="350" r="4"/><circle cx="216" cy="350" r="4"/><circle cx="264" cy="350" r="4"/><circle cx="312" cy="350" r="4"/>
+    <circle cx="96" cy="322" r="4"/><circle cx="192" cy="322" r="4"/><circle cx="288" cy="322" r="4"/>
+    <circle cx="144" cy="294" r="4"/><circle cx="240" cy="294" r="4"/>
+    <circle cx="192" cy="266" r="5"/><circle cx="192" cy="238" r="5"/>
+    <circle cx="192" cy="210" r="5"/><circle cx="192" cy="182" r="5"/><circle cx="192" cy="154" r="6" fill="#ff765f"/>
+  </g>
+
+  <!-- Level labels -->
+  <g fill="#b4c1dc" font-family="Arial, Helvetica, sans-serif" font-size="8">
+    <text x="20" y="381">256</text>
+    <text x="20" y="353">128</text>
+    <text x="20" y="325">64</text>
+    <text x="20" y="297">32</text>
+    <text x="20" y="269">16</text>
+    <text x="20" y="241">8</text>
+    <text x="20" y="213">4</text>
+    <text x="20" y="185">2</text>
+    <text x="20" y="157">1</text>
+  </g>
+
+  <!-- Eight stop-sign barrier markers -->
+  <g fill="#ff4444" stroke="#ff9292" stroke-width="1">
+    <polygon points="274,142 280,136 350,136 356,142 356,154 350,160 280,160 274,154"/>
+    <polygon points="274,170 280,164 350,164 356,170 356,182 350,188 280,188 274,182"/>
+    <polygon points="274,198 280,192 350,192 356,198 356,210 350,216 280,216 274,210"/>
+    <polygon points="274,226 280,220 350,220 356,226 356,238 350,244 280,244 274,238"/>
+    <polygon points="274,254 280,248 350,248 356,254 356,266 350,272 280,272 274,266"/>
+    <polygon points="274,282 280,276 350,276 356,282 356,294 350,300 280,300 274,294"/>
+    <polygon points="274,310 280,304 350,304 356,310 356,322 350,328 280,328 274,322"/>
+    <polygon points="274,338 280,332 350,332 356,338 356,350 350,356 280,356 274,350"/>
+  </g>
+  <g fill="#ffffff" font-family="Consolas, Menlo, monospace" font-size="7.7" font-weight="700" text-anchor="middle">
+    <text x="315" y="151">__syncthreads()</text>
+    <text x="315" y="179">__syncthreads()</text>
+    <text x="315" y="207">__syncthreads()</text>
+    <text x="315" y="235">__syncthreads()</text>
+    <text x="315" y="263">__syncthreads()</text>
+    <text x="315" y="291">__syncthreads()</text>
+    <text x="315" y="319">__syncthreads()</text>
+    <text x="315" y="347">__syncthreads()</text>
+  </g>
+
+  <!-- Thread row -->
+  <text x="199" y="371" text-anchor="middle" fill="#dce7ff" font-family="Arial, Helvetica, sans-serif" font-size="9">256 threads</text>
+  <rect x="35" y="384" width="328" height="14" rx="2" fill="url(#threadsPattern)" stroke="#8fa3ca"/>
+  <g fill="#cbd8f2" font-family="Arial, Helvetica, sans-serif" font-size="7">
+    <text x="35" y="407">T0</text>
+    <text x="183" y="407">… grouped threads …</text>
+    <text x="344" y="407">T255</text>
+  </g>
+
+  <!-- Code snippet -->
+  <rect x="25" y="414" width="348" height="38" rx="4" fill="#0d1429" stroke="#34466d"/>
+  <text x="36" y="430" fill="#dce7ff" font-family="Consolas, Menlo, monospace" font-size="10.5">st.red0[threadIdx.x] = out0;</text>
+  <text x="36" y="445" fill="#ff6666" font-family="Consolas, Menlo, monospace" font-size="10.5">__syncthreads();</text>
+  <text x="199" y="473" text-anchor="middle" fill="#ff7777" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">8 × __syncthreads per measurement</text>
+
+  <!-- Right panel heading -->
+  <text x="601" y="107" text-anchor="middle" fill="#44ff88" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">AFTER: Warp-Shuffle (1 barrier)</text>
+  <path d="M424 116 H778" stroke="#44ff88" stroke-opacity=".45"/>
+
+  <!-- Phase 1 -->
+  <text x="430" y="132" fill="#44ff88" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700">Intra-wavefront: __shfl_xor, NO barriers</text>
+
+  <g font-family="Arial, Helvetica, sans-serif">
+    <rect x="438" y="141" width="320" height="22" rx="5" fill="#126484" stroke="#44ff88"/>
+    <rect x="438" y="169" width="320" height="22" rx="5" fill="#175b89" stroke="#44ff88"/>
+    <rect x="438" y="197" width="320" height="22" rx="5" fill="#214f91" stroke="#44ff88"/>
+    <rect x="438" y="225" width="320" height="22" rx="5" fill="#294395" stroke="#44ff88"/>
+
+    <g fill="#ffffff" font-size="10" font-weight="700">
+      <text x="447" y="156">WF0</text>
+      <text x="447" y="184">WF1</text>
+      <text x="447" y="212">WF2</text>
+      <text x="447" y="240">WF3</text>
+    </g>
+    <g fill="#bdefff" font-size="8.5">
+      <text x="716" y="156">64 threads</text>
+      <text x="716" y="184">64 threads</text>
+      <text x="716" y="212">64 threads</text>
+      <text x="716" y="240">64 threads</text>
+    </g>
+  </g>
+
+  <!-- Shuffle double arrows -->
+  <g stroke="#00d4ff" stroke-width="1.4" marker-start="url(#arrowCyanStart)" marker-end="url(#arrowCyan)">
+    <path d="M490 152 H550"/>
+    <path d="M570 152 H630"/>
+    <path d="M490 180 H550"/>
+    <path d="M570 180 H630"/>
+    <path d="M490 208 H550"/>
+    <path d="M570 208 H630"/>
+    <path d="M490 236 H550"/>
+    <path d="M570 236 H630"/>
+  </g>
+  <g fill="#ffffff" font-family="Consolas, Menlo, monospace" font-size="8" text-anchor="middle">
+    <text x="660" y="155">__shfl_xor</text>
+    <text x="660" y="183">__shfl_xor</text>
+    <text x="660" y="211">__shfl_xor</text>
+    <text x="660" y="239">__shfl_xor</text>
+  </g>
+
+  <!-- Phase 2 divider and label -->
+  <path d="M424 258 H778" stroke="#8eb9d5" stroke-opacity=".35"/>
+  <text x="430" y="275" fill="#44ff88" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700">Inter-wavefront: 1 barrier, 4 LDS slots</text>
+
+  <!-- Leader flow into LDS -->
+  <g fill="none" stroke="#00d4ff" stroke-width="1.4" marker-end="url(#arrowCyan)" opacity=".95">
+    <path d="M758 152 C770 152 770 286 502 301"/>
+    <path d="M758 180 C772 180 766 271 570 301"/>
+    <path d="M758 208 C770 208 760 278 638 301"/>
+    <path d="M758 236 C770 236 758 286 706 301"/>
+  </g>
+  <text x="766" y="251" text-anchor="end" fill="#bdefff" font-family="Arial, Helvetica, sans-serif" font-size="8">wavefront leaders</text>
+
+  <!-- LDS slots -->
+  <g stroke="#44ff88" stroke-width="1.5" fill="#173f59">
+    <rect x="470" y="302" width="64" height="38" rx="5"/>
+    <rect x="538" y="302" width="64" height="38" rx="5"/>
+    <rect x="606" y="302" width="64" height="38" rx="5"/>
+    <rect x="674" y="302" width="64" height="38" rx="5"/>
+  </g>
+  <g fill="#ffffff" font-family="Consolas, Menlo, monospace" font-size="9" text-anchor="middle">
+    <text x="502" y="325">LDS[0]</text>
+    <text x="570" y="325">LDS[1]</text>
+    <text x="638" y="325">LDS[2]</text>
+    <text x="706" y="325">LDS[3]</text>
+  </g>
+
+  <!-- Single barrier -->
+  <rect x="512" y="349" width="178" height="25" rx="12.5" fill="url(#barrierGradient)" stroke="#ffffff" stroke-opacity=".7"/>
+  <text x="601" y="366" text-anchor="middle" fill="#ffffff" font-family="Consolas, Menlo, monospace" font-size="10.5" font-weight="700">1 × __syncthreads</text>
+
+  <!-- Phase 3 -->
+  <path d="M424 383 H778" stroke="#8eb9d5" stroke-opacity=".35"/>
+  <text x="430" y="399" fill="#44ff88" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700">Final reduce: no extra barrier</text>
+
+  <!-- LDS to thread zero -->
+  <g fill="none" stroke="#00d4ff" stroke-width="1.5" marker-end="url(#arrowCyan)">
+    <path d="M502 340 C502 385 535 402 570 421"/>
+    <path d="M570 340 V416"/>
+    <path d="M638 340 C638 385 608 402 584 421"/>
+    <path d="M706 340 C706 392 630 410 592 423"/>
+  </g>
+
+  <rect x="493" y="420" width="216" height="42" rx="8" fill="#174f54" stroke="#44ff88" stroke-width="2" filter="url(#softGlow)"/>
+  <rect x="503" y="429" width="52" height="24" rx="4" fill="#44ff88"/>
+  <text x="529" y="445" text-anchor="middle" fill="#102a25" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700">Thread 0</text>
+  <text x="625" y="438" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="10">reduces via</text>
+  <text x="625" y="452" text-anchor="middle" fill="#00d4ff" font-family="Consolas, Menlo, monospace" font-size="10.5" font-weight="700">__shfl_xor</text>
+  <text x="601" y="477" text-anchor="middle" fill="#bfffd3" font-family="Arial, Helvetica, sans-serif" font-size="9">256 values → 4 partials → 1 result</text>
+
+  <!-- Bottom callout -->
+  <rect x="0" y="490" width="800" height="60" fill="#1a4a2a"/>
+  <path d="M0 490 H800" stroke="#44ff88" stroke-width="2"/>
+  <text x="400" y="516" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="800">+40% throughput on coop tier</text>
+  <text x="400" y="539" text-anchor="middle" fill="#d6ffe2" font-family="Arial, Helvetica, sans-serif" font-size="12.5">4.0M → 5.6M shots/s  |  8 barriers → 1 barrier  |  Measurement ops ≈ 40% of d5 execution</text>
+</svg>
