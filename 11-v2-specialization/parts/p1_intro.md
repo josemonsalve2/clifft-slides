@@ -193,8 +193,15 @@ positive ones and predicts exactly which circuits benefit.
 
 **(c) The win mechanism is visible in the hardware counters and is not what one
 might guess.** It is not floating-point throughput. **SALU instruction count
-falls 3–9× on every circuit V2 wins** — that is the interpreter's `switch`
-dispatch disappearing from the scalar unit. (§14.2)
+falls 2.8–9.1× on all 20 circuits V2 wins** (ratios 0.110–0.361, no exceptions)
+— that is the interpreter's `switch` dispatch leaving the scalar unit. VALU
+falls too, but far less: 1.2–2.3×, and on `circuit_d3` barely at all (0.818).
+The counter that separates the two backends is the scalar one.
+
+The sign flips exactly where the fallback happened: on the six pre-fix losses,
+SALU goes **up** to 1.467–1.469 and VALU up to 2.23–2.30. Those six were running
+the interpreter (§1.3(d)), so the inversion is not a counter-example — it is the
+same measurement confirming which kernel actually ran. (§14.2)
 
 **(d) V2's one loss was a correctness failure wearing a performance costume —
 and it has since been fixed.** The `circuit_d5` family's specialization failed
