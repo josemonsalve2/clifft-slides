@@ -488,7 +488,7 @@ to that boundary, not to the total, which is 152 both before and after.)
 With HSA dispatch there is no runtime checking the kernarg layout for you (§13):
 the AQL packet carries a pointer and the kernel casts it. A size or offset
 mismatch is not an error, it is silently reading the wrong bytes. That is why
-`device_abi_checks.cc` exists — 60-odd `static_assert`s pinning every offset and
+`device_abi_checks.cc` exists — 55 `static_assert`s pinning every offset and
 size in the device header to the host structs in `gpu_types.h`, plus the opcode
 numbering:
 
