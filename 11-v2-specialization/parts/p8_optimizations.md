@@ -5,10 +5,34 @@ the fifth thing that happened, and if it had been the first, most of the
 speedup would have been invisible — the earliest V2 build was **28× slower than
 SVM** on `frame_h`, and no amount of constant folding closes a 28× gap.
 
-This chapter walks the optimization history in the order it happened, with the
-progressive ratio table as the spine. Every row of that table is a real
-benchmark run archived under `V2_performance/runs/`; the full progression is in
+This chapter walks the optimization history with the progressive ratio table as
+the spine. Every row of that table is a real benchmark run archived under
+`V2_performance/runs/`; the full progression is in
 `V2_performance/analysis/TRENDS.md`.
+
+The sections are ordered by *magnitude*, not by date, and the two differ. The
+actual commit order on `mlir-v2`, from `git log --reverse`, is:
+
+| # | commit | time | what |
+|---|---|---|---|
+| 1 | `d873997` | 07-25 04:46 | P1a — shrink reduction LDS |
+| 2 | `7802423` | 07-25 04:50 | P1b — bit-pack `lds_meas` |
+| 3 | `715f8d0` | 07-25 05:11 | **P0 — shot-packed register tier** |
+| 4 | `eea6e13` | 07-25 07:36 | specializer Phase 1 — operand library |
+| 5 | `b31b400` | 07-25 07:47 | specializer Phase 2+3 — register emitter |
+| 6 | `60d5728` | 07-25 08:24 | specializer — coop tier + correctness gate |
+| 7 | `4b55871` | 07-25 08:34 | force-inline `v2_op_*` in the interpreter |
+| 8 | `9d9cc68` | 07-25 16:24 | noise/measurement `noinline` fencing |
+| 9 | `bbb5e42` | 07-25 16:35 | gate: multi-seed + disk cache |
+| 10 | `5d10409` | 07-25 17:18 | specializer — global tier |
+| 11 | `842d646` | 07-25 23:06 | XOR observable parity |
+| 12 | `150d09f` | 07-26 06:33 | `v2_barrier` → memory barrier |
+
+**P1 shipped 25 minutes before P0**, despite being numbered after it and being
+worth ~10 % against P0's 28×. It was picked first because it was judged the
+safest change in the plan (layout only, no algorithm change), which is a
+reasonable way to start and a misleading way to report — so the ordering is
+stated here rather than smoothed over.
 
 ### 9.1 The progression
 
@@ -32,6 +56,33 @@ not move afterwards.** That is the signature of a structural change rather than
 a tuning change. Register tier lands at P0. Coop lands at the specializer.
 Noise-heavy coop lands at the noise fence. Global lands at the global emitter.
 
+That reading does not have to be taken on trust. Every archived run kept its
+`rocprofv3` kernel trace, and the kernel *name* in the trace says which code
+path produced each cell — `clifft_v2_register` / `_coop` / `_global` are the
+three interpreter kernels, `clifft_v2_spec` is a specialized one. Recovering it
+per cell:
+
+| circuit | after-specializer | *fenced+gated* | noise-specialized | global-specialized | **final** |
+|---|---|---|---|---|---|
+| frame_h | `spec` | `register`+`spec` | `spec` | `spec` | `spec` |
+| circuit_d3 | `spec` | `register`+`spec` | `spec` | `spec` | `spec` |
+| qv10 | `spec` | `coop`+`spec` | `spec` | `spec` | `spec` |
+| surface_d7_t15 | **`coop`** | `coop`+`spec` | `spec` | `spec` | `spec` |
+| surface_d9_t10 | **`coop`** | `coop`+`spec` | `spec` | `spec` | `spec` |
+| surface_d7_t19 | **`global`** | `global` | **`global`** | `spec` | `spec` |
+| surface_d9_t19 | **`global`** | `global` | **`global`** | `spec` | `spec` |
+| surface_d11_t15 | **`global`** | `global` | **`global`** | `spec` | `spec` |
+
+Each ~1.0 in the table is a cell where the trace shows an *interpreter* kernel:
+the specializer had not reached that tier yet, or the gate had rejected the
+circuit. The step to ~0.5 or ~0.3 is always the same cell flipping to `spec`.
+**Nothing in this table is a tuning effect** — every movement is a change of
+which kernel ran.
+
+The trace also settles the italic column independently of the commit history:
+`noise-fenced-gated` is the **only** run in which any circuit dispatched *two*
+different kernels. That is the gate's validation dispatch, caught in the act.
+
 > **The italic column is a measurement artifact, and it is shown rather than
 > dropped.** At `9d9cc68` the correctness gate existed but its verdict was
 > cached only in-process. `rocprofv3` spawns a fresh process per invocation, so
@@ -41,11 +92,25 @@ Noise-heavy coop lands at the noise fence. Global lands at the global emitter.
 > down. The next commit (`bbb5e42`) persisted the verdict to `<hsaco>.gate` so it
 > is computed once ever, and the numbers returned to trend. Its message names the
 > mechanism exactly: *"that polluted kernel traces with clifft_v2_coop+spec
-> dispatches summed by the digester → inflated times."* The lesson is worth more
-> than the column: **a correctness mechanism that runs on the measurement path
-> becomes a performance number**, and three of these eight circuits would have
-> been reported as 2–4× regressions by anyone reading the table without the
-> commit history.
+> dispatches summed by the digester → inflated times."*
+>
+> The kernel-trace stats show precisely what was summed — **three dispatches
+> where every other run has one**:
+>
+> ```
+> noise-fenced-gated   frame_h    clifft_v2_register x1 (19.1us) + clifft_v2_spec x2 (28.8us)
+>                      qv10       clifft_v2_coop     x1 (1270.2us) + clifft_v2_spec x2 (1667.2us)
+> noise-specialized    frame_h    clifft_v2_spec     x1 (10.5us)
+>                      qv10       clifft_v2_spec     x1 (1340.0us)
+> ```
+>
+> One interpreter run and two specialized runs: the gate executing the circuit
+> both ways to compare them, plus the real sampling dispatch. The reported
+> "regression" is the sum of all three. The lesson is worth more than the
+> column: **a correctness mechanism that runs on the measurement path becomes a
+> performance number**, and three of these eight circuits would have been
+> reported as 2–4× regressions by anyone reading the table without the commit
+> history.
 
 Two further caveats on this table, both of which follow from the project's own
 benchmarking rule that ratios must not be compared across nodes:
@@ -128,33 +193,83 @@ specializer would have needed three separate emitters.
 
 ---
 
-### 9.3 P1a/P1b — LDS reclamation on the coop tier (2 → 4 workgroups/CU)
+### 9.3 P1a/P1b — LDS reclamation on the coop tier
 
 The coop tier's occupancy is set by LDS. At the P0 baseline the coop kernel
-declared 25,088 bytes per workgroup, which on a 64 KB LDS budget allows
-**2 workgroups per CU**. Two commits took it to four.
+declared 25,088 bytes per workgroup. Two commits took that to 13,312.
 
-**P1a (`d873997`) — right-size the reduction buffers.** Three changes, all of
-them "the buffer was declared for the worst case that cannot happen":
+**P1a (`d873997`) — right-size the reduction buffers.** Both changes are of the
+form "the buffer was declared for a worst case that cannot happen":
 
 | Buffer | Before | After | Why it is safe |
 |---|---|---|---|
 | `lds_red0`, `lds_red1` | `[256]` | `[8]` | `coop_reduce2` only touches warps 0–3 |
 | `lds_red_scratch` | `[1024]` | `[512]` | The coop `SWAP_MEAS` fold half is `≤ 2^(10-1) = 512` |
 
-25,088 → 16,896 bytes, confirmed by `rocprofv3`'s `LDS_Block_Size`, occupancy
-2 → 3 wg/CU.
+25,088 → 16,896 bytes, confirmed by `rocprofv3`'s `LDS_Block_Size`
+(`V2_performance/tools/ldscheck_50017.log`).
 
 **P1b (`7802423`) — bit-pack the measurement array.** Measurement records are
 booleans and every access is tid0-only, so `u8 lds_meas[4096]` (4 KB) packs to
 `u64 lds_meas[64]` (512 B) behind three accessors (`mget`/`mset`/`mxor1`)
-replacing all 15 access sites. 16,896 → 13,312 bytes, occupancy 3 → 4 wg/CU.
+replacing all 15 access sites. 16,896 → 13,312 bytes (`ldscheck_50021.log`).
+Today's HEAD reports 13,064 in the ELF metadata
+(`.group_segment_fixed_size: 13064`); the extra 248 bytes were reclaimed by
+later changes.
 
-Net: **occupancy doubled**, byte-exact vs SVM 27/27 at each step. The
-progressive table shows P0+P1 together taking `surface_d9_t19` from 0.906 to
-0.817 and `surface_d11_t15` from 0.938 to 0.854 — roughly a 10 % gain on the
-coop-tier circuits, which is what a 2× occupancy improvement buys when the
-kernel is not purely latency-bound.
+> **Correction — the "2 → 4 wg/CU" claim in both commit messages is wrong on
+> this hardware, and the mechanism was not occupancy.** Both messages derive
+> occupancy from `floor(64 KB / LDS)`, and the P1 planning documents state
+> "CDNA4, 64 KB LDS/CU" as a premise
+> (`gpu_kernel_static_characterization.md:77`). **gfx950 has 160 KB of LDS per
+> CU, not 64 KB.** Asking the compiler directly — the same clang that builds
+> these kernels — by binary-searching the largest accepted `address_space(3)`
+> array:
+>
+> ```
+> gfx90a: max LDS per workgroup = 65,473 B    (64 KB limit)
+> gfx942: max LDS per workgroup = 65,473 B    (64 KB limit)
+> gfx950: max LDS per workgroup = 163,681 B   (160 KB limit)
+> ```
+>
+> and over-allocating by one byte prints the constant verbatim:
+> `error: local memory (163844) exceeds limit (163840) in 'k'`. LLVM's own
+> `; Occupancy:` comment, for a 256-thread workgroup at each historical budget:
+>
+> | LDS bytes | gfx942 | **gfx950** |
+> |---|---|---|
+> | 25,088 (baseline) | 2 | **6** |
+> | 16,896 (after P1a) | 3 | **8** |
+> | 13,312 (after P1b) | 4 | **8** |
+> | 8,704 (global tier) | 7 | **8** |
+>
+> The gfx942 column is exactly the "2 → 3 → 4" the commits claim: the reasoning
+> was right for the *previous* generation. On gfx950 the model is
+> `min(8, 163840 / LDS)`, verified against LLVM at every step boundary
+> (occupancy first drops below 8 at 20,992 bytes, and `163840/20992 = 7`).
+> **Both P1 steps therefore moved entirely inside the flat region: 8 wg/CU
+> before, 8 wg/CU after.** The occupancy cap here is the hardware's 8
+> waves/SIMD, and the kernel was already at it. Sweeping VGPR from 32 to 256 at
+> each LDS size leaves every entry unchanged, so registers were never binding
+> either.
+
+**So what did P1 actually buy?** The progressive table shows P0+P1 together
+taking `surface_d9_t19` from 0.906 to 0.817 and `surface_d11_t15` from 0.938 to
+0.854 — about 10 %, real and reproducible. But it cannot be occupancy on this
+node, and the two commits are not separable in the archived runs (the
+`after-P0-P1` run measures all three changes at once, on top of P0's topology
+change, which is itself worth 28×). **The honest statement is that the LDS
+reclamation is a correctness-preserving footprint reduction whose measured
+benefit on gfx950 is not isolated, and whose stated mechanism does not hold
+here.** It would be the difference between 2 and 4 wg/CU on an MI300X
+(gfx942) — which is where the plan was written — and it becomes binding again
+on gfx950 for any future kernel that pushes past 20 KB. What it definitely did
+buy is headroom: the rank-26 work in §10 spends LDS that P1 freed.
+
+This is also the one place where the report's ground rule cuts against a result
+the project was pleased with. The measurement (`LDS_Block_Size` 25,088 →
+16,896 → 13,312) was correct at every step; the *inference from it* used a
+constant from the wrong chip.
 
 Both commit messages note the forward connection, which is worth recording
 because it is how the project actually proceeded:
@@ -185,9 +300,13 @@ signature is the whole design:
 Byte-exactness is then true *by construction*, not by testing: both paths call
 the same function bodies. 38/38 byte-exact, timing unchanged.
 
-A follow-up (`4b55871`) marked the bodies `always_inline` so the interpreter
-gets them inlined into `execute_shot` exactly as the pre-refactor switch bodies
-were. That commit also honestly records a cost that had not yet been explained:
+`4b55871` marked the bodies `always_inline` so the interpreter gets them inlined
+into `execute_shot` exactly as the pre-refactor switch bodies were. (It is
+numbered as a follow-up to Phase 1 here because that is what it fixes, but it
+landed *after* the coop emitter — 08:34 against 08:24 — so the two
+`after-specializer` / `specializer-final` runs bracket it and are otherwise the
+same code.) That commit also honestly records a cost that had not yet been
+explained:
 
 > a ~20 % coop-interpreter regression vs pre-Phase1 remains on noise-heavy
 > fallback circuits (under investigation)
@@ -210,9 +329,52 @@ testing and the verdict: *"This validates R5's thesis: compile-time opcode
 resolution + constant folding is worth ~3x."*
 
 **Coop tier (`60d5728`)** — the same `spec_body`, a 1-workgroup-per-shot
-wrapper, LDS state. 5.5× on `qv10` and 7.6× on `surface_d7_t15` over the coop
-interpreter. This is the commit where `qv10` drops to 0.252 in the progressive
-table.
+wrapper, LDS state. This is the commit where `qv10` drops to 0.252 in the
+progressive table.
+
+The commit message claims *"qv10 5.5x, surface_d7_t15 7.6x"* over the coop
+interpreter. **Those were measured ad-hoc during development and are not
+reproducible from the archived runs**, which give a consistently smaller
+number. Taking each circuit's last interpreter run against its first
+specialized run — same node, same shot count, kernel identity confirmed by
+trace:
+
+| circuit | interpreter (µs) | specialized (µs) | gain |
+|---|---|---|---|
+| surface_d7_t15 | 39,352.8 (`coop`) | 11,117.4 (`spec`) | **3.54×** |
+| surface_d9_t10 | 79,242.3 (`coop`) | 21,318.3 (`spec`) | **3.72×** |
+| surface_d7_t19 | 20,295.2 (`global`) | 6,229.2 (`spec`) | **3.26×** |
+| surface_d9_t19 | 43,588.2 (`global`) | 11,726.6 (`spec`) | **3.72×** |
+| surface_d11_t15 | 75,154.0 (`global`) | 19,412.2 (`spec`) | **3.87×** |
+
+**Specialization is worth ~3.3–3.9× over the interpreter, uniformly across coop
+and global.** That is a cleaner result than the commit messages' spread of
+2.0×–7.6×, and it agrees with the register tier's independently-measured ~3×
+(§9.4, `b31b400`) and with the per-op instruction counts in §7 (a 2.9×
+median). Three different measurements of the same lever converge on ~3×.
+
+`qv10` is the exception and is instructive: 5,358.7 µs interpreter → 1,085.9 µs
+specialized is **4.93×**, but its specialized time then *rises* to 1,340–1,361 µs
+in every later run and settles at 0.310 rather than 0.252. The counters name the
+cause without ambiguity:
+
+| run | V2 µs | V2/SVM | VGPR | VALU |
+|---|---|---|---|---|
+| after-specializer | 1085.9 | 0.252 | 24 | 5.10e+08 |
+| specializer-final | 1088.6 | 0.251 | 24 | 5.31e+08 |
+| noise-specialized | 1340.0 | 0.308 | **36** | 5.02e+08 |
+| global-specialized | 1346.4 | 0.310 | **36** | 5.02e+08 |
+| final | 1361.3 | 0.310 | **36** | 5.02e+08 |
+
+**VALU goes *down* while time goes up, and VGPR jumps 24 → 36 at exactly the
+run that follows the noise fence.** Fewer vector instructions taking more time
+with more registers live is the signature of the `noinline` boundaries in
+`9d9cc68`: the ops can no longer be interleaved across call edges, so the
+scheduler has less to overlap and the ABI forces values live across the calls.
+It is not noise, not the node (all five runs are `d13-21`), and not the SVM
+baseline (4,317–4,388 µs throughout). **`qv10` pays about 23 % for
+byte-exactness**, and the progressive table reports the post-fence number
+rather than quoting the faster incorrect one.
 
 It is also the commit that introduced the **correctness gate**, and it did so
 because coop specialization of noise-heavy circuits diverged. The gate is worth
@@ -264,9 +426,16 @@ shipped had two parts:
    the build-time interpreter. Dropping them made the two paths compile the same
    way.
 
-This took `surface_d7_t15` from 1.427 to 0.503 and `surface_d9_t10` from 1.402
-to 0.484 — the "noise-specialized" column in §9.1 — because those circuits could
+This took `surface_d7_t15` from **1.793 to 0.503** and `surface_d9_t10` from
+**1.800 to 0.484** — a **3.5×** and **3.7×** step — because those circuits could
 now pass the gate and run specialized.
+
+(The step must be measured from the `specializer-final` column, not from the
+italic `1.427`/`1.402`. Those intermediate cells are the gate-polluted ones:
+they are *already partly specialized*, being the sum of an interpreter dispatch
+and two specialized dispatches, so they sit between the two real values and
+understate the step. The VALU counter makes the three states plain —
+4.71e+09 interpreter, 3.49e+09 polluted mixture, 1.15e+09 specialized.)
 
 **But the stated explanation was wrong, and the correction matters.** The commit
 attributed the divergence to `-O2` reassociating FP across inlined call
@@ -303,9 +472,36 @@ implementation detail is the interesting part:
 > placed in the implicit pad slot after `num_noise_sites` so the kernarg struct
 > **SIZE is unchanged** (a 120-vs-116 mismatch silently breaks every dispatch).
 
-With HSA dispatch there is no runtime checking the kernarg layout for you (§13).
-The ABI version was bumped to 3 and `device_abi_checks.cc` static-asserts the
-layout, which is how a hand-rolled dispatch path stays safe.
+The layout confirms it — compiling `device_abi.h` and printing the offsets:
+
+```
+sizeof(CV2KernArgs)        = 152
+offsetof num_noise_sites   = 112
+offsetof expected_obs_mask = 116
+```
+
+The new field sits at 116, in the four bytes of padding that the `u32` at 112
+already forced the compiler to reserve ahead of the next 8-byte-aligned member.
+**A whole new argument was added for free.** (The commit's "120-vs-116" refers
+to that boundary, not to the total, which is 152 both before and after.)
+
+With HSA dispatch there is no runtime checking the kernarg layout for you (§13):
+the AQL packet carries a pointer and the kernel casts it. A size or offset
+mismatch is not an error, it is silently reading the wrong bytes. That is why
+`device_abi_checks.cc` exists — 60-odd `static_assert`s pinning every offset and
+size in the device header to the host structs in `gpu_types.h`, plus the opcode
+numbering:
+
+```c
+static_assert(static_cast<int>(clifft::Opcode::OP_FRAME_CNOT) == 0, "opcode FRAME_CNOT");
+static_assert(static_cast<int>(clifft::Opcode::OP_EXPAND)     == 19, "opcode EXPAND");
+static_assert(sizeof(CV2Instr) == sizeof(GpuInstr), "CV2Instr size");
+static_assert(offsetof(CV2Instr, opcode) == offsetof(GpuInstr, opcode), "instr.opcode");
+```
+
+Its header comment records that this is not hypothetical: *"this caught an
+off-by-one: EXPAND/MEAS were numbered -1."* A build error instead of a silent
+GPU miscompute is the whole return on the file.
 
 ---
 
@@ -313,13 +509,23 @@ layout, which is how a hand-rolled dispatch path stays safe.
 
 | Change | Mechanism | Who it helped | Magnitude |
 |---|---|---|---|
-| P0 shot-packed register tier | topology: 1 shot/thread instead of 256 threads/shot | rank ≤ 4 | 28.3× → 1.2× |
-| P1a/P1b LDS reclamation | occupancy 2 → 4 wg/CU | all coop | ~10 % |
+| P0 shot-packed register tier | topology: 1 shot/thread instead of 256 threads/shot | rank ≤ 4 | **28.3× → 1.2×** |
+| P1a/P1b LDS reclamation | 25,088 → 13,312 B/workgroup | all coop | ~10 %, mechanism unconfirmed on gfx950 (§9.3) |
 | Specializer, register | constant-fold operands, delete dispatch | rank ≤ 4 | 3.3× over interpreter |
-| Specializer, coop | same, plus rank-folded loop bounds | rank 5–10 | 5.5–7.6× over interpreter |
-| Noise fence + gate | made noise circuits *eligible* to specialize | noise-heavy coop | 1.43 → 0.50 |
-| Specializer, global | fold `scatter_bits_2`, no LUT needed | rank 11–19 | 3.4–3.9× over interpreter |
+| Specializer, coop | same, plus rank-folded loop bounds | rank 5–10 | **3.5–3.7×** over interpreter |
+| Noise fence + gate | made noise circuits *eligible* to specialize | noise-heavy coop | 1.79 → 0.50 |
+| Specializer, global | fold `scatter_bits_2`, no LUT needed | rank 11–19 | **3.3–3.9×** over interpreter |
 | Rank cap 19 → 26 | size HBM from circuit rank, not the cap | rank 20–26 | new capability (§10) |
+
+Two rows changed under audit and are worth naming: the coop specializer is
+**3.5–3.7×**, not the 5.5–7.6× its commit message claims (§9.4), and the P1
+occupancy mechanism does not hold on this chip (§9.3). Both corrections came
+from the archived runs rather than from the commit log.
+
+The specialization rows now agree with each other — **~3.3–3.9× across all
+three tiers** — which is a stronger claim than the scattered original figures,
+because it says the lever is the same lever everywhere: resolve the opcode at
+compile time.
 
 The pattern across the whole table: **every large win came from removing
 something the runtime was doing, not from making the arithmetic faster.** The
