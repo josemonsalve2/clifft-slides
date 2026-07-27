@@ -1,0 +1,453 @@
+
+    <!-- ================= 11. Pitfalls ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">11</div>
+      <h1>Pitfalls</h1>
+      <div class="section-sub">Five things went wrong. In four of them a <em>plausible</em> explanation was
+      adopted, documented and built on &mdash; and in every one of those four the plausible explanation was
+      wrong.</div>
+    </section>
+
+    <section>
+      <h2>The pattern is uniform enough to state up front</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="d" style="font-size:0.92em;">Each bug was diagnosed <b>by analogy</b> ("this looks like
+        an FP problem", "this looks like a fixture problem") and each was actually resolved by <b>an
+        experiment that asked the system a question it could only answer one way</b>.
+        <hr/>
+        The diagnosis-by-analogy was never merely <em>incomplete</em>; <b>it pointed at the wrong
+        subsystem.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>11.1 &nbsp;The noise regression &mdash; the symptom and the theory</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">The symptom</div>
+          <div class="d">The <code>circuit_d5</code> / <code>cultivation_d5</code> family &mdash; rank 10,
+          <b>1,720 instructions</b>, the noisiest circuits in the corpus &mdash; produced measurement
+          outcomes from the specialized kernel that differed from the interpreter on roughly <b>one shot in
+          five thousand</b>, on some seeds.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The theory</div>
+          <div class="d">Straight-lining duplicates each noise op's body at every call site. Noise ops carry
+          scalar FP: an <code>ocml_log_f64</code> hazard draw, cumulative-probability sums, RNG.
+          <hr/>
+          If <code>-O2</code> reassociated that FP differently across copies, a probability could shift by
+          <b>~1 ULP</b>, <code>sample_branch</code> could take the other side of a comparison, and &mdash;
+          because a branch decides <em>whether a PRNG draw is consumed</em> &mdash; <b>the two streams would
+          decorrelate permanently and never resynchronize.</b></div>
+        </div>
+      </div>
+      <div class="insight">This story is <b>mechanically coherent</b>, it names a <b>real hazard</b>, and it
+      <b>fits the observation</b> that only the noisiest circuit family was affected. It motivated
+      <code>V2_NOISE_ATTR</code> (<code>9d9cc68</code>): emit the noise ops <code>noinline</code> in the
+      specialized build so <code>-O2</code> cannot merge or reassociate across the copies.</div>
+    </section>
+
+    <section>
+      <h2>Why it was wrong &mdash; fact 1: the build cannot legally do it</h2>
+      <p class="lede">The specializer compiles with <code>-O2 -ffp-contract=off</code> and <b>no
+      fast-math</b>. Under those flags reassociation of floating-point is <b>not permitted</b>, so inlining
+      <em>cannot</em> change an FP result. <code>v2_compile_cache.cc</code> says so at the flag site:</p>
+      <pre><code><span class="cm">// Flags are IDENTICAL to the build-time interpreter pipeline</span>
+<span class="cm">// (ClifftAmdgcn.cmake) so the shared v2_op_*() bodies compile to the same</span>
+<span class="cm">// code -&gt; byte-exact. -ffp-contract=off with no fast-math is what makes that</span>
+<span class="cm">// hold regardless of inlining decisions: without reassociation or</span>
+<span class="cm">// contraction the optimizer cannot change an FP result. Do NOT add</span>
+<span class="cm">// vectorize/unroll/fast-math flags that would diverge from the interpreter.</span></code></pre>
+      <div class="verdict verdict-bad">The comment that justifies byte-exactness is <b>also the refutation
+      of the theory</b> &mdash; and it was already in the file.</div>
+    </section>
+
+    <section>
+      <h2>Fact 2: the kernel disagreed <em>with itself</em></h2>
+      <p class="lede"><code>V2_GATE_SELFTEST</code> (<code>ca82260</code>) runs a kernel against
+      <em>itself</em>, twice, same seed, same shots, <b>same binary</b>. Rounding is deterministic for a
+      fixed binary, so <b>any disagreement is proof of nondeterminism.</b></p>
+      <table class="tight">
+        <thead><tr><th class="num">seed</th><th class="num">interp vs interp</th><th>verdict</th><th class="num">spec vs spec</th><th>verdict</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">1620 / 1620</td><td class="win">deterministic</td><td class="num">1620 / <b>1619</b></td><td class="lose"><b>NONDETERMINISTIC</b></td></tr>
+          <tr><td class="num">7</td><td class="num">1724 / 1724</td><td class="win">deterministic</td><td class="num">1724 / <b>1723</b></td><td class="lose"><b>NONDETERMINISTIC</b></td></tr>
+          <tr><td class="num">42</td><td class="num">1704 / 1704</td><td class="win">deterministic</td><td class="num">1704 / 1704</td><td class="win">deterministic</td></tr>
+          <tr><td class="num">99</td><td class="num">1720 / 1720</td><td class="win">deterministic</td><td class="num">1721 / <b>1720</b></td><td class="lose"><b>NONDETERMINISTIC</b></td></tr>
+          <tr><td class="num">123</td><td class="num">1691 / 1691</td><td class="win">deterministic</td><td class="num">1690 / <b>1691</b></td><td class="lose"><b>NONDETERMINISTIC</b></td></tr>
+          <tr><td class="num">2718</td><td class="num">1681 / 1681</td><td class="win">deterministic</td><td class="num">1681 / 1681</td><td class="win">deterministic</td></tr>
+          <tr><td class="num"></td><td class="num win"><b>0 / 6 diverge</b></td><td></td><td class="num lose"><b>4 / 6 diverge</b></td><td></td></tr>
+        </tbody>
+      </table>
+      <div class="footnote">5,000 shots per seed, <code>circuit_d5_p0.001</code>, job 50361. Counts are
+      <code>obs0</code> ones from run A vs run B of the same binary. <b><code>passed</code> was 5000/5000 in
+      <em>every</em> cell</b> &mdash; the shots all completed; only the observable flipped.</div>
+      <div class="verdict verdict-bad">The divergence is <b>one sample in ~1,700</b>, exactly the "one shot
+      in five thousand" the symptom describes &mdash; now attributed to the right cause. <b>No rounding
+      model explains a binary disagreeing with itself. This is a race.</b></div>
+    </section>
+
+    <section>
+      <h2><code>V2_GATE_BISECT</code> localized it, and the A/B was the last nail</h2>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">Bisect: one workgroup, zero divergence</div>
+          <div class="d">The instrumentation (<code>v2_kernel.cc:226-247</code>) re-runs each shot as its
+          own dispatch &mdash; <code>run_one(..., i, i+1, ...)</code> &mdash; and <b>in the coop tier one
+          shot is exactly one workgroup</b>.
+          <hr/>
+          Scanning all 5,000 shots of the worst seed emitted <b>not a single <code>DIVERGES</code>
+          line</b>. The bug needed <b>concurrent</b> workgroups &mdash; which also rules out any single
+          shot's arithmetic: <b>the same instruction stream, on the same inputs, is correct when run
+          alone.</b></div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">A/B on the fix itself: it made things <em>worse</em></div>
+          <div class="d"><code>V2_SPEC_NOISE_INLINE=1</code>, which flips <code>V2_NOISE_ATTR</code> back to
+          <code>always_inline</code>, gave <b>5/6 seeds diverging rather than 4/6</b>, with <em>larger</em>
+          deltas (seed 99 went from off-by-1 to <b>off-by-3</b>, 1721 / 1718).
+          <hr/>
+          Consistent with <b>perturbing a race's timing</b>; inconsistent with the attribute being the
+          load-bearing fix.</div>
+        </div>
+      </div>
+      <div class="insight">It also shows the trap in the original diagnosis: <b>had the A/B not been run,
+      the attribute would have looked like a <em>partial</em> fix rather than <em>no</em> fix at all</b>,
+      because both arms diverge on <em>some</em> seeds and the seed set is small.</div>
+      <div class="card card-success" style="padding:0.9em;">
+        <div class="h">What was kept and why &mdash; the justification was rewritten in the source</div>
+        <div class="d">"The attribute is kept because it measurably helps <b>register pressure and code
+        size</b> on large circuits, <b>NOT</b> because it is load-bearing for correctness."
+        <hr/>
+        The comment at <code>v2_ops_body.inc:409-427</code> is labelled <code>HISTORICAL NOTE</code> and
+        states the refutation inline, <b>so the next reader cannot re-derive the dead theory from the
+        code.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>11.2 &nbsp;The real bug: a barrier that ordered execution but not memory</h2>
+      <div class="verdict verdict-bad"><code>v2_barrier()</code> was a bare
+      <code>__builtin_amdgcn_s_barrier()</code>.</div>
+      <p class="lede">On AMDGCN that is an <b>execution</b> barrier only. LLVM declares the intrinsic
+      <code>IntrNoMem</code>, so the backend emits <b>no <code>s_waitcnt lgkmcnt(0)</code></b> ahead of it
+      and the scheduler is free to sink or hoist LDS accesses across it. <b>A wave can retire the barrier
+      with a <code>ds_write</code> still in flight while a peer wave reads the stale word.</b></p>
+      <table class="tight">
+        <thead><tr><th>kernel</th><th class="num">barriers</th><th class="num">unfenced</th><th>how measured</th></tr></thead>
+        <tbody>
+          <tr><td>interpreter (<code>clifft_v2_coop</code>)</td><td class="num">80</td><td class="num lose"><b>50 (62.5%)</b></td><td>A/B rebuild, <code>s_barrier</code> vs release/acquire, <code>-O2</code> asm</td></tr>
+          <tr><td><b>specialized</b> (<code>coop_r10_n1720</code>)</td><td class="num">1,509</td><td class="num lose"><b>1,400 (92.8%)</b></td><td><code>llvm-objdump -d</code> on the archived pre-fix <code>.hsaco</code></td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad"><b>Both kernels were wrong.</b> The specializer has <b>~28&times;
+      more</b> exposed barriers because it straight-lines every op &mdash; which is precisely why <em>only
+      it</em> failed the correctness gate. <b>The interpreter was equally incorrect in principle and simply
+      lost the race far less often.</b></div>
+      <div class="insight">This also explains why SVM and Hybrid never saw it: <b>HIP's
+      <code>__syncthreads()</code> already expands to the fenced sequence. V2 hand-rolled the barrier to
+      avoid HIP and lost the fence along with it</b> &mdash; a direct, and expensive, cost of the no-HIP
+      policy (&sect;13).</div>
+    </section>
+
+    <section>
+      <h2>A correction to the project's own number</h2>
+      <p class="lede">Commit <code>150d09f</code>'s message, and the header comment in
+      <code>scratch/d5_fence.sh</code>, both record the specialized figure as <b>1439 / 1509 (95.4%)</b>.
+      <b>That number does not reproduce.</b></p>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">Every reasonable definition converges on 1,400</div>
+          <div class="d">Disassembling the archived pre-fix
+          <code>coop_r10_n1720_977e1e830813621d.hsaco</code>: scanning back <b>24, 32, 48, 64 or
+          unbounded</b> instructions to the previous barrier all give 1,400, and loosening
+          <code>lgkmcnt(0)</code> to <em>any</em> <code>lgkmcnt</code> does not move it either.
+          <hr/>
+          The only definitions that yield anything else are degenerate: barriers not <em>immediately</em>
+          preceded by a wait gives 1,509; a 3-instruction window gives 1,460.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The interpreter figure is 50 / 80, not 52 / 81</div>
+          <div class="d">The archived count was taken on a <code>.hsaco</code> linked against
+          <code>ocml</code>/<code>ockl</code>, which contributes <b>one extra barrier and one extra unfenced
+          site from device-library code that is not V2's.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-good"><b>None of this changes the conclusion</b> &mdash; the corrected
+      ratio (28&times;) is marginally <em>larger</em> than the one originally claimed.</div>
+    </section>
+
+    <section>
+      <h2>The fix (<code>150d09f</code>) &mdash; release/acquire around the barrier</h2>
+      <pre><code><span class="cm">// s_barrier alone is an EXECUTION barrier only: LLVM models the intrinsic as</span>
+<span class="cm">// IntrNoMem, so it neither emits `s_waitcnt lgkmcnt(0)` nor stops the scheduler</span>
+<span class="cm">// from sinking/hoisting LDS accesses across it. A wave can therefore retire the</span>
+<span class="cm">// barrier with a ds_write still in flight while a peer wave reads the stale</span>
+<span class="cm">// word. The release/acquire fence pair is what makes it a MEMORY barrier: the</span>
+<span class="cm">// release forces the waitcnt before s_barrier, the acquire keeps later loads</span>
+<span class="cm">// from being hoisted above it. HIP's __syncthreads() expands to exactly this,</span>
+<span class="cm">// which is why the SVM backend never saw the race.</span>
+<span class="kw">static inline void</span> <span class="fn">v2_barrier</span>(<span class="kw">void</span>) {
+    <span class="fn">__builtin_amdgcn_fence</span>(__ATOMIC_RELEASE, <span class="st">"workgroup"</span>);
+    <span class="fn">__builtin_amdgcn_s_barrier</span>();
+    <span class="fn">__builtin_amdgcn_fence</span>(__ATOMIC_ACQUIRE, <span class="st">"workgroup"</span>);
+}</code></pre>
+      <div class="insight"><code>coop_reduce2</code>'s three raw barriers were converted too &mdash; each
+      guards a <b>read-after-write on <code>lds_red0</code>/<code>lds_red1</code></b>, so a lost partial sum
+      perturbs the reduction total and flips <code>sample_branch</code>. <b>That is the causal path by which
+      a missing fence became a wrong measurement outcome</b>, and it is why the symptom looked numerical:
+      <b>the corrupted value really was a probability.</b></div>
+    </section>
+
+    <section>
+      <h2>The cost, measured by compiling the same source twice</h2>
+      <p class="lede"><code>coop_interpreter.c</code> compiled twice &mdash; once with the bare
+      <code>s_barrier</code>, once with the fence pair &mdash; same source, same flags
+      (<code>-O2 -ffp-contract=off -mcpu=gfx950</code>), both disassembled:</p>
+      <table class="tight">
+        <thead><tr><th>build</th><th class="num">instructions</th><th class="num">barriers</th><th class="num">fenced</th><th class="num"><code>ds_*</code> in flight, unfenced</th></tr></thead>
+        <tbody>
+          <tr><td>pre-fix interpreter</td><td class="num">5,629</td><td class="num">80</td><td class="num lose">1 (1.2%)</td><td class="num lose"><b>50 (62.5%)</b></td></tr>
+          <tr><td>post-fix interpreter</td><td class="num">5,848</td><td class="num">80</td><td class="num win">74 (92.5%)</td><td class="num win"><b>0 (0.0%)</b></td></tr>
+          <tr><td>pre/post register tier</td><td class="num">4,457</td><td class="num">0</td><td class="num">&mdash;</td><td class="num">&mdash;</td></tr>
+        </tbody>
+      </table>
+      <div class="grid-3">
+        <div class="card card-success">
+          <div class="h">The fix is <b>complete</b></div>
+          <div class="d">The unfenced-with-<code>ds</code>-in-flight count goes to <b>exactly zero</b>
+          &mdash; the 6 barriers that remain unfenced have <b>no LDS write pending</b>, so the wait is
+          correctly <em>elided</em> rather than <em>missing</em>.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The price is <b>+3.89%</b> static instructions</div>
+          <div class="d">5,629 &rarr; 5,848, matching the +3.88% recorded at the time.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The register tier costs <b>nothing</b></div>
+          <div class="d">With <code>-DV2_REGISTER</code> the two <code>.s</code> files are <b>identical by
+          md5</b>, because <code>v2_barrier()</code> compiles to nothing there
+          (<code>v2_ops.h:131</code>). <b>&sect;9's register-tier numbers need no restatement.</b></div>
+        </div>
+      </div>
+      <div class="footnote">The A/B was re-run from scratch for this report &mdash; same source tree, the
+      only difference being <code>v2_barrier()</code>'s three-line body &mdash; and every cell reproduces
+      exactly. The "fenced" column uses a 3-instruction lookback; at a 1-instruction lookback the post-fix
+      figure is 73 rather than 74, the one place the definition matters, and it moves nothing.</div>
+    </section>
+
+    <section>
+      <h2>The same audit on the archived specialized binaries</h2>
+      <table class="tight">
+        <thead><tr><th><code>.hsaco</code></th><th class="num">barriers</th><th class="num">fenced (<code>lgkmcnt(0)</code> within 3)</th><th class="num"><code>ds_*</code> in flight, unfenced</th></tr></thead>
+        <tbody>
+          <tr><td>pre-fix <code>coop_r10_n1720</code></td><td class="num">1,509</td><td class="num lose"><b>49 (3.2%)</b></td><td class="num lose"><b>1,400 (92.8%)</b></td></tr>
+          <tr><td>post-fix <code>coop_r10_n1720</code></td><td class="num">1,509</td><td class="num win"><b>1,404 (93.0%)</b></td><td class="num win"><b>0 (0.0%)</b></td></tr>
+        </tbody>
+      </table>
+      <div class="insight">The two columns measure different things and both are worth reporting: the
+      pre-fix kernel has <b>49 barriers that <em>happen</em> to sit behind a wait emitted for an unrelated
+      reason</b> &mdash; <b>accidentally correct, not correct by construction.</b> Post-fix, the in-flight
+      column is zero, which is the property that actually matters.</div>
+      <p class="lede">With the fence in place the gate <b>passes</b> on <code>coop_r10_n1720</code>, and the
+      specializer is selected for all six circuits. Kernel time, median of 5, 10,000 shots, both arms
+      back-to-back on one node (job 50389, gfx950):</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">interpreter</th><th class="num">specialized</th><th class="num">speedup</th></tr></thead>
+        <tbody>
+          <tr><td><code>circuit_d5_p0.0005</code></td><td class="num">14.76 ms</td><td class="num">8.56 ms</td><td class="num win"><b>1.72&times;</b></td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num">14.89 ms</td><td class="num">8.56 ms</td><td class="num win"><b>1.74&times;</b></td></tr>
+          <tr><td><code>circuit_d5_p0.002</code></td><td class="num">15.09 ms</td><td class="num">8.63 ms</td><td class="num win"><b>1.75&times;</b></td></tr>
+          <tr><td><code>circuit_d5_p0.003</code></td><td class="num">15.30 ms</td><td class="num">8.68 ms</td><td class="num win"><b>1.76&times;</b></td></tr>
+          <tr><td><code>circuit_d5_p0.005</code></td><td class="num">15.62 ms</td><td class="num">8.87 ms</td><td class="num win"><b>1.76&times;</b></td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">0.624 ms</td><td class="num">0.379 ms</td><td class="num win"><b>1.65&times;</b></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>How a missing fence became a wrong measurement outcome</h2>
+      <figure>
+        <img src="diagrams/barrier-race.svg" alt="Execution-only barrier vs release/acquire fenced barrier" />
+        <figcaption><b>Figure 11.1</b> &mdash; Wave 0 retires <code>s_barrier</code> with its
+        <code>ds_write</code> to <code>lds_red0</code> still in flight; wave 1 passes the same barrier and
+        reads the stale word. The reduction total is wrong, so <code>sample_branch</code> compares against a
+        corrupted probability and takes the other side &mdash; <b>consuming a different number of PRNG draws
+        from that shot onward.</b></figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>11.3 &nbsp;The threshold calibrated for the wrong precision</h2>
+      <p class="lede">Covered in full in &sect;12, but it belongs here because it has the same shape:</p>
+      <div class="verdict verdict-bad"><code>V2_DUST_EPS</code> was <b><code>1e-18</code></b> &mdash; a
+      sensible clamp for <b>f64</b> amplitudes, compared against <b>f32</b> amplitudes.</div>
+      <div class="insight">The clamp <b>never fired on the GPU where it fired on the CPU</b>;
+      <code>sample_branch</code> returns <em>without drawing a PRNG value</em> when a branch is dust, so
+      <b>one side consumed a random number the other did not</b>, and the streams desynchronized
+      permanently.</div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The lesson is not "f32 is imprecise"</div>
+        <div class="d">It is that <b>a constant outlived the representation it was chosen for</b>, and
+        <b>nothing in the type system noticed.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>11.4 &nbsp;The pitfall that nearly reached this report: a stale cache</h2>
+      <p class="lede">Found <em>while writing this chapter</em>, and the most instructive of the four
+      because <b>it corrupted the measurements themselves rather than the code.</b></p>
+      <div class="diff">
+<span class="ctx">// before</span>
+<span class="del">std::string ident = csrc + "|" + llvm_bin("clang") + "|" + arch() + "|" + bitcode_dir();</span>
+<span class="ctx">size_t h = std::hash&lt;std::string&gt;{}(ident);</span>
+      </div>
+      <div class="insight"><code>csrc</code> is the generated C. <b>But the generated C is only <em>half</em>
+      the translation unit</b> &mdash; a list of <code>v2_op_*(...)</code> calls plus <code>#include
+      "v2_ops.h"</code>. Every op body, <code>v2_barrier()</code>, and every tunable constant lives in the
+      headers, <b>and the headers are not in the hash.</b>
+      <hr/>
+      Change <code>v2_ops.h</code>, and the key does not move: the day-old <code>.hsaco</code> is reused
+      &mdash; <b><em>and so is its <code>&lt;hsaco&gt;.gate</code> verdict</em></b>, which is keyed off the
+      same path.</div>
+    </section>
+
+    <section>
+      <h2>How far it got</h2>
+      <p class="lede">The benchmark run submitted specifically to guarantee that <em>"every performance
+      claim in the upcoming report reflects shipped, correct code"</em> <b>dispatched pre-fix kernels for
+      every specialized circuit.</b> Verified on the binaries with <code>llvm-objdump</code>, on two
+      independent markers:</p>
+      <table class="tight" style="font-size:0.82em;">
+        <thead><tr><th>marker</th><th class="num">build cache (what the run used)</th><th class="num">fresh cache</th></tr></thead>
+        <tbody>
+          <tr><td>barriers with <code>ds_*</code> in flight and no <code>lgkmcnt(0)</code> (the <code>150d09f</code> fence)</td><td class="num lose"><b>1400 / 1509 (92.8%)</b></td><td class="num win"><b>0 / 1509 (0.0%)</b></td></tr>
+          <tr><td><code>s_barrier</code> preceded by <code>lgkmcnt(0)</code> within 3 instructions</td><td class="num lose"><b>49 / 1509 (3.2%)</b></td><td class="num win">1404 / 1509 (93.0%)</td></tr>
+          <tr><td><code>V2_DUST_EPS</code> constant baked into the binary</td><td class="num lose"><b><code>0x3c32725d…</code> = <code>1e-18</code></b> (pre-<code>2a015fd</code>)</td><td class="num win"><code>0x3da5fd7f…</code> = <code>1e-11</code></td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">The dust marker is the cleaner of the two &mdash; it is a bit pattern, not a heuristic</div>
+          <div class="d">The IEEE-754 double <code>1e-18</code> has high word <code>0x3c32725d</code> and
+          <code>1e-11</code> has <code>0x3da5fd7f</code>; each appears <b>exactly twice</b> in its
+          respective binary and <b>zero times</b> in the other. <b>No interpretation involved &mdash; the
+          stale kernel provably contains the pre-fix constant.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The timestamps agree</div>
+          <div class="d"><b>32 of the 36</b> cached kernels are dated 2026-07-25 and the remaining 4 are
+          from 07-26 00:00&ndash;01:48 &mdash; all before the barrier fix at <b>07-26 06:33</b>, and well
+          before the dust fix at <b>07-26 13:31</b>. <b>Every kernel the run dispatched predates both
+          fixes.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The consequence, and the near-miss that makes it worth reporting</h2>
+      <div class="verdict verdict-bad">The stale run recorded the <code>coop_r10_n1720</code> gate as
+      <b>failing</b> &mdash; a verdict on the <b>pre-fence</b> binary. The ledger built an entire section
+      around <em>"the specializer is still incorrect on this shape,"</em> listing it as <b>"the single
+      largest open correctness item in V2."</b> <b>It was already fixed.</b> The claim survived only because
+      the cache kept handing back the binary from before the fix.</div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The hazard was <em>known</em>. <code>d5_fence.sh</code> documents it exactly:</div>
+        <div class="d" style="font-size:0.82em;">The <code>.gate</code> verdict is keyed on the generated-C
+        hash, which does <b>NOT</b> change when <code>v2_ops.h</code> changes &mdash; a stale "0" would hide
+        the fix. Each arm uses a fresh <code>V2_SPEC_CACHE_DIR</code> so every verdict below is recomputed
+        from scratch.</div>
+      </div>
+      <div class="insight">Every <code>d5_*.sh</code> diagnostic script therefore sets its own
+      <code>V2_SPEC_CACHE_DIR</code> and got correct results. <b>The workaround was applied per-script
+      instead of fixing the cache</b>, so the one path that did <em>not</em> set the variable &mdash; the
+      build tree's default cache, used by the benchmark sweep &mdash; silently kept serving stale kernels.
+      <b>A known bug, correctly documented, routed around rather than fixed, in the one place it mattered
+      most.</b></div>
+      <pre><code><span class="cm">// Identity of the DEVICE HEADERS the emitted C includes. The generated .c is</span>
+<span class="cm">// only half the translation unit: every v2_op_* body, v2_barrier(), and every</span>
+<span class="cm">// tunable constant (V2_DUST_EPS, ...) lives in these headers. [...]</span>
+<span class="cm">// Content, not mtime: mtimes change on every checkout and would defeat the</span>
+<span class="cm">// cache for no reason.</span>
+std::string ident = csrc + <span class="st">"|"</span> + <span class="fn">llvm_bin</span>(<span class="st">"clang"</span>) + <span class="st">"|"</span> + <span class="fn">arch</span>() + <span class="st">"|"</span> +
+                    <span class="fn">bitcode_dir</span>() + <span class="st">"|"</span> + <span class="fn">device_header_ident</span>();   <span class="cm">// 009df59</span></code></pre>
+      <div class="footnote">The stale cache was <b>moved, not deleted</b>, to
+      <code>V2_performance/history/stale_spec_cache_20260725/</code> &mdash; it is the evidence for this
+      section.</div>
+    </section>
+
+    <section>
+      <h2>11.5 &nbsp;The same bug, in the build system, three minutes later</h2>
+      <p class="lede"><code>ClifftAmdgcn.cmake</code>'s <code>add_custom_command</code> for each
+      <code>.hsaco</code> listed <code>DEPENDS "${_src}"</code> &mdash; <b>the <code>.c</code> file
+      alone</b>. CMake does no implicit header scanning for custom commands, so editing
+      <code>v2_ops.h</code> did not invalidate the output and an incremental build kept linking the
+      previously-compiled kernel.</p>
+      <div class="insight">This matters because of <em>what those <code>.c</code> files are</em>.
+      <code>coop_interpreter.c</code> is <b>~150 lines</b> wrapping the entire op library; <b>the headers
+      <em>are</em> the kernel.</b></div>
+      <div class="card card-hl" style="padding:0.85em;">
+        <div class="h">The commit that fixed it (<code>72aee12</code>, 07-26 06:36) says where it was caught</div>
+        <div class="d">"This bit during the barrier-fence fix: <b>the first verification job would have
+        measured the pre-fix kernel and reported the fix as ineffective.</b>"</div>
+      </div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">Note the timestamps</div>
+          <div class="d">The barrier fix landed at <b>06:33</b> and this at <b>06:36</b> &mdash; the
+          staleness was hit <b>immediately</b>, on the very first attempt to measure the fix, and caught
+          <b>within three minutes</b>.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">The specializer's cache had the identical defect</div>
+          <div class="d">And was not fixed until <b>22:14 the same day &mdash; sixteen hours later</b>,
+          after it had already contaminated a full benchmark sweep.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed"><b>Two caches, one failure mode &mdash; <em>the identity of a
+      compiled artifact omitted the headers that define it</em>. The difference in how long each survived is
+      entirely explained by how loudly it failed.</b> The build-system instance broke a verification the
+      author was actively watching; the runtime instance quietly returned plausible numbers.</div>
+      <pre><code><span class="fn">get_filename_component</span>(_src_dir <span class="st">"${_src}"</span> DIRECTORY)
+<span class="fn">file</span>(GLOB _dev_hdrs <span class="st">"${_src_dir}/*.h"</span> <span class="st">"${_src_dir}/*.inc"</span>)
+...
+DEPENDS <span class="st">"${_src}"</span> ${_dev_hdrs}</code></pre>
+      <div class="footnote">A glob in <code>DEPENDS</code> is evaluated at configure time, so a <em>newly
+      added</em> header still needs a re-configure to be tracked &mdash; acceptable, since the three headers
+      that matter already exist and the failure mode it removes was the one actually observed. The commit
+      also records the scope constraint explicitly: <code>ClifftAmdgcn.cmake</code> is included only inside
+      the <code>CLIFFT_ENABLE_MLIR_V2</code> block, so <b>no SVM or hybrid build path is touched.</b></div>
+    </section>
+
+    <section>
+      <h2>11.6 &nbsp;The common thread</h2>
+      <table class="tight" style="font-size:0.8em;">
+        <thead><tr><th class="num">&sect;</th><th>plausible story</th><th>what it actually was</th><th>what settled it</th></tr></thead>
+        <tbody>
+          <tr><td class="num">11.1</td><td><code>-O2</code> reassociates FP across inlined noise ops</td><td class="win">a <b>data race</b> between workgroups</td><td>kernel disagreed <b>with itself</b> (<code>V2_GATE_SELFTEST</code>)</td></tr>
+          <tr><td class="num">11.2</td><td><em>(see above)</em></td><td class="win"><code>s_barrier</code> orders <b>execution, not memory</b></td><td>ISA audit: 92.8% of barriers unfenced</td></tr>
+          <tr><td class="num">11.3</td><td>f32 is less precise than f64</td><td class="win">a threshold <b>calibrated for f64</b>, compared against f32</td><td>two-arm A/B on the constant</td></tr>
+          <tr><td class="num">11.4</td><td>the benchmark measures current code</td><td class="win">the cache served <b>day-old binaries</b></td><td><code>llvm-objdump</code> on the dispatched <code>.hsaco</code></td></tr>
+          <tr><td class="num">11.5</td><td>an incremental build rebuilds what changed</td><td class="win"><code>DEPENDS</code> omitted the headers that <b>are</b> the kernel</td><td>the fence fix measured as ineffective</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>Three of the five were settled by an experiment whose outcome the
+      wrong theory <em>could not</em> produce</b> &mdash; a self-comparison, a static audit, a controlled
+      A/B. <b>None were settled by reasoning harder about the plausible story.</b> The fourth was caught only
+      because this report's ground rule (<em>trust data, not text</em>) required re-deriving an in-tree
+      claim from the artifact instead of quoting it. The fifth was caught for free, <b>by being loud</b>.</div>
+    </section>
+
+    <section>
+      <h2>A sixth, smaller instance &mdash; which happened while writing this chapter</h2>
+      <p class="lede">The <b>95.4%</b> figure was quoted from <code>150d09f</code>'s commit message and from
+      a comment in the script that produced it. Re-running the measurement on the archived binary gave
+      <b>92.8%</b>, under every definition tried.</p>
+      <div class="verdict verdict-bad"><b>The original number is not recoverable and the script no longer
+      carries the exact counting code that produced it &mdash; the audit trail ends at prose.</b></div>
+      <div class="insight">This is precisely the failure mode the ground rule exists for, and it is worth
+      noting that <b>it caught a number in a <em>correct</em> section, written by someone who had the
+      artifact in hand at the time.</b> The conclusion did not change; <b>a number that had been repeated
+      three times did.</b></div>
+    </section>
