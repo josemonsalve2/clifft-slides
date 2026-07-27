@@ -224,15 +224,36 @@ back-to-back on node `smci350-rck-g03-d13-21`):
 | `circuit_d5_p0.005` | 15.62 ms | **8.87 ms** | 1.76× |
 | `circuit_d3_p0.001` | 0.624 ms | **0.379 ms** | 1.65× |
 
-Against the SVM baselines from the corpus this turns 1.44–1.45 **losses** into
-ratios near **0.40** — i.e. ~2.5× wins. That last step crosses nodes (the corpus
-ran on `f13-21`, this A/B on `d13-21`) and `mi350x-es` is heterogeneous, so the
-**1.65–1.76× interpreter→specializer gain is the measured result** and the
-~0.40 is a projection. §15 measures the ratio directly, both arms in one job.
+That 1.65–1.76× is the interpreter→specializer gain, measured with both arms
+back-to-back in one job. It does *not* directly give a V2/SVM ratio: dividing it
+into the corpus baselines would chain a `d13-21` measurement onto an `f13-21`
+one, and `mi350x-es` is heterogeneous.
 
-So the headline "20 of 26" in §1.2 is a *pre-fix* figure that the report carries only because §15's post-fix
-re-run is the arbiter; the expectation is that it becomes 26 of 26. **§1.2's
-table is the conservative reading, not the optimistic one.** (§11.1, §11.2)
+The direct measurement now exists (job 50785, both backends in one job on
+`d13-21`) and it confirms the sign flip:
+
+| circuit | pre-fence, interpreter | **post-fence, specialized** |
+|---|---|---|
+| `circuit_d5_p0.0005` | 1.451 | **0.842** |
+| `circuit_d5_p0.001` | 1.451 | **0.851** |
+| `circuit_d5_p0.002` | 1.451 | **0.843** |
+| `circuit_d5_p0.003` | 1.443 | **0.828** |
+| `circuit_d5_p0.005` | 1.448 | **0.811** |
+
+All six now run `clifft_v2_spec` and win by 15–19 %. Worth stating plainly: an
+earlier draft of this section *projected* ~0.40 for these circuits by chaining
+the two runs, and the direct measurement says **~0.84**. The projection was
+wrong by a factor of two, in the flattering direction, for exactly the reason
+the project's benchmarking rule exists. The 1.7× gain was real; the assumption
+that an SVM baseline transfers across nodes was not.
+
+So the headline "20 of 26" in §1.2 is a *pre-fix* figure. Post-fix, five of the
+six former losses are measured wins and the corpus stands at **25 of 26
+measured**; the sixth, `cultivation_d5`, shares the coop specialization that
+the other five recovered on but was not paired in job 50785 (its fixture path
+was stale, §14.0), so it is *unmeasured* rather than assumed. **§1.2's table is
+the conservative reading, not the optimistic one**, and §15 carries the full
+post-fix corpus. (§11.1, §11.2)
 
 **(e) The f32/f64 "gap" was never really about arithmetic precision.** It was a
 threshold constant calibrated for f64 and left in place when the storage became
