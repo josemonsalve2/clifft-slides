@@ -359,22 +359,34 @@ deletes it — along with the test that chose between them. A constant `slot`
 deletes the `slot < V2_MAX_MEAS` bounds check. And `mset(st->meas, slot, ...)`
 on a bit-packed array becomes a fixed word and a fixed mask, exactly as in S1.
 
-The specialized assembly contains no `s_cbranch` at all in the measurement
-logic; what remains is a straight scalar sequence, and the only surviving
-control flow is the `rng_uniform` compare inside the `_random` variant:
+The specialized assembly contains **no `s_cbranch` or `s_branch` at all** —
+not merely none in the measurement logic; a `grep` over the whole file returns
+zero, against 18 in the interpreter form. What remains is a straight scalar
+sequence. Even the `rng_uniform` compare inside the `_random` variant, which
+is genuinely data-dependent, is if-converted (`spec/S2_meas_dormant.s:49-65`,
+with the intervening stores and `v_mov` staging elided):
 
 ```asm
-	v_cvt_f64_u32_e32 v[8:9], s11       ; xoshiro output -> double
-	v_ldexp_f64  v[0:1], v[0:1], s18
+	v_cvt_f64_u32_e32 v[8:9], s11       ; xoshiro output hi -> double
+	v_cvt_f64_u32_e32 v[10:11], s10     ; ... and lo
+	v_ldexp_f64  v[0:1], v[8:9], 32     ; hi * 2^32
+	v_add_f64    v[0:1], v[0:1], v[10:11]
+	v_ldexp_f64  v[0:1], v[0:1], s18    ; * 2^-53
 	v_cmp_gt_f64_e32 vcc, 0.5, v[0:1]   ; rng_uniform(st->rng) < 0.5
+	s_and_b64    s[2:3], vcc, exec
 	s_cselect_b32 s18, 0, 0x2000        ; ... resolved with a SELECT, not a branch
 ```
 
 Note the `s_cselect_b32`: even the genuinely random outcome is if-converted,
 because with constant `axis`/`slot` both arms write the same fixed bit and the
-compiler can pick the *value* rather than the *path*. VALU falls 86 → 19
-(4.53×) and the kernel as a whole 206 → 70 instructions (2.94×), the largest
-instruction ratio of the eight.
+compiler can pick the *value* rather than the *path*. The neighbouring
+`s_bitset0_b32 s12, 13` is the same fold in its purest form — `mset` of a
+constant slot on a bit-packed array is one instruction with the bit number
+in the encoding.
+
+VALU falls 86 → 19 (4.53×) and the kernel as a whole 206 → 70 instructions.
+The **2.94× is the largest instruction ratio of the eight**, though S1's 5.50×
+remains the largest VALU ratio.
 
 This is also the case where **SGPR usage doubles, 13 → 26** — the only such case
 in the study. Nothing was lost: the eighteen deleted branches and the vector work
@@ -566,9 +578,23 @@ the reduction indexes with; constant `slot`/`flags` folds the bounds check and
 the sign XOR as in S2.
 
 **The `ds_op` column stays at 4 in both forms**, and that is the load-bearing
-observation for §12. The `ds_read`/`ds_write` pairs are the cooperative
-reduction's LDS traffic, and specialization does **not** remove or reorder them.
-That is deliberate: `v2_ops.h:235-236` records the constraint —
+observation for §12. Those four are two `ds_write2_b64` / `ds_read2_b64` pairs —
+the cross-wave combine step, where each wave's partial sums go through LDS —
+and specialization does **not** remove or reorder them.
+
+The column understates the evidence, though, because `build_examples.sh` counts
+`ds_(read|write)` only. Counting the shuffle instructions as well:
+
+| | interpreter | specialized |
+|---|---|---|
+| `ds_bpermute_b32` | 32 | 32 |
+| `ds_write2_b64` / `ds_read2_b64` | 2 / 2 | 2 / 2 |
+
+**32 `ds_bpermute_b32` in both forms, exactly.** That is the butterfly: six XOR
+steps at offsets 32/16/8/4/2/1, two f64 values per step, two 32-bit halves per
+f64 — and the second, four-lane reduction on top. Every one survives
+specialization unchanged, in the same order. That is deliberate:
+`v2_ops.h:235-236` records the constraint —
 
 > MUST reproduce SVM `coop_reduce2`'s exact summation order or f64 rounding
 > diverges at measurement branch points.
@@ -752,11 +778,12 @@ runtime load in both forms.
 SGPR 23→16, but **branches 10→2**. What *did* fold: `cp` (the table entry — a
 fixed displacement into `fused_u2`), `axis` (so `scatter_bits_1` and `axis_bit`
 become constant masks, as in S5), and crucially `axis < active_k` — the case
-calls it with `axis=4, active_k=8`, so with both constant the guard is decided at
-compile time and the `if` is entered unconditionally. That single fold is most of
-the 10→2 branch drop; the two survivors in the specialized form are both
-`s_cbranch_execz`, the loop's own exec-mask guards, which no amount of constant
-folding removes.
+calls `v2_op_array_u2(st, v, 8u, 4u, fused_u2, 17u)`, i.e. `axis=4`,
+`active_k=8`, so with both constant the guard is decided at compile time and the
+`if` is entered unconditionally. That single fold is most of the 10→2 branch
+drop; the two survivors in the specialized form are at `:22` and `:73` and are
+both `s_cbranch_execz`, the loop's own exec-mask guards, which no amount of
+constant folding removes.
 
 The VALU ratio of 1.29× is the honest ceiling for this class. Four complex
 multiplies and two adds per amplitude pair are irreducible arithmetic. This is
@@ -891,12 +918,39 @@ The case comment states the boundary precisely:
 
 This is a different shape of bounded gain from S6. In S6 the *arithmetic* was
 irreducible; here the **memory traffic** is. `pauli_masks[cp]` with a constant
-`cp` becomes a fixed displacement — that is the 17→11 `s_load` drop — but the
-`CLIFFT_V2_PAULI_WORDS` words still have to be *loaded* and XORed into the
-frame, and the number of loads is set by the mask width, not by the operand.
-The branch count does not move at all because the one branch that matters,
-`mget(st->meas, cond_slot) != 0`, tests a **runtime measurement outcome**. It is
+`cp` becomes a fixed displacement — visible directly in the load offsets, which
+go from a *computed* index in the interpreter form
+
+```
+:32  s_load_dwordx2 s[4:5], s[34:35], s7 offset:0x50    ; index in a REGISTER
+```
+
+to three literal displacements in the specialized form, one per call site:
+
+```
+:19  s_load_dwordx16 s[0:15],  s[36:37], 0x0
+:74  s_load_dwordx16 s[0:15],  s[36:37], 0x58   ; pauli_masks[1]
+:118 s_load_dwordx16 s[0:15],  s[36:37], 0xb0   ; pauli_masks[2]
+```
+
+`0x58` is 88 bytes, which is `sizeof(CV2Mask)` for
+`CLIFFT_V2_PAULI_WORDS = 5` — two arrays of five `uint64_t` plus a sign byte,
+padded to 8. The stride between the three constants is exactly one mask. That is
+the 17→11 `s_load` drop. But the five words still have to be *loaded* and XORed
+into the frame, and the number of loads is set by the mask width, not by the
+operand.
+
+**The branch count does not move — but two of the three branches change kind,
+and that is the more interesting fact.** The interpreter form has one
+`s_cbranch_scc1` and two `s_cbranch_vccnz`; the specialized form has three
+`s_cbranch_scc1`. A `vccnz` branch tests the *vector* condition code — the
+lane-mask result of a `v_cmp` — where `scc1` tests the scalar condition code.
+Specialization did not delete the branch, but it moved the *predicate* that
+drives it off the vector pipe, exactly as §7.3 described for the arithmetic.
+What it could not do is remove the branch entirely, because the condition
+`mget(st->meas, cond_slot) != 0` tests a **runtime measurement outcome**. It is
 the same wall as S6's `in_state`: data that only exists once the shot is running.
+Constant `cond_slot` fixes *which bit* is tested; nothing fixes its value.
 
 Together S6, S7, and S8 delimit the technique. Specialization folds:
 
