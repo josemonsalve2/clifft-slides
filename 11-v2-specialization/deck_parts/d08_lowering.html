@@ -379,6 +379,19 @@
     </section>
 
     <section>
+      <h2>Registers, then packing</h2>
+      <figure>
+        <img src="diagrams/sroa-to-packed-f32.svg" alt="From stack slots to packed f32 math" class="mid" />
+        <figcaption><b>Figure 8.2</b> &mdash; Why <code>fmul</code> <em>rising</em> 12&rarr;448 is the good
+        news. SROA and inlining move shot-local state off the stack, which is what makes the amplitudes
+        visible to the SLP vectorizer, which is what produces <b>847 packed instructions where V1 has
+        none</b>. The three surviving <code>alloca</code>s are drawn: the count did not reach zero, and
+        what remains is a per-kernel constant rather than something that scales with circuit
+        length.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>A correction, and a caution about the tooling</h2>
       <p class="lede">An earlier draft of that table read <code>alloca</code> <b>2,268 &rarr; 0</b>, taken
       from <code>stage_stats.csv</code>. <b>Both numbers were wrong, in the same direction, for two
@@ -530,7 +543,7 @@
       <h2>Where V1's f64 went</h2>
       <figure>
         <img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" />
-        <figcaption><b>Figure 8.2</b> &mdash; V1's f64 volume for <code>circuit_d3</code>, decomposed by the
+        <figcaption><b>Figure 8.3</b> &mdash; V1's f64 volume for <code>circuit_d3</code>, decomposed by the
         A/B experiment. <b>68% is 54 inlined copies of a hand-written log polynomial</b>; the 1,380 that
         remain are the same PRNG, <code>cnorm</code> and <code>cscale</code> sites V2 has. V2 keeps
         <code>log()</code> as a call to <code>__ocml_log_f64</code> because it links ROCm device bitcode; V1

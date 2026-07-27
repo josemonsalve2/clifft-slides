@@ -481,6 +481,18 @@
       93&rarr;45 at the same time.</div>
     </section>
 
+    <section>
+      <h2>Eighteen branches, then none</h2>
+      <figure>
+        <img src="diagrams/branch-erasure-exec-mask.svg" alt="Three deletion mechanisms in one specialized body" class="mid" />
+        <figcaption><b>Figure 7.3</b> &mdash; Three <em>distinct</em> mechanisms in one body. A constant
+        <code>flags</code> deletes a path; a constant <code>slot</code> deletes the bounds check; constant
+        <code>axis</code>/<code>slot</code> make both arms of the genuinely random compare write the same
+        bit, so it if-converts to <code>s_cselect_b32</code>. The SGPR rise 13&rarr;26 is drawn at the
+        same weight as the wins &mdash; it is the price of straight-lining, not a hidden defeat.</figcaption>
+      </figure>
+    </section>
+
     <!-- ---------------- S3 ---------------- -->
     <section>
       <h2>S3 &mdash; static rank tracking <span style="font-size:0.6em;color:var(--dim);">coop &middot; the load-bearing one</span></h2>
@@ -601,7 +613,7 @@
       <h2>Static rank tracking, through a whole program</h2>
       <figure>
         <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" />
-        <figcaption><b>Figure 7.3</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
+        <figcaption><b>Figure 7.4</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
         so every rank-dependent bound is a literal <em>at its use site</em>. The interpreter must reload
         <code>st-&gt;active_k</code> at every instruction because any preceding op could have changed
         it.</figcaption>
@@ -977,7 +989,7 @@
       <h2>Constants the specializer cannot use</h2>
       <figure>
         <img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" class="mid" />
-        <figcaption><b>Figure 7.4</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
+        <figcaption><b>Figure 7.5</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
         collapses to one unsigned compare &mdash; a real but small win. The loop does not iterate over that
         range: it consumes the sites the PRNG selects, and the cursor advances by a random amount drawn
         through an <code>ocml_log_f64</code> hazard call. The trip count is a function of the random

@@ -314,6 +314,18 @@
     </section>
 
     <section>
+      <h2>Half a translation unit</h2>
+      <figure>
+        <img src="diagrams/specialization-cache-identity.svg" alt="The incomplete cache key and its binary proof" class="mid" />
+        <figcaption><b>Figure 11.2</b> &mdash; The cache did exactly what its key said; <b>the key was
+        incomplete</b>. One identity produces both the binary <em>and</em> the correctness verdict, so a
+        header fix that does not move the key preserves a stale "0" along with the stale kernel. The proof
+        is two independent markers on the binaries themselves &mdash; and the dust constant is a bit
+        pattern, not a heuristic.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>How far it got</h2>
       <p class="lede">The benchmark run submitted specifically to guarantee that <em>"every performance
       claim in the upcoming report reflects shipped, correct code"</em> <b>dispatched pre-fix kernels for

@@ -1536,6 +1536,16 @@ which is what makes the six unsupported opcodes safe rather than fatal. **This
 guarantees byte-exactness for every circuit, not just the ones that happened to
 be tested.**
 
+<figure>
+<img src="diagrams/correctness-gate-lifecycle.svg" alt="Gate lifecycle and the three caches" width="100%">
+<figcaption><b>Figure 6.3</b> — Compile once, validate once, then choose. The
+verdict caches in three places, and the bottom half shows what happened the one
+time it did not reach disk: <code>rocprofv3</code> spawns a fresh process, the
+in-process map is empty, the gate re-runs <em>inside</em> the profiled region,
+and the digester sums all three dispatches into one reported kernel
+time.</figcaption>
+</figure>
+
 Three design details are load-bearing and easy to miss:
 
 1. **The verdict caches in three places, not one** — an in-process
@@ -1679,7 +1689,7 @@ void clifft_v2_spec(..., CV2Complex* global_v, CV2Complex* global_scratch, u64* 
 
 <figure>
 <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" width="100%">
-<figcaption><b>Figure 6.3</b> — The global tier's persistent kernel. A fixed
+<figcaption><b>Figure 6.4</b> — The global tier's persistent kernel. A fixed
 pool of resident workgroups, each owning an HBM amplitude slice, drains shots
 from an atomic counter. The grid does not scale with shot count.</figcaption>
 </figure>
@@ -2185,6 +2195,16 @@ of straight-lining, not the destination of migrated work — and §14.3 shows th
 scalar instruction count falling faster than the vector one on every circuit in
 the corpus.
 
+<figure>
+<img src="diagrams/branch-erasure-exec-mask.svg" alt="Eighteen branches erased by constant flags" width="100%">
+<figcaption><b>Figure 7.3</b> — Three distinct mechanisms, one specialized
+body. A constant <code>flags</code> <em>deletes</em> a path; a constant
+<code>slot</code> deletes the bounds check; constant <code>axis</code>/<code>slot</code>
+make both arms of the genuinely random compare write the same bit, so it
+if-converts to <code>s_cselect_b32</code>. The SGPR rise is drawn at the same
+weight as the wins because it is the price of straight-lining.</figcaption>
+</figure>
+
 Why this matters more on a GPU than the raw count suggests: on AMDGCN a taken
 `s_cbranch` inside a divergent region forces `s_and_saveexec_b64` /
 `s_or_b64 exec` mask manipulation and serializes the two sides. Eighteen of
@@ -2300,7 +2320,7 @@ is what LLVM's loop optimizer actually wants.
 
 <figure>
 <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" width="100%">
-<figcaption><b>Figure 7.3</b> — The specializer walks the bytecode maintaining
+<figcaption><b>Figure 7.4</b> — The specializer walks the bytecode maintaining
 <code>k</code>, so every rank-dependent bound is a literal at its use site. The
 interpreter must reload <code>st-&gt;active_k</code> at every instruction because
 any preceding op could have changed it.</figcaption>
@@ -2681,7 +2701,7 @@ specialized anyway.
 
 <figure>
 <img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" width="100%">
-<figcaption><b>Figure 7.4</b> — The boundary of specialization, as a mechanism.
+<figcaption><b>Figure 7.5</b> — The boundary of specialization, as a mechanism.
 Both bounds <em>do</em> fold to literals, and the range guard collapses to one
 unsigned compare — a real but small win. The loop does not iterate over that
 range: it consumes the sites the PRNG selects, and the cursor advances by a
@@ -3126,6 +3146,17 @@ throughput win that only becomes available *because* the amplitudes ended up in
 registers rather than in a stack array, which in turn is only possible because
 the specializer wrote a straight-line body with statically-known indices.
 
+<figure>
+<img src="diagrams/sroa-to-packed-f32.svg" alt="From stack slots to packed f32 math" width="100%">
+<figcaption><b>Figure 8.2</b> — Why <code>fmul</code> <em>rising</em> 12 → 448
+is the good news. SROA and inlining move shot-local state off the stack, which
+is what makes the amplitudes visible to the SLP vectorizer, which is what
+produces 847 packed instructions where V1 has none. The three surviving
+<code>alloca</code>s are drawn: the count did not reach zero, and what remains
+is a per-kernel constant rather than something that scales with circuit
+length.</figcaption>
+</figure>
+
 The `-O0` → `-O2` boundary is therefore doing the same job MLIR's
 canonicalize/cse did for V1 — plus SROA, plus inlining, plus vectorization —
 and doing it far more thoroughly, because clang's IR was never asked to survive
@@ -3213,7 +3244,7 @@ B,           12038,            11148,  1380,  1586,        0,         477,      
 
 <figure>
 <img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" width="100%">
-<figcaption><b>Figure 8.2</b> — V1's f64 instruction volume for <code>circuit_d3</code>,
+<figcaption><b>Figure 8.3</b> — V1's f64 instruction volume for <code>circuit_d3</code>,
 decomposed by the A/B experiment. 68 % is 54 inlined copies of a hand-written
 log polynomial; the 1,380 that remain are the same PRNG, <code>cnorm</code> and
 <code>cscale</code> sites V2 has. V2 keeps <code>log()</code> as a call to
@@ -4542,6 +4573,16 @@ Both markers agree with the timestamps: 32 of the 36 cached kernels are dated
 2026-07-25 and the remaining 4 are from 07-26 00:00–01:48 — all of them before
 the barrier fix at 07-26 06:33, and well before the dust fix at 07-26 13:31.
 Every kernel the run dispatched predates both fixes.
+
+<figure>
+<img src="diagrams/specialization-cache-identity.svg" alt="The incomplete cache key and its binary proof" width="100%">
+<figcaption><b>Figure 11.2</b> — The cache did exactly what its key said; the
+key was incomplete. One identity produces both the binary <em>and</em> the
+correctness verdict, so a header fix that does not move the key preserves a
+stale &quot;0&quot; along with the stale kernel. The proof is two independent
+markers on the binaries themselves — and the dust constant is a bit pattern,
+not a heuristic.</figcaption>
+</figure>
 
 **The consequence for the in-tree conclusions.** The stale run recorded the
 `coop_r10_n1720` gate as *failing*, which is a verdict on the **pre-fence**

@@ -1954,6 +1954,18 @@ std::string gate_path = spath + <span class="st">".gate"</span>;
     </section>
 
     <section>
+      <h2>Compile once, validate once, then choose</h2>
+      <figure>
+        <img src="diagrams/correctness-gate-lifecycle.svg" alt="Gate lifecycle and the three caches" class="mid" />
+        <figcaption><b>Figure 6.3</b> &mdash; The lifecycle, and the one time the verdict did <em>not</em>
+        reach disk. <code>rocprofv3</code> spawns a fresh process per invocation, so the in-process map is
+        always empty, the gate re-ran <em>inside</em> the profiled region, and the digester summed all
+        three dispatches into one reported kernel time. Three of eight circuits would have been read as
+        2&ndash;4&times; regressions.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>Verdicts on disk: 16 of 16 pass</h2>
       <div class="grid-60-40">
         <div>
@@ -2123,7 +2135,7 @@ __attribute__((amdgpu_kernel, visibility(<span class="st">"default"</span>)))
       <h2>The persistent kernel</h2>
       <figure>
         <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" class="mid" />
-        <figcaption><b>Figure 6.3</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
+        <figcaption><b>Figure 6.4</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
         workgroups, each owning an HBM amplitude slice, drains shots from an atomic counter. The grid does
         not scale with shot count.</figcaption>
       </figure>
@@ -2668,6 +2680,18 @@ global_grid_wgs = (uint32_t)wgs;
       93&rarr;45 at the same time.</div>
     </section>
 
+    <section>
+      <h2>Eighteen branches, then none</h2>
+      <figure>
+        <img src="diagrams/branch-erasure-exec-mask.svg" alt="Three deletion mechanisms in one specialized body" class="mid" />
+        <figcaption><b>Figure 7.3</b> &mdash; Three <em>distinct</em> mechanisms in one body. A constant
+        <code>flags</code> deletes a path; a constant <code>slot</code> deletes the bounds check; constant
+        <code>axis</code>/<code>slot</code> make both arms of the genuinely random compare write the same
+        bit, so it if-converts to <code>s_cselect_b32</code>. The SGPR rise 13&rarr;26 is drawn at the
+        same weight as the wins &mdash; it is the price of straight-lining, not a hidden defeat.</figcaption>
+      </figure>
+    </section>
+
     <!-- ---------------- S3 ---------------- -->
     <section>
       <h2>S3 &mdash; static rank tracking <span style="font-size:0.6em;color:var(--dim);">coop &middot; the load-bearing one</span></h2>
@@ -2788,7 +2812,7 @@ global_grid_wgs = (uint32_t)wgs;
       <h2>Static rank tracking, through a whole program</h2>
       <figure>
         <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" />
-        <figcaption><b>Figure 7.3</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
+        <figcaption><b>Figure 7.4</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
         so every rank-dependent bound is a literal <em>at its use site</em>. The interpreter must reload
         <code>st-&gt;active_k</code> at every instruction because any preceding op could have changed
         it.</figcaption>
@@ -3164,7 +3188,7 @@ global_grid_wgs = (uint32_t)wgs;
       <h2>Constants the specializer cannot use</h2>
       <figure>
         <img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" class="mid" />
-        <figcaption><b>Figure 7.4</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
+        <figcaption><b>Figure 7.5</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
         collapses to one unsigned compare &mdash; a real but small win. The loop does not iterate over that
         range: it consumes the sites the PRNG selects, and the cursor advances by a random amount drawn
         through an <code>ocml_log_f64</code> hazard call. The trip count is a function of the random
@@ -3674,6 +3698,19 @@ global_grid_wgs = (uint32_t)wgs;
     </section>
 
     <section>
+      <h2>Registers, then packing</h2>
+      <figure>
+        <img src="diagrams/sroa-to-packed-f32.svg" alt="From stack slots to packed f32 math" class="mid" />
+        <figcaption><b>Figure 8.2</b> &mdash; Why <code>fmul</code> <em>rising</em> 12&rarr;448 is the good
+        news. SROA and inlining move shot-local state off the stack, which is what makes the amplitudes
+        visible to the SLP vectorizer, which is what produces <b>847 packed instructions where V1 has
+        none</b>. The three surviving <code>alloca</code>s are drawn: the count did not reach zero, and
+        what remains is a per-kernel constant rather than something that scales with circuit
+        length.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>A correction, and a caution about the tooling</h2>
       <p class="lede">An earlier draft of that table read <code>alloca</code> <b>2,268 &rarr; 0</b>, taken
       from <code>stage_stats.csv</code>. <b>Both numbers were wrong, in the same direction, for two
@@ -3825,7 +3862,7 @@ global_grid_wgs = (uint32_t)wgs;
       <h2>Where V1's f64 went</h2>
       <figure>
         <img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" />
-        <figcaption><b>Figure 8.2</b> &mdash; V1's f64 volume for <code>circuit_d3</code>, decomposed by the
+        <figcaption><b>Figure 8.3</b> &mdash; V1's f64 volume for <code>circuit_d3</code>, decomposed by the
         A/B experiment. <b>68% is 54 inlined copies of a hand-written log polynomial</b>; the 1,380 that
         remain are the same PRNG, <code>cnorm</code> and <code>cscale</code> sites V2 has. V2 keeps
         <code>log()</code> as a call to <code>__ocml_log_f64</code> because it links ROCm device bitcode; V1
@@ -5358,6 +5395,18 @@ global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
       Change <code>v2_ops.h</code>, and the key does not move: the day-old <code>.hsaco</code> is reused
       &mdash; <b><em>and so is its <code>&lt;hsaco&gt;.gate</code> verdict</em></b>, which is keyed off the
       same path.</div>
+    </section>
+
+    <section>
+      <h2>Half a translation unit</h2>
+      <figure>
+        <img src="diagrams/specialization-cache-identity.svg" alt="The incomplete cache key and its binary proof" class="mid" />
+        <figcaption><b>Figure 11.2</b> &mdash; The cache did exactly what its key said; <b>the key was
+        incomplete</b>. One identity produces both the binary <em>and</em> the correctness verdict, so a
+        header fix that does not move the key preserves a stale "0" along with the stale kernel. The proof
+        is two independent markers on the binaries themselves &mdash; and the dust constant is a bit
+        pattern, not a heuristic.</figcaption>
+      </figure>
     </section>
 
     <section>

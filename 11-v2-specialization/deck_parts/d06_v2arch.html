@@ -388,6 +388,18 @@ std::string gate_path = spath + <span class="st">".gate"</span>;
     </section>
 
     <section>
+      <h2>Compile once, validate once, then choose</h2>
+      <figure>
+        <img src="diagrams/correctness-gate-lifecycle.svg" alt="Gate lifecycle and the three caches" class="mid" />
+        <figcaption><b>Figure 6.3</b> &mdash; The lifecycle, and the one time the verdict did <em>not</em>
+        reach disk. <code>rocprofv3</code> spawns a fresh process per invocation, so the in-process map is
+        always empty, the gate re-ran <em>inside</em> the profiled region, and the digester summed all
+        three dispatches into one reported kernel time. Three of eight circuits would have been read as
+        2&ndash;4&times; regressions.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>Verdicts on disk: 16 of 16 pass</h2>
       <div class="grid-60-40">
         <div>
@@ -557,7 +569,7 @@ __attribute__((amdgpu_kernel, visibility(<span class="st">"default"</span>)))
       <h2>The persistent kernel</h2>
       <figure>
         <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" class="mid" />
-        <figcaption><b>Figure 6.3</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
+        <figcaption><b>Figure 6.4</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
         workgroups, each owning an HBM amplitude slice, drains shots from an atomic counter. The grid does
         not scale with shot count.</figcaption>
       </figure>
