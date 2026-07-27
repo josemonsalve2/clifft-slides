@@ -52,7 +52,7 @@ That signature is the whole trick. The **same source** serves two consumers:
 bodies. This directly retires V1's duplication tax (§5.6).
 
 The tier dimension is handled by preprocessor parameterization of *cooperation*,
-not of arithmetic (`v2_ops.h:115-139`, quoted verbatim with the barrier body
+not of arithmetic (`v2_ops.h:128-152`, quoted verbatim with the barrier body
 elided to §11.2):
 
 ```c
@@ -249,7 +249,7 @@ That last term is a repair. The key originally hashed only `csrc` — the
 *generated* C — which is barely half the translation unit: every `v2_op_*` body,
 `v2_barrier()`, and every tunable constant lives in the included headers. A
 header fix therefore produced the same key, and the stale `.hsaco` **plus its
-stale `.gate` verdict** silently won. §15 documents the benchmark run that
+stale `.gate` verdict** silently won. §11.1 documents the benchmark run this
 destroyed. The fix hashes the contents of all three device headers
 (`v2_ops.h`, `v2_ops_body.inc`, `device_abi.h`) into the key — content, not
 mtime, since mtimes change on every checkout and would defeat the cache for no
@@ -300,18 +300,34 @@ Three design details are load-bearing and easy to miss:
    diagnostics that exist (`V2_GATE_VERBOSE`, `V2_GATE_BISECT`) had to be added
    during §11.2's investigation.
 
-**Verdicts on disk (2026-07-27, `build-v2-nohip/v2_spec_cache/`): 6 of 6
+**Verdicts on disk (2026-07-27, `build-v2-nohip/v2_spec_cache/`): 16 of 16
 pass.**
 
 ```
 $ for f in build-v2-nohip/v2_spec_cache/*.gate; do echo "$(cat $f) $(basename $f .hsaco.gate)"; done
 1 coop_r10_n140_7b3194ac269d23a9
+1 coop_r10_n140_ad02701c918c6f1b
 1 coop_r10_n1720_48e8389e3cb74acb      <- the shape that used to fail
+1 coop_r10_n1720_847f167402847a8b      <- and its sibling hash
+1 coop_r10_n4371_e333cefd1e929cb
+1 coop_r7_n16374_b38b86d5770ce20a
+1 coop_r7_n4134_197aaf5bcd540fb1
+1 coop_r7_n4134_60919e543cb4cced
+1 coop_r7_n8859_74c4fcdbba5a0374
 1 reg_r0_n11_dc388d7dcd2a8cf0
 1 reg_r0_n4_47d470a8aeec1399
+1 reg_r0_n4_833175afc86f6aea
 1 reg_r3_n4151_3a83fd16f93a5eea
+1 reg_r3_n4151_f11fad7b253aa1df
 1 reg_r4_n344_7378b9a76010d9be
+1 reg_r4_n344_bcf40c29ff41f709
 ```
+
+Note that shapes now appear in pairs under two different hashes. The shape key
+(`coop_r10_n1720`) identifies the *circuit*; the trailing hash covers the
+toolchain, arch, bitcode directory and device-header contents, so a header edit
+legitimately produces a second entry for the same circuit. That is
+`device_header_ident` doing exactly the job §6.4 describes.
 
 Read that against the quarantined cache the report's earlier benchmark actually
 ran (`V2_performance/history/stale_spec_cache_20260725/`, 36 verdicts):
@@ -319,15 +335,16 @@ ran (`V2_performance/history/stale_spec_cache_20260725/`, 36 verdicts):
 | cache | verdicts | failures |
 |---|---|---|
 | `history/stale_spec_cache_20260725/` (pre-fence, pre-dust) | 36 | **2** — `coop_r10_n1720_977e1e83…`, `coop_r10_n1720_cadfdf19…` |
-| `build-v2-nohip/v2_spec_cache/` (current HEAD) | 6 | **0** |
+| `build-v2-nohip/v2_spec_cache/` (current HEAD) | 16 | **0** |
 
 Two things follow, and both matter for how the rest of this report is read.
 **First, the gate failure is fixed**: the shape that produced the only two zeros
 in the corpus now produces a one. §11.2 is the story of what was actually wrong.
-**Second, the two caches are not comparable on count** — 36 versus 6 is not a
+**Second, the two caches are not comparable on count** — 36 versus 16 is not a
 shrinking corpus, it is a cache that was rebuilt from scratch after `009df59`
 changed the key, and has since only been populated by the circuits that have
-been re-run. §15's full-corpus run repopulates it.
+been re-run. It was at 6 entries earlier on the day this section was written and
+is at 16 now, growing as §15's full-corpus run repopulates it.
 
 ### 6.6 The specializer is opt-in
 
@@ -341,10 +358,12 @@ produced with it set; §11.1 shows what happens when the gate un-sets it for you
 
 ### 6.7 The three tier wrappers
 
-One `spec_body`, three wrappers (`v2_specializer.cc:172-225`). All three forward
-an identical 20-argument list — emitted once into a `const char* fwd` at
-`v2_specializer.cc:166-170` and reused verbatim by each branch — so the tier
-choice cannot accidentally change what the body receives.
+One `spec_body`, three wrappers (`v2_specializer.cc:172-225`). `spec_body` takes
+21 parameters; the first five are the tier-dependent ones (state, amplitudes,
+scratch, capacity, shot id) and the remaining 16 are identical across tiers —
+emitted once into a `const char* fwd` at `v2_specializer.cc:166-170` and reused
+verbatim by each branch, so the tier choice cannot accidentally change what the
+body receives.
 
 Every wrapper opens with the same line:
 
