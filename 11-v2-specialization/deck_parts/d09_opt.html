@@ -231,6 +231,18 @@
     </section>
 
     <section>
+      <h2>256 threads doing the work of one</h2>
+      <figure>
+        <img src="diagrams/register-tier-topology.svg" alt="Coop topology on a rank-0 circuit against the shot-packed register topology" class="mid" />
+        <figcaption><b>Figure 9.2</b> &mdash; The largest single optimization in V2's history was a
+        <em>topology</em> change, not an arithmetic one. Above: 255 idle lanes synchronizing around one
+        lane's scalar work, four times, per shot. Below: the same opcode bodies with cooperation compiled
+        out. Note what the result is &mdash; 28.258&times; &rarr; 1.215&times; puts V2 <b>at SVM's own
+        floor</b>, not ahead of it.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>9.3 &nbsp;P1a/P1b &mdash; LDS reclamation: 25,088 &rarr; 13,312 B</h2>
       <p class="lede">The coop tier's occupancy is set by LDS. Two commits took the declared workgroup
       footprint down by 47%. Both changes are of the form <b>"the buffer was declared for a worst case that
@@ -497,7 +509,7 @@
       the progressive table those three go from ~1.0 to ~0.26&ndash;0.31 <b>in a single step</b>.</div>
       <figure>
         <img src="diagrams/scatter-index-folding.svg" alt="scatter_bits_2 at runtime vs folded" class="mid" />
-        <figcaption><b>Figure 9.2</b> &mdash; The global-tier bottleneck. Left: the interpreter recomputes
+        <figcaption><b>Figure 9.3</b> &mdash; The global-tier bottleneck. Left: the interpreter recomputes
         <code>scatter_bits_2</code> per amplitude, 8&ndash;12 VALU each, 256 threads deep. Centre: SVM's
         runtime scatter LUT, which it <em>disables</em> on the global tier. Right: V2's compile-time fold
         &mdash; three constant masks and a <code>v_or3</code>.</figcaption>

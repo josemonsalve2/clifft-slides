@@ -395,6 +395,18 @@
       <em>pure overhead with respect to the simulation</em>, and constants delete them outright.</div>
     </section>
 
+    <section>
+      <h2>What is deleted is a <em>dependency chain</em></h2>
+      <figure>
+        <img src="diagrams/scalar-pipe-deletion.svg" alt="The interpreter's operand-fetch dependency chain against the specialized form" class="mid" />
+        <figcaption><b>Figure 7.2</b> &mdash; The interpreter must compute an address, load, wait, move
+        the operand across pipes, and load again <em>before the first useful FLOP</em>. The specialized
+        form has the operands as literals in the instruction stream. Both pipes issue less &mdash; the
+        work does not migrate from VALU to SALU. The mnemonics illustrate the chain's shape, drawn from
+        the disassembly excerpt; they are structural, not counted.</figcaption>
+      </figure>
+    </section>
+
     <!-- ---------------- S2 ---------------- -->
     <section>
       <h2>S2 &mdash; flag folding on dormant measurements <span style="font-size:0.6em;color:var(--dim);">register &middot; 2.94&times; instrs &middot; 18 branches &rarr; 0</span></h2>
@@ -589,7 +601,7 @@
       <h2>Static rank tracking, through a whole program</h2>
       <figure>
         <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" />
-        <figcaption><b>Figure 7.2</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
+        <figcaption><b>Figure 7.3</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
         so every rank-dependent bound is a literal <em>at its use site</em>. The interpreter must reload
         <code>st-&gt;active_k</code> at every instruction because any preceding op could have changed
         it.</figcaption>
@@ -959,6 +971,18 @@
       <div class="verdict verdict-bad">That is the regression in one table: <b>the ops worth specializing
       are the ones that cost little, and the op that dominates the time is the one specialization cannot
       touch.</b> &sect;11.1 shows what happened when it was specialized anyway.</div>
+    </section>
+
+    <section>
+      <h2>Constants the specializer cannot use</h2>
+      <figure>
+        <img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" class="mid" />
+        <figcaption><b>Figure 7.4</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
+        collapses to one unsigned compare &mdash; a real but small win. The loop does not iterate over that
+        range: it consumes the sites the PRNG selects, and the cursor advances by a random amount drawn
+        through an <code>ocml_log_f64</code> hazard call. The trip count is a function of the random
+        stream, so the loop survives in both forms and VGPR pressure gets no relief.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------- S8 ---------------- -->

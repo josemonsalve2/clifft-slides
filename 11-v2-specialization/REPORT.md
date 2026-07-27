@@ -1325,6 +1325,16 @@ branch.
 stride-1 loop has already summed everything. Coop/global: 256 threads/shot,
 stride 256, fenced barriers, butterfly reduction.
 
+<figure>
+<img src="diagrams/one-library-two-consumers.svg" alt="One operand library with two consumers and two tier compilations" width="100%">
+<figcaption><b>Figure 6.2</b> — The whole trick, in one signature. Two consumers
+call the same <code>static inline</code> bodies; only the call-site knowledge
+differs, so byte-exactness is by construction rather than by testing. The tier
+macros below the library parameterize <em>cooperation</em>, not arithmetic.
+35 of the 41 opcodes are specialized; unsupported opcodes fall back to the
+interpreter.</figcaption>
+</figure>
+
 ### 6.3 What the specializer emits
 
 `v2_specializer.cc:26-97` is a `switch` over opcodes that prints exactly one
@@ -1669,7 +1679,7 @@ void clifft_v2_spec(..., CV2Complex* global_v, CV2Complex* global_scratch, u64* 
 
 <figure>
 <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" width="100%">
-<figcaption><b>Figure 6.2</b> — The global tier's persistent kernel. A fixed
+<figcaption><b>Figure 6.3</b> — The global tier's persistent kernel. A fixed
 pool of resident workgroups, each owning an HBM amplitude slice, drains shots
 from an atomic counter. The grid does not scale with shot count.</figcaption>
 </figure>
@@ -2076,6 +2086,17 @@ scalar work as much as vector work, and specialization removes both.
 > larger on the scalar side, by an absolute margin of roughly 3.8× on the
 > surface family.
 
+<figure>
+<img src="diagrams/scalar-pipe-deletion.svg" alt="The interpreter's operand-fetch dependency chain against the specialized form" width="100%">
+<figcaption><b>Figure 7.2</b> — What specialization deletes is a <em>serial
+dependency chain</em>, not a set of scattered instructions. The interpreter must
+compute an address, load, wait, move the operand across pipes, and load again
+before the first useful FLOP; the specialized form has the operands as literals
+in the instruction stream. Both pipes issue less — the work does not migrate
+from VALU to SALU. The mnemonics illustrate the chain's shape, drawn from the
+disassembly excerpt above; they are structural, not counted.</figcaption>
+</figure>
+
 ---
 
 ### 7.4 S2 — flag folding on dormant measurements
@@ -2279,7 +2300,7 @@ is what LLVM's loop optimizer actually wants.
 
 <figure>
 <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" width="100%">
-<figcaption><b>Figure 7.2</b> — The specializer walks the bytecode maintaining
+<figcaption><b>Figure 7.3</b> — The specializer walks the bytecode maintaining
 <code>k</code>, so every rank-dependent bound is a literal at its use site. The
 interpreter must reload <code>st-&gt;active_k</code> at every instruction because
 any preceding op could have changed it.</figcaption>
@@ -2657,6 +2678,18 @@ well are individually cheap. That is the regression in one table: the ops worth
 specializing are the ones that cost little, and the op that dominates the time
 is the one specialization cannot touch. §11.1 shows what happened when it was
 specialized anyway.
+
+<figure>
+<img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" width="100%">
+<figcaption><b>Figure 7.4</b> — The boundary of specialization, as a mechanism.
+Both bounds <em>do</em> fold to literals, and the range guard collapses to one
+unsigned compare — a real but small win. The loop does not iterate over that
+range: it consumes the sites the PRNG selects, and the cursor advances by a
+random amount drawn through an <code>ocml_log_f64</code> hazard call. The trip
+count is a function of the random stream, so the loop survives in both forms and
+VGPR pressure gets no relief. The constants exist; they are simply not the
+values that control the expensive part.</figcaption>
+</figure>
 
 ---
 
@@ -3520,6 +3553,18 @@ identifies why this refactor mattered beyond its number:
 Without P0 there is no `spec_body` that all three tiers can share, and the
 specializer would have needed three separate emitters.
 
+<figure>
+<img src="diagrams/register-tier-topology.svg" alt="Coop topology on a rank-0 circuit against the shot-packed register topology" width="100%">
+<figcaption><b>Figure 9.2</b> — The largest single optimization in V2's history
+was a <em>topology</em> change, not an arithmetic one. Above: 255 idle lanes
+synchronizing around one lane's scalar work, four times, per shot. Below: the
+same opcode bodies with cooperation compiled out — every lane running its own
+shot, the barriers gone, the reduction degenerate, and <code>v[16]</code> in
+VGPRs rather than LDS. Note what the result is: 28.258× → 1.215× puts V2 <em>at
+SVM's own floor</em>, not ahead of it. The specialization win in §9.4 is
+measured from there.</figcaption>
+</figure>
+
 ---
 
 ### 9.3 P1a/P1b — LDS reclamation on the coop tier
@@ -3738,7 +3783,7 @@ three go from ~1.0 to ~0.26–0.31 in a single step.
 
 <figure>
 <img src="diagrams/scatter-index-folding.svg" alt="scatter_bits_2 at runtime vs folded" width="100%">
-<figcaption><b>Figure 9.2</b> — The global-tier bottleneck. Left: the
+<figcaption><b>Figure 9.3</b> — The global-tier bottleneck. Left: the
 interpreter recomputes <code>scatter_bits_2</code> per amplitude, 8–12 VALU
 each, 256 threads deep. Centre: SVM's runtime scatter LUT, which it disables on
 the global tier. Right: V2's compile-time fold — three constant masks and a
@@ -4166,6 +4211,17 @@ tier (96–112 B). Every other kernel, at rank 11–14 and at rank 22–24 alike
 at the cap. So the rank-22 break is not "the allocator hits the cap"; the
 long rank-11–14 kernels are at the cap too and spill 4 SGPRs at most. It is that
 rank 22 hits the cap **and** finds nothing left to overflow into.
+
+<figure>
+<img src="diagrams/rank22-spill-cliff.svg" alt="Register-file occupancy and speedup against rank, with the cliff at rank 22" width="100%">
+<figcaption><b>Figure 10.2</b> — The cliff, on one vertical line. Ranks 20–21 sit
+<em>below</em> the VGPR 128 / AGPR 64 cap and spill nothing; rank 22 takes the cap
+and pushes 594–762 scalars into HBM-backed scratch — the same memory these
+kernels are already bandwidth-bound on — and the ratio collapses from 0.732–0.850
+to 0.980–0.990 at exactly that rank. The spilling kernels are the <em>shortest</em>
+in the tier (320–359 instructions) against a rank-14 kernel at 16,521 that spills
+4 SGPRs, so this is rank-driven live state, not program length.</figcaption>
+</figure>
 
 What actually changes at the boundary is narrower than expected. Diffing the
 emitted C for rank 21 against rank 22 with all numeric literals normalized shows
@@ -4962,6 +5018,18 @@ persistent path, and batched HSA <em>with</em> a completion wait lands within
 11 % of what HIP charges for an <em>unsynchronized</em> enqueue.</figcaption>
 </figure>
 
+<figure>
+<img src="diagrams/hsa-aql-dispatch-path.svg" alt="The AQL dispatch path, showing which resources sit on the hot path in each mode" width="100%">
+<figcaption><b>Figure 13.2</b> — The same dispatch costs 197,935 ns or 6,326 ns
+depending only on <em>where the resource creation sits</em>. The naive path
+re-allocates the 40-byte kernarg segment, re-authorizes GPU access to it, and
+creates a completion signal on every dispatch — three runtime round-trips, two
+KFD ioctls and a page-table update, all before the packet is written. The
+persistent path does those once at setup, leaving packet write, doorbell ring
+and signal wait. Same queue, same packet, same kernel, same completion
+semantics.</figcaption>
+</figure>
+
 ### 13.4 Reading the result honestly
 
 Three observations, and the third is the one that matters most:
@@ -5386,6 +5454,16 @@ filled**, and no amount of instruction-level improvement changes that. This is
 the clearest single explanation for the QV band, and it is structural rather
 than incidental: it follows from the budget constant and the rank, both known
 before the kernel launches.
+
+<figure>
+<img src="diagrams/xcd-pool-underfill.svg" alt="Resident workgroup pool against 8 XCDs and 256 CUs, ranks 20 through 24" width="100%">
+<figcaption><b>Figure 14.1</b> — The pool formula drawn against the device. Each
+added qubit doubles bytes per workgroup and so halves the resident pool against
+the fixed 32 GB budget: 2,048 workgroups at rank 20 multiply-occupy every CU;
+168 at rank 24 leave 88 CUs with no resident workgroup at all. The formula
+predicted all five grids exactly, which is what makes this structural rather
+than incidental — both inputs are known before the kernel launches.</figcaption>
+</figure>
 
 **The second mechanism is register spilling, and it is measured, not inferred.**
 The three weakest circuits — `qv22_L6` (0.980), `qv23_L5` (0.990), `qv24_L4`

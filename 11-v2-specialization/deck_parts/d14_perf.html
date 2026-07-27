@@ -272,6 +272,18 @@ global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
     </section>
 
     <section>
+      <h2>By rank 24, the machine cannot be filled</h2>
+      <figure>
+        <img src="diagrams/xcd-pool-underfill.svg" alt="Resident workgroup pool against 8 XCDs and 256 CUs, ranks 20 through 24" class="mid" />
+        <figcaption><b>Figure 14.1</b> &mdash; The pool formula drawn against the device. Each added qubit
+        doubles bytes per workgroup and so halves the resident pool against the fixed 32 GB budget: 2,048
+        workgroups at rank 20 multiply-occupy every CU; 168 at rank 24 leave <b>88 CUs with no resident
+        workgroup at all</b>. The formula predicted all five grids exactly, which is what makes this
+        structural rather than incidental.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>The second mechanism: register spilling &mdash; measured, not inferred</h2>
       <p class="lede">The three weakest circuits &mdash; <code>qv22_L6</code> (0.980), <code>qv23_L5</code>
       (0.990), <code>qv24_L4</code> (0.882) &mdash; are <b>exactly the three whose kernels spill.</b> This

@@ -339,6 +339,22 @@ global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
       <div class="verdict verdict-mixed">So the rank-22 break is <b>not</b> "the allocator hits the cap" —
       the long rank-11&ndash;14 kernels are at the cap too and spill 4 SGPRs at most. <b>It is that rank 22
       hits the cap <em>and</em> finds nothing left to overflow into.</b></div>
+    </section>
+
+    <section>
+      <h2>The cliff, on one vertical line</h2>
+      <figure>
+        <img src="diagrams/rank22-spill-cliff.svg" alt="Register-file occupancy and speedup against rank, with the cliff at rank 22" class="mid" />
+        <figcaption><b>Figure 10.2</b> &mdash; Ranks 20&ndash;21 sit <em>below</em> the VGPR 128 / AGPR 64
+        cap and spill nothing; rank 22 takes the cap and pushes 594&ndash;762 scalars into HBM-backed
+        scratch &mdash; the same memory these kernels are already bandwidth-bound on &mdash; and the ratio
+        collapses from 0.732&ndash;0.850 to 0.980&ndash;0.990 at exactly that rank. The spilling kernels are
+        the <em>shortest</em> in the tier.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>What changes at the boundary is one constant</h2>
       <p class="lede">What actually changes at the boundary is narrower than expected. Diffing the emitted C
       for rank 21 against rank 22 with all numeric literals normalized shows <b>no structural
       difference</b> &mdash; same preprocessor preamble, same <code>spec_body</code> shape, near-identical

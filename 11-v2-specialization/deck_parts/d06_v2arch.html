@@ -118,6 +118,18 @@
     </section>
 
     <section>
+      <h2>One library, two consumers, two topologies</h2>
+      <figure>
+        <img src="diagrams/one-library-two-consumers.svg" alt="One operand library with two consumers and two tier compilations" class="mid" />
+        <figcaption><b>Figure 6.2</b> &mdash; The whole trick, in one signature. Two consumers call the
+        same <code>static inline</code> bodies; only the call-site knowledge differs, so byte-exactness
+        is <b>by construction</b> rather than by testing. The tier macros below the library parameterize
+        <em>cooperation</em>, not arithmetic. 35 of the 41 opcodes are specialized; unsupported opcodes
+        fall back to the interpreter.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>6.3 &nbsp;What the specializer emits</h2>
       <p class="lede"><code>v2_specializer.cc:26-97</code> is a <code>switch</code> over opcodes that prints
       <b>exactly one line each</b>. Register-tier <code>circuit_d3</code>
@@ -545,7 +557,7 @@ __attribute__((amdgpu_kernel, visibility(<span class="st">"default"</span>)))
       <h2>The persistent kernel</h2>
       <figure>
         <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" class="mid" />
-        <figcaption><b>Figure 6.2</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
+        <figcaption><b>Figure 6.3</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
         workgroups, each owning an HBM amplitude slice, drains shots from an atomic counter. The grid does
         not scale with shot count.</figcaption>
       </figure>
@@ -593,8 +605,9 @@ global_grid_wgs = (uint32_t)wgs;
         <div>
           <figure>
             <img src="diagrams/hbm-budget-pool.svg" alt="Resident pool vs peak rank" />
-            <figcaption><b>Figure 6.3</b> &mdash; Resident workgroups against peak rank. Flat at the 2,048
-            ceiling through rank 20, then geometric decay as the 32 GB budget binds.</figcaption>
+            <figcaption>Resident workgroups against peak rank. Flat at the 2,048
+            ceiling through rank 20, then geometric decay as the 32 GB budget binds.
+            (Figure 10.1, shown early &mdash; &sect;10 develops it.)</figcaption>
           </figure>
         </div>
       </div>

@@ -158,6 +158,18 @@ clang --target=amdgcn-amd-amdhsa -mcpu=gfx950 -ffreestanding -nostdlib \
     </section>
 
     <section>
+      <h2>What actually happens on an AQL dispatch</h2>
+      <figure>
+        <img src="diagrams/hsa-aql-dispatch-path.svg" alt="The AQL dispatch path, showing which resources sit on the hot path in each mode" class="mid" />
+        <figcaption><b>Figure 13.2</b> &mdash; The same dispatch costs 197,935 ns or 6,326 ns depending
+        only on <em>where the resource creation sits</em>. The naive path re-allocates the 40-byte kernarg
+        segment, re-authorizes GPU access to it, and creates a completion signal on <b>every</b> dispatch
+        &mdash; three runtime round-trips before the packet is even written. The persistent path does those
+        once at setup. <b>Same queue, same packet, same kernel, same completion semantics.</b></figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>13.4 &nbsp;Reading the result honestly &mdash; observations 1 and 2</h2>
       <div class="grid-2">
         <div class="card card-success">

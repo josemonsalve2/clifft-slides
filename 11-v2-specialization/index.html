@@ -1684,6 +1684,18 @@ g_emit_ak = <span class="lit">0</span>;
     </section>
 
     <section>
+      <h2>One library, two consumers, two topologies</h2>
+      <figure>
+        <img src="diagrams/one-library-two-consumers.svg" alt="One operand library with two consumers and two tier compilations" class="mid" />
+        <figcaption><b>Figure 6.2</b> &mdash; The whole trick, in one signature. Two consumers call the
+        same <code>static inline</code> bodies; only the call-site knowledge differs, so byte-exactness
+        is <b>by construction</b> rather than by testing. The tier macros below the library parameterize
+        <em>cooperation</em>, not arithmetic. 35 of the 41 opcodes are specialized; unsupported opcodes
+        fall back to the interpreter.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>6.3 &nbsp;What the specializer emits</h2>
       <p class="lede"><code>v2_specializer.cc:26-97</code> is a <code>switch</code> over opcodes that prints
       <b>exactly one line each</b>. Register-tier <code>circuit_d3</code>
@@ -2111,7 +2123,7 @@ __attribute__((amdgpu_kernel, visibility(<span class="st">"default"</span>)))
       <h2>The persistent kernel</h2>
       <figure>
         <img src="diagrams/persistent-kernel.svg" alt="Persistent kernel with work-stealing" class="mid" />
-        <figcaption><b>Figure 6.2</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
+        <figcaption><b>Figure 6.3</b> &mdash; The global tier's persistent kernel. A fixed pool of resident
         workgroups, each owning an HBM amplitude slice, drains shots from an atomic counter. The grid does
         not scale with shot count.</figcaption>
       </figure>
@@ -2159,8 +2171,9 @@ global_grid_wgs = (uint32_t)wgs;
         <div>
           <figure>
             <img src="diagrams/hbm-budget-pool.svg" alt="Resident pool vs peak rank" />
-            <figcaption><b>Figure 6.3</b> &mdash; Resident workgroups against peak rank. Flat at the 2,048
-            ceiling through rank 20, then geometric decay as the 32 GB budget binds.</figcaption>
+            <figcaption>Resident workgroups against peak rank. Flat at the 2,048
+            ceiling through rank 20, then geometric decay as the 32 GB budget binds.
+            (Figure 10.1, shown early &mdash; &sect;10 develops it.)</figcaption>
           </figure>
         </div>
       </div>
@@ -2569,6 +2582,18 @@ global_grid_wgs = (uint32_t)wgs;
       <em>pure overhead with respect to the simulation</em>, and constants delete them outright.</div>
     </section>
 
+    <section>
+      <h2>What is deleted is a <em>dependency chain</em></h2>
+      <figure>
+        <img src="diagrams/scalar-pipe-deletion.svg" alt="The interpreter's operand-fetch dependency chain against the specialized form" class="mid" />
+        <figcaption><b>Figure 7.2</b> &mdash; The interpreter must compute an address, load, wait, move
+        the operand across pipes, and load again <em>before the first useful FLOP</em>. The specialized
+        form has the operands as literals in the instruction stream. Both pipes issue less &mdash; the
+        work does not migrate from VALU to SALU. The mnemonics illustrate the chain's shape, drawn from
+        the disassembly excerpt; they are structural, not counted.</figcaption>
+      </figure>
+    </section>
+
     <!-- ---------------- S2 ---------------- -->
     <section>
       <h2>S2 &mdash; flag folding on dormant measurements <span style="font-size:0.6em;color:var(--dim);">register &middot; 2.94&times; instrs &middot; 18 branches &rarr; 0</span></h2>
@@ -2763,7 +2788,7 @@ global_grid_wgs = (uint32_t)wgs;
       <h2>Static rank tracking, through a whole program</h2>
       <figure>
         <img src="diagrams/static-rank-tracking.svg" alt="Static rank tracking through a program" />
-        <figcaption><b>Figure 7.2</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
+        <figcaption><b>Figure 7.3</b> &mdash; The specializer walks the bytecode maintaining <code>k</code>,
         so every rank-dependent bound is a literal <em>at its use site</em>. The interpreter must reload
         <code>st-&gt;active_k</code> at every instruction because any preceding op could have changed
         it.</figcaption>
@@ -3133,6 +3158,18 @@ global_grid_wgs = (uint32_t)wgs;
       <div class="verdict verdict-bad">That is the regression in one table: <b>the ops worth specializing
       are the ones that cost little, and the op that dominates the time is the one specialization cannot
       touch.</b> &sect;11.1 shows what happened when it was specialized anyway.</div>
+    </section>
+
+    <section>
+      <h2>Constants the specializer cannot use</h2>
+      <figure>
+        <img src="diagrams/noise-loop-cannot-fold.svg" alt="Why the noise block's folded constants do not shorten its loop" class="mid" />
+        <figcaption><b>Figure 7.4</b> &mdash; Both bounds <em>do</em> fold to literals and the range guard
+        collapses to one unsigned compare &mdash; a real but small win. The loop does not iterate over that
+        range: it consumes the sites the PRNG selects, and the cursor advances by a random amount drawn
+        through an <code>ocml_log_f64</code> hazard call. The trip count is a function of the random
+        stream, so the loop survives in both forms and VGPR pressure gets no relief.</figcaption>
+      </figure>
     </section>
 
     <!-- ---------------- S8 ---------------- -->
@@ -4188,6 +4225,18 @@ global_grid_wgs = (uint32_t)wgs;
     </section>
 
     <section>
+      <h2>256 threads doing the work of one</h2>
+      <figure>
+        <img src="diagrams/register-tier-topology.svg" alt="Coop topology on a rank-0 circuit against the shot-packed register topology" class="mid" />
+        <figcaption><b>Figure 9.2</b> &mdash; The largest single optimization in V2's history was a
+        <em>topology</em> change, not an arithmetic one. Above: 255 idle lanes synchronizing around one
+        lane's scalar work, four times, per shot. Below: the same opcode bodies with cooperation compiled
+        out. Note what the result is &mdash; 28.258&times; &rarr; 1.215&times; puts V2 <b>at SVM's own
+        floor</b>, not ahead of it.</figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>9.3 &nbsp;P1a/P1b &mdash; LDS reclamation: 25,088 &rarr; 13,312 B</h2>
       <p class="lede">The coop tier's occupancy is set by LDS. Two commits took the declared workgroup
       footprint down by 47%. Both changes are of the form <b>"the buffer was declared for a worst case that
@@ -4454,7 +4503,7 @@ global_grid_wgs = (uint32_t)wgs;
       the progressive table those three go from ~1.0 to ~0.26&ndash;0.31 <b>in a single step</b>.</div>
       <figure>
         <img src="diagrams/scatter-index-folding.svg" alt="scatter_bits_2 at runtime vs folded" class="mid" />
-        <figcaption><b>Figure 9.2</b> &mdash; The global-tier bottleneck. Left: the interpreter recomputes
+        <figcaption><b>Figure 9.3</b> &mdash; The global-tier bottleneck. Left: the interpreter recomputes
         <code>scatter_bits_2</code> per amplitude, 8&ndash;12 VALU each, 256 threads deep. Centre: SVM's
         runtime scatter LUT, which it <em>disables</em> on the global tier. Right: V2's compile-time fold
         &mdash; three constant masks and a <code>v_or3</code>.</figcaption>
@@ -4942,6 +4991,22 @@ global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
       <div class="verdict verdict-mixed">So the rank-22 break is <b>not</b> "the allocator hits the cap" —
       the long rank-11&ndash;14 kernels are at the cap too and spill 4 SGPRs at most. <b>It is that rank 22
       hits the cap <em>and</em> finds nothing left to overflow into.</b></div>
+    </section>
+
+    <section>
+      <h2>The cliff, on one vertical line</h2>
+      <figure>
+        <img src="diagrams/rank22-spill-cliff.svg" alt="Register-file occupancy and speedup against rank, with the cliff at rank 22" class="mid" />
+        <figcaption><b>Figure 10.2</b> &mdash; Ranks 20&ndash;21 sit <em>below</em> the VGPR 128 / AGPR 64
+        cap and spill nothing; rank 22 takes the cap and pushes 594&ndash;762 scalars into HBM-backed
+        scratch &mdash; the same memory these kernels are already bandwidth-bound on &mdash; and the ratio
+        collapses from 0.732&ndash;0.850 to 0.980&ndash;0.990 at exactly that rank. The spilling kernels are
+        the <em>shortest</em> in the tier.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>What changes at the boundary is one constant</h2>
       <p class="lede">What actually changes at the boundary is narrower than expected. Diffing the emitted C
       for rank 21 against rank 22 with all numeric literals normalized shows <b>no structural
       difference</b> &mdash; same preprocessor preamble, same <code>spec_body</code> shape, near-identical
@@ -5911,6 +5976,18 @@ clang --target=amdgcn-amd-amdhsa -mcpu=gfx950 -ffreestanding -nostdlib \
     </section>
 
     <section>
+      <h2>What actually happens on an AQL dispatch</h2>
+      <figure>
+        <img src="diagrams/hsa-aql-dispatch-path.svg" alt="The AQL dispatch path, showing which resources sit on the hot path in each mode" class="mid" />
+        <figcaption><b>Figure 13.2</b> &mdash; The same dispatch costs 197,935 ns or 6,326 ns depending
+        only on <em>where the resource creation sits</em>. The naive path re-allocates the 40-byte kernarg
+        segment, re-authorizes GPU access to it, and creates a completion signal on <b>every</b> dispatch
+        &mdash; three runtime round-trips before the packet is even written. The persistent path does those
+        once at setup. <b>Same queue, same packet, same kernel, same completion semantics.</b></figcaption>
+      </figure>
+    </section>
+
+    <section>
       <h2>13.4 &nbsp;Reading the result honestly &mdash; observations 1 and 2</h2>
       <div class="grid-2">
         <div class="card card-success">
@@ -6416,6 +6493,18 @@ global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
       <div class="insight">This is the clearest single explanation for the QV band, and it is <b>structural
       rather than incidental</b>: it follows from the budget constant and the rank, <b>both known before the
       kernel launches.</b></div>
+    </section>
+
+    <section>
+      <h2>By rank 24, the machine cannot be filled</h2>
+      <figure>
+        <img src="diagrams/xcd-pool-underfill.svg" alt="Resident workgroup pool against 8 XCDs and 256 CUs, ranks 20 through 24" class="mid" />
+        <figcaption><b>Figure 14.1</b> &mdash; The pool formula drawn against the device. Each added qubit
+        doubles bytes per workgroup and so halves the resident pool against the fixed 32 GB budget: 2,048
+        workgroups at rank 20 multiply-occupy every CU; 168 at rank 24 leave <b>88 CUs with no resident
+        workgroup at all</b>. The formula predicted all five grids exactly, which is what makes this
+        structural rather than incidental.</figcaption>
+      </figure>
     </section>
 
     <section>
