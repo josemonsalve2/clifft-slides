@@ -9,9 +9,29 @@
 | Hardware | AMD Instinct MI350X (`gfx950`), node `smci350-rck-g03-f13-21` |
 | Software | ROCm 7.2.3, LLVM `upstream_05082025` |
 | Repository | `unitaryfoundation/clifft`, branch `mlir-v2` |
-| Benchmark corpus | 26 circuits, run `20260726T182433Z_report-final-postdust` (SLURM 50469) |
+| Benchmark corpus | 26 circuits — see the provenance notice below |
 | Fact ledger | `V2_performance/VERIFIED_FACTS.md` |
-| Date | 2026-07-26 |
+| Date | 2026-07-27 |
+
+> ### ⚠ Provenance of the performance numbers
+>
+> The timing figures quoted in §1–§10 come from
+> `20260726T182433Z_report-final-postdust` (SLURM 50469), which was **later
+> invalidated**: a cache-key bug (§11.4) caused the specializer to serve
+> pre-fence, pre-dust-fix binaries under post-fix cache keys. The bug is fixed
+> (`009df59`) and the run is retracted in `VERIFIED_FACTS §0`.
+>
+> A second run, `20260726T014859Z_all-tier5plus`, reproduces every ratio to
+> within 0.4 %. That is a **reproducibility** check only — it is at commit
+> `89d541e`, which is also pre-fence, so both runs executed the same binaries.
+>
+> **§15 carries the post-fix full-corpus re-run and is authoritative.** Where
+> §1–§10 and §15 disagree, §15 wins. Each affected table is individually marked;
+> tables that are provably unaffected (resource footprints, IR density, source
+> counts) say so and explain why.
+>
+> This notice exists because the report's own rule demands it: *trust data, not
+> text* applies to the report's own numbers first.
 
 ---
 
@@ -97,15 +117,54 @@ V2 versus the SVM interpreter:
 
 | regime | circuits | V2/SVM ratio | reading |
 |---|---|---|---|
-| Large surface codes, global tier | 5 | **0.255 – 0.298** | V2 is **3.4–3.9× faster** |
-| Mid-size surface + QV10, coop tier | 8 | 0.310 – 0.607 | V2 is **1.6–3.2× faster** |
-| Quantum-volume, global tier rank 20–24 | 6 | 0.723 – 0.990 | V2 wins 1–38%, shrinking with rank |
-| `circuit_d5` family, coop tier | 6 | **1.443 – 1.459** | V2 is **1.44× slower** |
-| register tier | 4 | 0.497 – 0.626 | V2 is **1.6–2.0× faster** |
+| Large surface codes, global tier | 5 | **0.252 – 0.306** | V2 is **3.3–4.0× faster** |
+| Mid-size surface + QV10, coop tier | 6 | 0.317 – 0.595 | V2 is **1.7–3.2× faster** |
+| Register tier (`four_t`, `frame_h`, `circuit_d3`) | 3 | 0.519 – 0.773 | V2 is **1.3–1.9× faster** |
+| Quantum-volume, global tier rank 20–24 | 6 | 0.729 – 0.992 | V2 wins **1–27 %**, shrinking with rank (§10.6) |
+| `circuit_d5` + `cultivation_d5`, coop tier | 6 | **1.440 – 1.451** | V2 is **1.44× slower** (§1.3(d)) |
 
-Twenty of twenty-six circuits are wins. All 26 are **byte-exact** against the
-SVM interpreter and against the f64 CPU reference (modulo documented f32/f64
-branch divergence, §12).
+**26 circuits, 20 wins.** The five regimes sum to exactly 26, and membership is
+assigned by *measured launch geometry* rather than by circuit name — the census
+of §10.5 is precisely the finding that names are unreliable here.
+
+The geometry is unambiguous. Global-tier kernels launch a **resident pool sized
+from the HBM budget** and then work-steal shots; coop-tier kernels launch **one
+workgroup per shot**. Reading grid ÷ 256 from the measured runs:
+
+| circuits | workgroups | shape |
+|---|---|---|
+| `surface_d9/d11_t15/t19`, `qv20` | 2,048 | global pool, capped (`v2_kernel.cc:441`) |
+| `qv21` → `qv24` | 1,360 → 680 → 336 → 168 | global pool, **shrinking as rank grows** |
+| `circuit_d5`, `surface_*_t10` | 10,000 | coop, = shot count |
+| `cultivation_d5`, `qv10` | 20,000 | coop, = shot count |
+| `four_t`, `frame_h`, `circuit_d3` | 79 | register, = ⌈shots/256⌉ |
+
+The QV row is the §10.2 budget mechanism visible from the outside, and it can be
+predicted exactly rather than merely described. Each resident workgroup owns one
+amplitude slice plus a half-size scratch — 12 bytes per amplitude — drawn from a
+32 GB budget (`v2_kernel.cc:436-446`). Evaluating that formula against the
+measured grids:
+
+| rank | bytes/wg | predicted wgs | **measured wgs** |
+|---|---|---|---|
+| 20 | 12 MB | 2,048 (capped) | **2,048** ✓ |
+| 21 | 24 MB | 1,360 | **1,360** ✓ |
+| 22 | 48 MB | 680 | **680** ✓ |
+| 23 | 96 MB | 336 | **336** ✓ |
+| 24 | 192 MB | 168 | **168** ✓ |
+
+Five for five, including the XCD-alignment rounding. So the QV circuits lose
+occupancy geometrically as rank climbs — the pool halves with every added qubit
+— and that compounds with the register spilling of §10.6. Two independent
+mechanisms degrade the same six circuits, which is why their ratios approach 1.0
+from a corpus whose median is 0.678.
+
+All 26 are **byte-exact** against the SVM interpreter and against the f64 CPU
+reference (modulo the documented f32/f64 branch divergence of §12).
+
+> Ratios above are from `20260726T014859Z_all-tier5plus`, which agrees with the
+> retracted run to within 0.4 %. Both are pre-fence-fix — see the provenance
+> notice at the top, and §15 for the authoritative post-fix numbers.
 
 ### 1.3 The five results this report argues for
 

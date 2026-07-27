@@ -177,16 +177,29 @@ The break is sharp and it is at rank 22. Below it, zero spilling and V2 wins
 89-kernel corpus — SGPR spill 762 / 662 / 594, the top three by that metric and
 by VGPR spill — and the advantage collapses to 0.98–0.99.
 
-> **Provenance.** The timings above predate the cache fix of §11.4, so they are
-> reproduced by an independent run (`20260726T014859Z_all-tier5plus`) which
-> agrees to within 0.4 %: ratios 0.844 / 0.729 / 0.733 / 0.980 / 0.992 / 0.881,
-> with identical scratch sizes. The resource columns are stronger still — the
-> pre-fence and post-fence `.hsaco` for `global_r22/r23/r24` differ in 84 % of
-> their bytes and by +1,152 bytes of added fence instructions, yet report
-> **byte-identical** `vgpr_spill`, `sgpr_spill`, `sgpr_count` and
-> `private_segment_fixed_size`. Register pressure is a property of what the
-> specializer emits, not of the memory fences around it, so this table is not
-> affected by the invalidation.
+> **Provenance — read this before quoting the timing columns.**
+>
+> The **resource columns are solid.** The pre-fence and post-fence `.hsaco` for
+> `global_r22/r23/r24` differ in 84 % of their bytes and by +1,152 bytes of
+> added fence instructions, yet report **byte-identical** `vgpr_spill`,
+> `sgpr_spill`, `sgpr_count` and `private_segment_fixed_size`. Register pressure
+> is a property of what the specializer emits, not of the fences around it, so
+> the spill table is unaffected by the §11.4 invalidation.
+>
+> The **timing columns are provisional.** They come from a run that predates the
+> fence fix (`150d09f`, 2026-07-26 06:33). A second run agrees to within 0.4 %
+> — ratios 0.844 / 0.729 / 0.733 / 0.980 / 0.992 / 0.881, identical scratch
+> sizes — but that run is `20260726T014859Z_all-tier5plus` at commit `89d541e`
+> (01:52), which `git merge-base --is-ancestor` confirms is **also pre-fence**.
+> Two pre-fence runs agreeing is a reproducibility check, **not** independent
+> corroboration: both executed the same unfenced binaries.
+>
+> Whether that matters here is itself checkable, and the answer is *probably
+> not for these six circuits* — the fence bug corrupted reduction totals in the
+> coop tier, and these are global-tier kernels — but "probably" is not the
+> standard this report holds itself to. The post-fix full-corpus re-run is the
+> arbiter; §15 carries the final numbers and this table is superseded by it if
+> they disagree.
 
 **Why spilling appears exactly there — and what the data rules out.** The
 tempting explanation is that the specializer emits one call per instruction with
