@@ -85,7 +85,8 @@ dead code."*
 a sum of `half = 1 << (active_k - 1)` squared fp32 magnitudes, and the rounding
 error is *relative to each amplitude* — so the dust floor does **not** grow with
 term count; summing more terms averages the residuals rather than accumulating
-them. Measured (residual model, `p1/total` over 2,000 trials per rank):
+them. Measured with `V2_performance/tools/dust_floor.py` (`p1/total`, 2,000
+trials per rank):
 
 | rank | median | max |
 |---|---|---|
@@ -101,6 +102,36 @@ smallest probability f32 can meaningfully carry, leaving margin on both sides.
 Nothing real is clamped away: genuine small probabilities (the SVM comment cites
 `R_ZZ` angles producing ~1e-16) are not representable in f32 storage in the
 first place.
+
+> **Provenance.** These four rows were originally recorded only as prose, in the
+> `V2_DUST_EPS` comment — the generating code was never committed, the same gap
+> that produced the incorrect barrier figure in §11.2. Re-deriving it turned up
+> a detail the prose elides. "Residual model" is literal: it is a *statistical*
+> model, not a simulation of the kernel's arithmetic. It assumes each
+> analytically-zero output carries a relative error at full `eps`
+> (`resid_i = a_i · eps · z_i`, `z_i` unit-variance complex Gaussian), giving
+> `p1/total = eps² · Σ|a_i|²|z_i|² / Σ|a_i|²` — `eps²` times a weighted mean of
+> `Exp(1)` variables. Re-running that model reproduces the table to the digit
+> (9.730e-15 / 1.222e-13, 1.315e-14 / 5.048e-14, 1.422e-14 / 1.586e-14,
+> 1.422e-14 / 1.476e-14). Both the model and the four values are now committed
+> as `dust_floor.py --model residual`, its default.
+>
+> Directly simulating the arithmetic instead — `fl(fl(u·a) + fl(v·b))` over
+> fp32-stored amplitudes whose exact fp64 counterparts cancel identically, via
+> `--model butterfly` — puts the real floor **~36× lower**: median 3.2e-16 at
+> rank 26, worst tail ~5e-15 at rank 1. The residual model is the conservative
+> envelope, because it assumes every term rounds at full `eps` and that the
+> errors never cancel against one another.
+>
+> This does not disturb the choice of `1e-11`, and it is worth being precise
+> about why. Every structural fact the threshold rests on holds under *both*
+> estimators: the floor is rank-independent, the spread tightens with rank so
+> the widest tail is at low rank, and the floor is insensitive to circuit depth
+> (`--depth 256` moves the medians by <5 %, because accumulated error is itself
+> relative and divides out of the ratio). The two models disagree only on the
+> absolute location, and `1e-11` clears the *conservative* one by two decades —
+> so it clears the simulated one by nearly four. What the correction changes is
+> the margin, which is larger than claimed, not the decision.
 
 This is worth pausing on, because it inverts the intuition the "f32 vs f64"
 framing invites. The dust floor is **rank-independent**, and the *low*-rank
