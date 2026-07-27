@@ -138,10 +138,37 @@ measurement (`89d541e`). `probe_all.sh` ran the rank probe over **every** live
 and `docs/guide/circuits` — recording the **compiled** `peak_rank`, i.e. what
 the tier dispatcher actually sees after `StatevectorSqueezePass`.
 
-| compiled rank | fixtures |
-|---|---|
-| 0–1 | **326** |
-| ≥ 5 | **22** |
+The raw probe output is `V2_performance/scratch/all_ranks.txt`, one
+`<rank> <path>` line per fixture. Its full distribution — every fixture in the
+tree, by compiled rank:
+
+| compiled rank | fixtures | tier |
+|---|---|---|
+| 0 | 82 | register |
+| 1 | 244 | register |
+| 3 | 3 | register |
+| 4 | 2 | register |
+| **0–1 subtotal** | **326** | **register** |
+| 7 | 3 | coop |
+| 10 | 8 | coop |
+| 11 | 2 | global |
+| 12 | 1 | global |
+| 13 | 1 | global |
+| 14 | 1 | global |
+| 20 | 2 | global |
+| 21 | 1 | global |
+| 22 | 1 | global |
+| 23 | 1 | global |
+| 24 | 1 | global |
+| **≥ 5 subtotal** | **22** | **coop + global** |
+| **total** | **353** | |
+
+Note what is *absent*: **nothing in the entire tree compiles to rank 2, 5, 6,
+8, 9, 15, 16, 17, 18 or 19.** The distribution is not a smooth spread with a
+long tail — it is two dense clusters (0–1 and 10) plus a thin spine of surface
+codes and the six hand-built QV circuits. The coop tier, which the bulk of the
+optimization work in §9 targets, is exercised by exactly **eleven** fixtures,
+eight of which are the `circuit_d5` parameter sweep.
 
 Every one of `tests/fixtures/sweep` (188 files) and `rank_sweep` (56) squeezes
 flat, *despite names like `rank_q17_r12_d1.stim` promising rank 12.*
@@ -179,12 +206,19 @@ by VGPR spill — and the advantage collapses to 0.98–0.99.
 
 > **Provenance — read this before quoting the timing columns.**
 >
-> The **resource columns are solid.** The pre-fence and post-fence `.hsaco` for
-> `global_r22/r23/r24` differ in 84 % of their bytes and by +1,152 bytes of
-> added fence instructions, yet report **byte-identical** `vgpr_spill`,
-> `sgpr_spill`, `sgpr_count` and `private_segment_fixed_size`. Register pressure
-> is a property of what the specializer emits, not of the fences around it, so
-> the spill table is unaffected by the §11.4 invalidation.
+> The **resource columns are solid.** Both binaries survive in-tree — pre-fence
+> under `V2_performance/history/stale_spec_cache_20260725/`, post-fence under
+> `V2_performance/scratch/fence_cache/all/` — so this is directly checkable:
+>
+> | kernel | pre (B) | post (B) | Δ | bytes differing | `vgpr_spill` | `sgpr_spill` | `sgpr_count` | scratch |
+> |---|---|---|---|---|---|---|---|---|
+> | `global_r22_n359` | 217,424 | 218,576 | +1,152 | **83.9 %** | 136 = 136 | 762 = 762 | 108 = 108 | 448 = 448 |
+> | `global_r23_n335` | 190,480 | 191,568 | +1,088 | **83.0 %** | 199 = 199 | 662 = 662 | 108 = 108 | 576 = 576 |
+> | `global_r24_n320` | 172,880 | 173,904 | +1,024 | **82.9 %** | 152 = 152 | 594 = 594 | 108 = 108 | 480 = 480 |
+>
+> **Five-sixths of the binary changed and not one resource number moved.**
+> Register pressure is a property of what the specializer emits, not of the
+> fences around it, so the spill table is unaffected by the §11.4 invalidation.
 >
 > The **timing columns are provisional.** They come from a run that predates the
 > fence fix (`150d09f`, 2026-07-26 06:33). A second run agrees to within 0.4 %
@@ -207,17 +241,26 @@ constants baked in, so longer circuits carry more live scalars until the SGPR
 budget breaks. **The corpus refutes this.** Sorting every `global_*` kernel by
 emitted instruction count:
 
-| rank | instrs | VGPR | AGPR | SGPR | VGPR spill | SGPR spill |
-|---|---|---|---|---|---|---|
-| 11 | 16,415 | 128 | 64 | 106 | 0 | 4 |
-| 14 | 16,521 | 128 | 64 | 106 | 0 | 4 |
-| 13 | 9,359 | 128 | 64 | 106 | 0 | 4 |
-| 12 | 4,296 | 128 | 64 | 106 | 0 | 0–4 |
-| 20 | 418 | 104 | 40 | 106 | 0 | 0 |
-| 21 | 393 | 104 | 40 | 106 | 0 | 0 |
-| **22** | **359** | 128 | 64 | 108 | **136** | **762** |
-| **23** | **335** | 128 | 64 | 108 | **199** | **662** |
-| **24** | **320** | 128 | 64 | 108 | **152** | **594** |
+All fifteen `global_*` kernels in `lowering/kernel_resources.csv`, nothing
+omitted:
+
+| rank | instrs | VGPR | AGPR | SGPR | VGPR spill | SGPR spill | scratch |
+|---|---|---|---|---|---|---|---|
+| 14 | 16,521 | 128 | 64 | 106 | 0 | 4 | 352 |
+| 11 | 16,415 | 128 | 64 | 106 | 0 | 4 | 320 |
+| 11 | 16,415 | 128 | 64 | 106 | 0 | 4 | 320 |
+| 13 | 9,359 | 128 | 64 | 106 | 0 | 4 | 336 |
+| 13 | 9,359 | 128 | 64 | 106 | 0 | 4 | 336 |
+| 11 | 8,952 | 128 | 64 | 106 | 0 | 4 | 320 |
+| 11 | 8,952 | 128 | 64 | 106 | 0 | 4 | 320 |
+| 12 | 4,296 | 128 | 64 | 106 | 0 | 4 | 320 |
+| 12 | 4,296 | 128 | 64 | 106 | 0 | 0 | 320 |
+| 20 | 418 | **104** | **40** | 106 | 0 | 0 | 96 |
+| 20 | 387 | **106** | **42** | 106 | 0 | 0 | 112 |
+| 21 | 393 | **104** | **40** | 106 | 0 | 0 | 112 |
+| **22** | **359** | 128 | 64 | 108 | **136** | **762** | 448 |
+| **23** | **335** | 128 | 64 | 108 | **199** | **662** | 576 |
+| **24** | **320** | 128 | 64 | 108 | **152** | **594** | 480 |
 
 The three spilling kernels are the three **shortest** in the tier. A rank-14
 kernel emits 16,521 instructions — 46× more than rank 22's 359 — and spills 4
@@ -225,6 +268,14 @@ SGPRs. Instruction count is not the mechanism; if anything the correlation runs
 backwards. That also disposes of the "qv24 is an anomaly because it has the
 fewest instructions" story: fewest instructions is the norm among the spillers,
 not an exception.
+
+The full listing sharpens the boundary. **Rank 20–21 is the only region in the
+tier where the allocator does not take the VGPR 128 / AGPR 64 cap** — three
+kernels at 104–106 / 40–42, all with zero spill and the smallest scratch in the
+tier (96–112 B). Every other kernel, at rank 11–14 and at rank 22–24 alike, is
+at the cap. So the rank-22 break is not "the allocator hits the cap"; the
+long rank-11–14 kernels are at the cap too and spill 4 SGPRs at most. It is that
+rank 22 hits the cap **and** finds nothing left to overflow into.
 
 What actually changes at the boundary is narrower than expected. Diffing the
 emitted C for rank 21 against rank 22 with all numeric literals normalized shows
