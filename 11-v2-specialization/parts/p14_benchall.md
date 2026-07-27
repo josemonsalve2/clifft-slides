@@ -176,11 +176,18 @@ leaves behind. **Read the measured LDS size, not the fixture name.**
 Three observations, all structural:
 
 - **LDS.** V2's coop kernels declare `lds_v[1024]` + `lds_red_scratch[512]` at
-  8 B each = 12,288 B, plus `lds_state` → 13,312 B. The global kernels declare
-  neither, because at rank > 10 the amplitudes live in HBM; their 1,024 B is
-  `lds_state` and `lds_shot` (`v2_specializer.cc:185-186`, `:204-205`). SVM
+  8 B each = 12,288 B, plus `lds_red0`/`lds_red1` (128 B) and `lds_state` —
+  13,064 B in the ELF, which the profiler reports as 13,312 (see below). The
+  global kernels declare neither amplitude array, because at rank > 10 the
+  amplitudes live in HBM; their ELF figure is 784 B of `lds_state` and
+  `lds_shot` (`v2_specializer.cc:185-186`, `:204-205`), reported as 1,024. SVM
   provisions 23,040 / 8,704 B for the same tiers. The 8.5× global-tier gap is a
   consequence of where the amplitudes live, not of tuning.
+
+  > `rocprofv3` reports `LDS_Block_Size` **rounded up to a 256-byte granule**:
+  > 13,064 → 13,312 and 784 → 1,024. The ELF `.group_segment_fixed_size` is the
+  > declared size; the profiler figure is the dispatch allocation. This table
+  > quotes the profiler throughout, for consistency with its other columns.
 - **Scratch, register tier.** 656–1,040 B against SVM's uniform 4,480 B — 4.3×.
   SVM must provision for the worst opcode it *might* interpret; V2 provisions for
   the opcodes the circuit actually contains.

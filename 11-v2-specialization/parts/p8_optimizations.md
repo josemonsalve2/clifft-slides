@@ -213,9 +213,16 @@ form "the buffer was declared for a worst case that cannot happen":
 booleans and every access is tid0-only, so `u8 lds_meas[4096]` (4 KB) packs to
 `u64 lds_meas[64]` (512 B) behind three accessors (`mget`/`mset`/`mxor1`)
 replacing all 15 access sites. 16,896 → 13,312 bytes (`ldscheck_50021.log`).
-Today's HEAD reports 13,064 in the ELF metadata
-(`.group_segment_fixed_size: 13064`); the extra 248 bytes were reclaimed by
-later changes.
+
+> **The 13,312 / 13,064 discrepancy is a reporting granule, not a change.**
+> Every coop `.hsaco` on disk — the interpreter and all specializations alike —
+> records `.group_segment_fixed_size: 13064`, while `rocprofv3` reports
+> `LDS_Block_Size` 13,312 for the same kernels. An earlier draft of this section
+> read the difference as 248 bytes "reclaimed by later changes." It is not:
+> **13,312 is 13,064 rounded up to the next 256-byte granule**, and the
+> global tier shows the identical pattern (ELF 784 → profiler 1,024, also the
+> next multiple of 256). The two numbers describe one allocation. §15's tables
+> are profiler-sourced and therefore quote the rounded figures throughout.
 
 > **Correction — the "2 → 4 wg/CU" claim in both commit messages is wrong on
 > this hardware, and the mechanism was not occupancy.** Both messages derive

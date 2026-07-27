@@ -310,11 +310,17 @@ and was recorded as *unmeasured* rather than rounded down to zero.)
 | register | 0 B | 0 B | — |
 
 The coop figure is the sum of the declared arrays — `lds_v[1024]` and
-`lds_red_scratch[512]` at 8 B each is 12,288 B, plus `lds_state` — and the
-global-tier kernel declares neither, because at rank > 10 the amplitudes live in
-HBM. Its 1,024 B is `lds_state` and `lds_shot` alone
+`lds_red_scratch[512]` at 8 B each is 12,288 B, plus `lds_red0`/`lds_red1`
+(128 B) and `lds_state`, for 13,064 B in the ELF — and the global-tier kernel
+declares neither amplitude array, because at rank > 10 the amplitudes live in
+HBM. Its ELF figure is 784 B of `lds_state` and `lds_shot` alone
 (`v2_specializer.cc:204-205`). The 8.5× gap is therefore a consequence of the
 tier's design, not a tuning result.
+
+> The table quotes `rocprofv3`'s `LDS_Block_Size`, which is the ELF
+> `.group_segment_fixed_size` **rounded up to a 256-byte granule**: 13,064 →
+> 13,312 and 784 → 1,024. Both columns are rounded the same way, so the ratios
+> are unaffected. See §9.3 for how this granule was mistaken for a code change.
 
 The dynamic counter agrees. `SQ_INSTS_LDS` on the coop tier runs 0.60–0.77× SVM;
 on the register tier V2 executes **zero** LDS instructions against SVM's 25,280.

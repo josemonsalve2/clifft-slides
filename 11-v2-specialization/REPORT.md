@@ -3533,9 +3533,16 @@ form "the buffer was declared for a worst case that cannot happen":
 booleans and every access is tid0-only, so `u8 lds_meas[4096]` (4 KB) packs to
 `u64 lds_meas[64]` (512 B) behind three accessors (`mget`/`mset`/`mxor1`)
 replacing all 15 access sites. 16,896 → 13,312 bytes (`ldscheck_50021.log`).
-Today's HEAD reports 13,064 in the ELF metadata
-(`.group_segment_fixed_size: 13064`); the extra 248 bytes were reclaimed by
-later changes.
+
+> **The 13,312 / 13,064 discrepancy is a reporting granule, not a change.**
+> Every coop `.hsaco` on disk — the interpreter and all specializations alike —
+> records `.group_segment_fixed_size: 13064`, while `rocprofv3` reports
+> `LDS_Block_Size` 13,312 for the same kernels. An earlier draft of this section
+> read the difference as 248 bytes "reclaimed by later changes." It is not:
+> **13,312 is 13,064 rounded up to the next 256-byte granule**, and the
+> global tier shows the identical pattern (ELF 784 → profiler 1,024, also the
+> next multiple of 256). The two numbers describe one allocation. §15's tables
+> are profiler-sourced and therefore quote the rounded figures throughout.
 
 > **Correction — the "2 → 4 wg/CU" claim in both commit messages is wrong on
 > this hardware, and the mechanism was not occupancy.** Both messages derive
@@ -5382,11 +5389,17 @@ and was recorded as *unmeasured* rather than rounded down to zero.)
 | register | 0 B | 0 B | — |
 
 The coop figure is the sum of the declared arrays — `lds_v[1024]` and
-`lds_red_scratch[512]` at 8 B each is 12,288 B, plus `lds_state` — and the
-global-tier kernel declares neither, because at rank > 10 the amplitudes live in
-HBM. Its 1,024 B is `lds_state` and `lds_shot` alone
+`lds_red_scratch[512]` at 8 B each is 12,288 B, plus `lds_red0`/`lds_red1`
+(128 B) and `lds_state`, for 13,064 B in the ELF — and the global-tier kernel
+declares neither amplitude array, because at rank > 10 the amplitudes live in
+HBM. Its ELF figure is 784 B of `lds_state` and `lds_shot` alone
 (`v2_specializer.cc:204-205`). The 8.5× gap is therefore a consequence of the
 tier's design, not a tuning result.
+
+> The table quotes `rocprofv3`'s `LDS_Block_Size`, which is the ELF
+> `.group_segment_fixed_size` **rounded up to a 256-byte granule**: 13,064 →
+> 13,312 and 784 → 1,024. Both columns are rounded the same way, so the ratios
+> are unaffected. See §9.3 for how this granule was mistaken for a code change.
 
 The dynamic counter agrees. `SQ_INSTS_LDS` on the coop tier runs 0.60–0.77× SVM;
 on the register tier V2 executes **zero** LDS instructions against SVM's 25,280.
@@ -5616,11 +5629,18 @@ leaves behind. **Read the measured LDS size, not the fixture name.**
 Three observations, all structural:
 
 - **LDS.** V2's coop kernels declare `lds_v[1024]` + `lds_red_scratch[512]` at
-  8 B each = 12,288 B, plus `lds_state` → 13,312 B. The global kernels declare
-  neither, because at rank > 10 the amplitudes live in HBM; their 1,024 B is
-  `lds_state` and `lds_shot` (`v2_specializer.cc:185-186`, `:204-205`). SVM
+  8 B each = 12,288 B, plus `lds_red0`/`lds_red1` (128 B) and `lds_state` —
+  13,064 B in the ELF, which the profiler reports as 13,312 (see below). The
+  global kernels declare neither amplitude array, because at rank > 10 the
+  amplitudes live in HBM; their ELF figure is 784 B of `lds_state` and
+  `lds_shot` (`v2_specializer.cc:185-186`, `:204-205`), reported as 1,024. SVM
   provisions 23,040 / 8,704 B for the same tiers. The 8.5× global-tier gap is a
   consequence of where the amplitudes live, not of tuning.
+
+  > `rocprofv3` reports `LDS_Block_Size` **rounded up to a 256-byte granule**:
+  > 13,064 → 13,312 and 784 → 1,024. The ELF `.group_segment_fixed_size` is the
+  > declared size; the profiler figure is the dispatch allocation. This table
+  > quotes the profiler throughout, for consistency with its other columns.
 - **Scratch, register tier.** 656–1,040 B against SVM's uniform 4,480 B — 4.3×.
   SVM must provision for the worst opcode it *might* interpret; V2 provisions for
   the opcodes the circuit actually contains.
