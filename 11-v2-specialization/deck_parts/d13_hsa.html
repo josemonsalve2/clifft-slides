@@ -1,0 +1,393 @@
+
+    <!-- ================= 13. Removing HIP, introducing HSA ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">13</div>
+      <h1>Removing HIP,<br/>introducing HSA</h1>
+      <div class="section-sub">What the policy is worth, what the in-tree justification got wrong by ~44&times;,
+      and the bill it has already come due for.</div>
+    </section>
+
+    <section>
+      <h2>The short version, up front, so the numbers read correctly</h2>
+      <div class="verdict verdict-good">V2's dispatch policy is stated as an absolute: <b>avoid HIP at all
+      cost; HSA-based dispatch and runtime management.</b></div>
+      <div class="summary-grid">
+        <div class="card card-success">
+          <div class="h">HSA persistent beats HIP synchronized by <b>1.74&times;</b></div>
+          <div class="d">4,671 ns per dispatch.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">The pre-existing <em>naive</em> HSA path was <b>31&times; worse than either</b></div>
+          <div class="d">The single largest dispatch finding here &mdash; and the one the in-tree comments
+          got most wrong.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">But V2 issues <b>one dispatch per run</b></div>
+          <div class="d">At the median circuit that 1.74&times; is worth <b>0.03% of kernel time</b>. It is
+          decisive only in the short tail.</div>
+        </div>
+        <div class="card card-purple">
+          <div class="h">The policy's real cost was a <b>correctness</b> bug</div>
+          <div class="d">&sect;11.2, not a performance one.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>13.1 &nbsp;What HIP actually does per launch</h2>
+      <p class="lede">A HIP kernel launch is <b>not a doorbell write</b>. <code>hipLaunchKernelGGL</code>
+      enters the CLR runtime, which <b>validates arguments</b>, <b>resolves the kernel from a module</b>,
+      <b>packs the kernarg segment</b> into a runtime-managed pool, <b>builds an AQL packet</b>, and
+      <b>enqueues it on a stream</b> &mdash; and <code>hipStreamSynchronize</code> then re-enters the runtime
+      to wait.</p>
+      <div class="insight">Underneath, <b>all of it becomes the same AQL packet on the same hardware queue
+      that HSA exposes directly.</b> The question is only what the abstraction costs.</div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">Every prior answer in this tree predates the current hardware, and none compares the two runtimes</div>
+        <div class="d"><code>hsa_persistent_dispatch.h</code> documents per-op costs
+        (<code>alloc_kernarg ~800 ns</code>, <code>allow_gpu_access ~1200 ns</code>,
+        <code>signal_create ~600 ns</code>, <em>"~3.3 µs saved of ~4.5 µs total"</em>) under the label
+        <em>"measured on MI300X"</em> &mdash; <b>a different chip, a different ROCm, and no reproducible
+        artifact in the tree. There is no HIP-side number at all.</b>
+        <hr/>
+        So <b>the policy that shapes V2's entire host path rested on an unverified comparison that was never
+        actually run.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>13.2 &nbsp;The experiment</h2>
+      <pre><code><span class="cm">// empty_kernel.c — the smallest possible amdgcn kernel.</span>
+<span class="cm">//</span>
+<span class="cm">// The point of an empty kernel is that its GPU execution time is a floor</span>
+<span class="cm">// (a few hundred ns of wave launch + s_endpgm), so end-to-end launch-to-</span>
+<span class="cm">// completion latency measured on the host is DOMINATED by the runtime's</span>
+<span class="cm">// dispatch path. That is exactly the quantity we want to attribute to</span>
+<span class="cm">// HIP vs raw HSA.</span>
+__attribute__((visibility(<span class="st">"default"</span>)))
+__attribute__((amdgpu_kernel))
+<span class="kw">void</span> <span class="fn">bench_empty</span>(<span class="kw">unsigned char</span>* out, u64 a, u64 b, u64 c, u64 d) {
+    u32 t = <span class="fn">__builtin_amdgcn_workitem_id_x</span>();
+    <span class="kw">if</span> (t == 0u) out[0] = (<span class="kw">unsigned char</span>)(a ^ b ^ c ^ d);
+}</code></pre>
+      <div class="insight">Five arguments and one byte written, so <b>the compiler cannot delete the body</b>
+      and the kernarg segment is non-trivially sized. The benchmark <b>reads the segment size back out of the
+      loaded code object</b> rather than assuming it, and prints it in the run header &mdash;
+      <code>kernarg_seg=40</code> &mdash; so <b>the packet being timed is demonstrably carrying real
+      arguments.</b></div>
+      <pre><code><span class="cm"># compiled with the specializer's flags verbatim (run_bench.sh:28-29)</span>
+clang --target=amdgcn-amd-amdhsa -mcpu=gfx950 -ffreestanding -nostdlib \
+      -nogpulib -std=c23 -O2 -ffp-contract=off -c -emit-llvm -o bench_empty.bc</code></pre>
+    </section>
+
+    <section>
+      <h2>Six modes, three per runtime &mdash; all measuring the same quantity</h2>
+      <table class="tight">
+        <thead><tr><th>runtime</th><th>mode</th><th>what it does</th></tr></thead>
+        <tbody>
+          <tr><td>HSA</td><td><code>naive</code></td><td>alloc kernarg + <code>agents_allow_access</code> + <code>signal_create</code> per dispatch, destroy + free after &mdash; what <code>hsa_dispatch_and_wait</code> did <b>before</b> <code>PersistentDispatcher</code></td></tr>
+          <tr><td>HSA</td><td><code>persistent</code></td><td>kernarg + signal allocated once; packet written per dispatch; signal reset with <code>store_relaxed</code> &mdash; <b>V2's hot path</b></td></tr>
+          <tr><td>HSA</td><td><code>batched16</code></td><td>16 packets published back-to-back, doorbell rung once, wait once on the last</td></tr>
+          <tr><td>HIP</td><td><code>sync</code></td><td><code>&lt;&lt;&lt;&gt;&gt;&gt;</code> + <code>hipDeviceSynchronize</code></td></tr>
+          <tr><td>HIP</td><td><code>stream_sync</code></td><td><code>&lt;&lt;&lt;&gt;&gt;&gt;</code> + <code>hipStreamSynchronize</code></td></tr>
+          <tr><td>HIP</td><td><code>launch_only</code></td><td><code>&lt;&lt;&lt;&gt;&gt;&gt;</code> only, no sync &mdash; HIP's <em>asynchronous enqueue floor</em></td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good">All six measure <b>launch-to-completion wall latency per
+      dispatch</b> &mdash; the same quantity on both sides, <b>which is what makes them comparable.</b></div>
+      <div class="footnote">Both runtimes in <b>one SLURM job on one node</b> (50507,
+      <code>smci350-rck-g03-d13-21</code>, gfx950, ROCm 7.2.3), 2,000 iterations &times; 5 reps. <b>The
+      partition is heterogeneous, so measuring the two arms on different nodes would have been
+      worthless.</b></div>
+    </section>
+
+    <section>
+      <h2>13.3 &nbsp;The result &mdash; ns per dispatch, all five reps</h2>
+      <table class="tight">
+        <thead><tr><th>mode</th><th class="num">rep 0</th><th class="num">rep 1</th><th class="num">rep 2</th><th class="num">rep 3</th><th class="num">rep 4</th><th class="num">steady state</th></tr></thead>
+        <tbody>
+          <tr><td>HSA <code>naive</code></td><td class="num">198,920</td><td class="num">201,622</td><td class="num">203,587</td><td class="num">193,931</td><td class="num">191,615</td><td class="num lose"><b>197,935</b></td></tr>
+          <tr><td>HSA <code>persistent</code></td><td class="num">6,333</td><td class="num">6,329</td><td class="num">6,323</td><td class="num">6,325</td><td class="num">6,320</td><td class="num win"><b>6,326</b></td></tr>
+          <tr><td>HSA <code>batched16</code></td><td class="num">2,326</td><td class="num">2,318</td><td class="num">2,318</td><td class="num">2,318</td><td class="num">2,318</td><td class="num win"><b>2,320</b></td></tr>
+          <tr><td>HIP <code>sync</code></td><td class="num">13,668</td><td class="num">10,739</td><td class="num">10,731</td><td class="num">10,745</td><td class="num">10,734</td><td class="num"><b>10,737</b></td></tr>
+          <tr><td>HIP <code>stream_sync</code></td><td class="num">10,993</td><td class="num">11,002</td><td class="num">10,992</td><td class="num">11,000</td><td class="num">10,997</td><td class="num"><b>10,997</b></td></tr>
+          <tr><td>HIP <code>launch_only</code></td><td class="num">2,106</td><td class="num">2,088</td><td class="num">2,090</td><td class="num">2,085</td><td class="num">2,095</td><td class="num"><b>2,093</b></td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">Reproducibility is strong where it matters</div>
+          <div class="d">Across reps 1&ndash;4 the peak-to-peak spread is <b>0.15% for
+          <code>persistent</code>, 0.02% for <code>batched16</code>, 0.13% for HIP <code>sync</code> and
+          0.09% for <code>stream_sync</code></b> &mdash; the two numbers the headline rests on are stable to
+          <b>two parts in a thousand</b>.
+          <hr/>
+          HIP <code>sync</code> rep 0 carries a visible first-touch cost (13,668 &rarr; 10,739), which is why
+          it is excluded from its steady-state column.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">Two modes are noisier &mdash; read them with that in mind</div>
+          <div class="d"><code>launch_only</code> spreads 0.44% and <code>naive</code> spreads <b>6%</b>
+          (191.6&ndash;203.6 µs). The naive path's variance is unsurprising: <b>two KFD ioctls and a
+          page-table update per dispatch</b>, so it inherits kernel-side scheduling jitter.
+          <hr/>
+          <b>It doesn't matter for any conclusion drawn here, because the effect being measured is
+          31&times;.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The headline comparison &mdash; same kernel, same node, same completion semantics</h2>
+      <table class="tight">
+        <thead><tr><th></th><th class="num">ns/dispatch</th><th class="num">vs HIP <code>stream_sync</code></th></tr></thead>
+        <tbody>
+          <tr><td>HIP <code>stream_sync</code></td><td class="num">10,997</td><td class="num">1.00&times;</td></tr>
+          <tr><td><b>HSA <code>persistent</code></b> (V2's hot path)</td><td class="num win"><b>6,326</b></td><td class="num win"><b>1.74&times; faster</b> (&minus;4,671 ns)</td></tr>
+          <tr><td><b>HSA <code>batched16</code></b> (not yet used)</td><td class="num win"><b>2,320</b></td><td class="num win"><b>4.74&times; faster</b> (&minus;8,677 ns)</td></tr>
+        </tbody>
+      </table>
+      <figure>
+        <img src="diagrams/dispatch-latency.svg" class="mid" alt="Per-dispatch latency, HSA vs HIP, six modes" />
+        <figcaption><b>Figure 13.1</b> &mdash; Launch-to-completion latency per dispatch on gfx950
+        (job 50507). Log scale: the naive HSA path is <b>31&times;</b> worse than V2's persistent path, and
+        batched HSA <em>with</em> a completion wait lands within <b>11%</b> of what HIP charges for an
+        <em>unsynchronized</em> enqueue.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>13.4 &nbsp;Reading the result honestly &mdash; observations 1 and 2</h2>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">1. HSA is worth 1.74&times; on the synchronized path</div>
+          <div class="d">6,326 vs 10,997 ns. That <b>4,671 ns per dispatch is pure runtime
+          abstraction</b> &mdash; identical kernel, identical hardware queue, identical completion
+          semantics, <b>differing only in who builds the AQL packet.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">2. Batching is worth <em>more</em> than the runtime choice</div>
+          <div class="d"><code>batched16</code> at 2,320 ns is <b>2.73&times; better than
+          <code>persistent</code></b> &mdash; a <b>larger factor than HSA-vs-HIP's 1.74&times;</b>.
+          Amortizing the doorbell and the completion wait across 16 packets <b>beats any per-dispatch
+          micro-optimization available on either runtime.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">The useful comparison is against <b>HIP's <code>launch_only</code>
+      floor of 2,093 ns</b>, the cost of enqueueing <em>without ever waiting</em>. Batched HSA reaches
+      2,320 ns <b><em>while still paying for a completion wait</em></b> &mdash; 11% above HIP's
+      fire-and-forget cost, <b>for strictly stronger semantics.</b>
+      <hr/>
+      Put the other way: <b>HIP charges nearly as much to merely hand a packet to a stream as batched HSA
+      charges to dispatch it and observe it finish.</b></div>
+    </section>
+
+    <section>
+      <h2>3. The in-tree numbers this replaces were wrong by ~44&times;</h2>
+      <p class="lede"><code>hsa_persistent_dispatch.h:36-42</code> carries a cost model &mdash; labelled
+      <em>"measured on MI300X"</em> &mdash; that itemizes <b>exactly the operations the <code>naive</code>
+      mode performs</b>:</p>
+      <pre><code><span class="cm">/// Eliminated per-dispatch costs (measured on MI300X):</span>
+<span class="cm">///   - alloc_kernarg:      ~800ns  (pool allocator + bookkeeping)</span>
+<span class="cm">///   - allow_gpu_access:   ~1200ns (kernel call into KFD for page table update)</span>
+<span class="cm">///   - signal_create:      ~600ns  (KFD ioctl for doorbell-backed signal)</span>
+<span class="cm">///   - signal_destroy:     ~400ns  (KFD ioctl)</span>
+<span class="cm">///   - free_kernarg:       ~300ns  (pool return + bookkeeping)</span>
+<span class="cm">///   Total saved:          ~3.3us per dispatch (of ~4.5us total overhead)</span></code></pre>
+      <p class="lede">The <code>naive</code> mode is a <b>faithful reimplementation of that op
+      sequence</b>, so the two are directly comparable:</p>
+      <table class="tight">
+        <thead><tr><th>claim</th><th class="num">asserted</th><th class="num">measured</th><th class="num">error</th></tr></thead>
+        <tbody>
+          <tr><td>naive per-dispatch cost</td><td class="num">~4.5 µs total</td><td class="num lose"><b>~198 µs</b></td><td class="num lose"><b>44&times; understated</b></td></tr>
+          <tr><td>saving from persistent resources</td><td class="num">~3.3 µs</td><td class="num lose"><b>~192 µs</b> (198,000 &minus; 6,326)</td><td class="num lose"><b>58&times; understated</b></td></tr>
+        </tbody>
+      </table>
+      <div class="footnote">One precision note in the header's favour: its "~4.5 µs" is labelled
+      <em>overhead</em>, while 198 µs is <em>total launch-to-completion latency</em>. But the two are
+      separated by only the 6,326 ns <code>persistent</code> floor &mdash; subtract it and the eliminated
+      cost is still ~192 µs against an asserted ~3.3 µs. <b>The gap is not an accounting artifact.</b></div>
+    </section>
+
+    <section>
+      <h2>What that correction reframes</h2>
+      <div class="verdict verdict-mixed">The <em>direction</em> was right and the <em>magnitude</em> was
+      badly wrong. Per-dispatch <code>hsa_amd_memory_pool_allocate</code> +
+      <code>hsa_amd_agents_allow_access</code> + <code>hsa_signal_create</code> costs <b>~198 µs, not
+      ~4.5 µs</b> &mdash; <code>agents_allow_access</code> in particular is <b>a KFD call that updates GPU
+      page tables</b>, and paying that per launch dwarfs everything else in the system.</div>
+      <div class="insight">This is <b>the strongest single argument for <code>PersistentDispatcher</code>,
+      and nobody had actually measured it.</b></div>
+      <div class="card card-hl" style="padding:0.9em;">
+        <div class="h">It also reframes the priority order</div>
+        <div class="d">Against a ~10 µs HIP dispatch, a millisecond-scale kernel is <b>dominated by
+        compute</b>. Against a ~198 µs naive dispatch, <b>dispatch is a first-order cost for anything
+        short</b> &mdash; which is exactly the regime the v1-era <code>PERFORMANCE_OPTIONS.md</code> was
+        written in, and <b>why "host dispatch overhead" was labelled the dominant bottleneck there.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>13.4a &nbsp;How much of this does V2 actually collect?</h2>
+      <p class="lede">Honesty requires answering the obvious follow-up: <b>V2 does one dispatch per
+      <em>run</em>, not one per shot.</b> The shot loop is inside the kernel (&sect;4's R5 principle), and
+      <code>n_dispatches</code> is <b>1 for all 26 tier-5+ circuits</b> in the corpus. So the 4,671 ns saving
+      is paid once, and its weight is 4,671 ns divided by the whole kernel time:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th>tier</th><th class="num">V2 kernel</th><th class="num">4,671 ns as % of it</th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td>register</td><td class="num">12.1 µs</td><td class="num lose"><b>38.7 %</b></td></tr>
+          <tr><td><code>four_t</code></td><td>register</td><td class="num">13.1 µs</td><td class="num lose"><b>35.7 %</b></td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td>coop</td><td class="num">220.7 µs</td><td class="num">2.12 %</td></tr>
+          <tr><td><code>qv10</code></td><td>coop</td><td class="num">1.386 ms</td><td class="num">0.337 %</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td>coop</td><td class="num">8.600 ms</td><td class="num">0.054 %</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td>coop</td><td class="num">16.42 ms</td><td class="num">0.028 %</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td>global</td><td class="num">7.242 s</td><td class="num win">0.00006 %</td></tr>
+        </tbody>
+      </table>
+      <div class="footnote">Measured on the canonical run (job 50793), whose <code>n_dispatches</code> is
+      <b>1 for all 26 circuits</b> &mdash; so this is <b>exact, not an assumption</b>.</div>
+    </section>
+
+    <section>
+      <h2>An earlier version of this table was stale in a way worth recording</h2>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="d">It quoted <code>circuit_d5_p0.001</code> at <b>14.76 ms</b> and
+        <code>cultivation_d5</code> at <b>30.15 ms</b> from the two <code>f13-21</code> runs. <b>Those are
+        <em>interpreter</em> times</b>: both circuits map to <code>coop_r10_n1720</code>, whose gate verdict
+        was a <b>stale pre-fence <em>failure</em></b> (&sect;11.4), so V2 fell back to the interpreter for
+        exactly that shape.
+        <hr/>
+        The canonical run has the gate passing and the specializer selected, at <b>8.60 ms</b> and
+        <b>16.42 ms</b> &mdash; 1.72&times; and 1.84&times; faster. The percentages barely moved (0.032%
+        &rarr; 0.054%) so <b>no conclusion changed</b>, but <b>the absolute times were measuring a different
+        kernel than the one the surrounding text describes.</b></div>
+      </div>
+      <div class="card card-hl" style="padding:0.9em;">
+        <div class="h">The two register-tier rows carry the effect and deserve a stability note</div>
+        <div class="d">At 12&ndash;13 µs a kernel is close enough to the measurement floor that
+        <b>run-to-run variation is comparable to the effect.</b> The two earlier <code>f13-21</code> runs put
+        <code>four_t</code> at 13.2 and 10.1 µs and <code>frame_h</code> at 13.6 and 10.0 µs, spanning
+        <b>34&ndash;47%</b>. Read the short-tail figure as <b>~35&ndash;47%</b>, not as a single number.
+        <hr/>
+        Those two circuits are <b>unaffected by the stale cache in the first place</b>: register tier
+        (LDS = 0, VGPR = 32), and &sect;11.2's A/B rebuild showed the register-tier binary is
+        <b>byte-identical by md5</b> before and after the barrier fix &mdash; 4,457 instructions, zero
+        barriers, nothing to fence. <b>All three runs measured the same code for these rows.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The conclusion cuts against a naive reading of &sect;13.3</h2>
+      <div class="verdict verdict-bad"><b>For V2's production workloads, the HSA-vs-HIP dispatch difference
+      is negligible.</b> At the median circuit it is <b>well under 0.1% of kernel time</b>. The 1.74&times;
+      is a real property of the dispatch path and <b>it is not where V2's speedup comes from</b> &mdash;
+      &sect;14 attributes that to the kernel.</div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Where it <em>does</em> matter: the short tail</div>
+          <div class="d"><code>four_t</code> and <code>frame_h</code> run for 10&ndash;13 µs, so a single HIP
+          dispatch would add <b>35&ndash;47%</b> to their cost, and the ~198 µs naive path would have cost
+          <b>15&ndash;20&times; the kernel itself</b> (16.4&times; and 15.1&times; on the canonical run's
+          12.1 and 13.1 µs).
+          <hr/>
+          <b>Those two circuits are also exactly the ones a user iterates on interactively.</b> And the
+          correctness gate (&sect;9) dispatches per validation, as does any future per-batch structure.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The defensible framing</div>
+          <div class="d">Not <em>"it makes V2 fast."</em> Rather:
+          <hr/>
+          <b><em>dispatch overhead is a fixed floor that becomes the entire cost at small problem sizes, and
+          HSA puts that floor 1.74&times; lower &mdash; and 31&times; lower than the naive path the code
+          started from.</em></b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>13.5 &nbsp;What the no-HIP policy has cost</h2>
+      <p class="lede">The policy is not free, and <b>&sect;11.2 is the invoice.</b></p>
+      <div class="insight"><code>v2_barrier()</code> was hand-rolled to avoid HIP's
+      <code>__syncthreads()</code>. HIP's version expands to a <b>release/acquire fence pair</b> around
+      <code>s_barrier</code>; V2's expanded to a <b>bare <code>s_barrier</code></b>, which on AMDGCN orders
+      <b>execution but not memory</b>. The result was a workgroup-level data race exposed at <b>92.8% of the
+      specialized kernel's barriers</b>, which corrupted reduction totals, which flipped measurement
+      outcomes.</div>
+      <div class="verdict verdict-bad">V2 hand-rolled the barrier to avoid HIP and lost the fence with
+      it.</div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The honest shape of the trade</div>
+        <div class="d"><b>HIP's abstraction costs 4,671 ns per dispatch, and it also encodes correctness
+        knowledge that is easy to lose when you reimplement it.</b>
+        <hr/>
+        Combine that with &sect;13.4a &mdash; where the saving is worth 0.03% of a median run &mdash; and the
+        accounting is uncomfortable: <b>on the workloads V2 actually runs, the no-HIP policy bought a
+        fraction of a percent and cost weeks of debugging a memory-model detail that
+        <code>__syncthreads()</code> had been handling silently.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>That is not an argument for reverting</h2>
+      <p class="lede">The policy remains right for three reasons that are <b>not about the 1.74&times;</b>:</p>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">1. The short tail is real</div>
+          <div class="d">At 13 µs, <code>four_t</code> pays <b>35%</b> for a HIP dispatch.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">2. Self-containment</div>
+          <div class="d">V2's whole premise is emitting <b>freestanding amdgcn</b> and loading it directly; a
+          <code>.hsaco</code> produced by <code>clang --target=amdgcn-amd-amdhsa</code> <b>has no HIP module
+          to be launched from</b>. HSA is not an optimization here so much as <b>the native interface for
+          what V2 already builds.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">3. The naive-path finding</div>
+          <div class="d">198 µs &rarr; 6.3 µs is a <b>31&times; win that exists only because the dispatch
+          layer is owned rather than delegated.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed">The cost is stated as plainly as the benefit: <b>reimplementing a
+      runtime means reimplementing its invariants, and &sect;11.2 is what that looks like when one is
+      missed.</b></div>
+    </section>
+
+    <section>
+      <h2>HIP has not been removed from the <em>repository</em></h2>
+      <p class="lede">The SVM and Hybrid backends still use it (<code>hip_sampler.hip</code>), and the
+      constraint on this work was explicitly <em>"no CMake, ONLY on the MLIR part, no changes to SVM or
+      hybrid."</em> What V2 removed is HIP from <b>its own</b> dispatch and device-side synchronization path.
+      <b>That removal is total and checkable:</b></p>
+      <pre><code>$ grep -rn <span class="st">"#include.*hip"</span>            src/clifft/gpu/mlir/v2/   <span class="cm"># (none)</span>
+$ grep -rnE <span class="st">"\bhip[A-Z][A-Za-z]*\s*\("</span> src/clifft/gpu/mlir/v2/  <span class="cm"># (none)</span>
+$ grep -rn <span class="st">"__syncthreads"</span>             src/clifft/gpu/mlir/v2/
+v2_ops.h:130:  <span class="cm">// ... HIP's __syncthreads() expands to exactly this,</span></code></pre>
+      <div class="verdict verdict-good"><b>Zero HIP headers, zero HIP API calls.</b> All 13 lines in the
+      directory that match "hip" case-insensitively are <b>comments</b> &mdash; and the sole
+      <code>__syncthreads</code> reference is the &sect;11.2 post-mortem note explaining what V2's
+      hand-rolled barrier had been missing. Dispatch instead runs on <b>14 direct <code>hsa_*</code> call
+      sites</b> in <code>v2_kernel.cc</code>.</div>
+    </section>
+
+    <section>
+      <h2>13.6 &nbsp;What is still unmeasured</h2>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h"><code>batched16</code> is a benchmark mode, <b>not</b> something V2 does</div>
+        <div class="d">V2's hot path is <code>hsa_dispatch_and_wait</code> (the <code>persistent</code>
+        shape, 6,326 ns), called <b>exactly once per run</b>. A batched entry point exists &mdash;
+        <code>hsa_dispatch_batch_and_wait</code>, which reserves N packets plus a barrier in a single CAS
+        &mdash; but grep finds <b>no caller</b> outside the dispatch layer itself. <b>It is capability, not
+        usage.</b></div>
+      </div>
+      <div class="insight">Given &sect;13.4a, <b>that is the right call for now</b>: with one dispatch per
+      run and millisecond-to-second kernels, <b>batching has nothing to amortize.</b> It would only pay if V2
+      moved to a multi-dispatch structure &mdash; chunked shot batches for progress reporting or
+      memory-bounded rank-26 runs. Recorded in &sect;16 as <b>conditional, not as a missed win.</b></div>
+      <div class="verdict verdict-mixed">The larger caveat on this whole section: <b>an empty kernel isolates
+      dispatch cost by construction, which is what makes the comparison clean, and also what makes it an
+      upper bound on relevance.</b> &sect;13.4a is the correction, and it should be read <b>as part of the
+      result rather than as a footnote to it.</b></div>
+    </section>
