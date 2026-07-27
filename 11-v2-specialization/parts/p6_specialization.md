@@ -137,8 +137,38 @@ report:
 
 1. **The VALU ratios still exceed the instruction ratios, but the gap is now
    honest.** S1 deletes 82 % of its vector ALU work and 65 % of its
-   instructions. What replaces the deleted VALU is *scalar* work — the SGPR
-   column is the tell, and §7.3 and §14.3 develop it.
+   instructions.
+
+   An earlier draft of this chapter claimed the deleted VALU work was *replaced
+   by scalar work* — "the same computation moved from the vector pipe to the
+   scalar pipe" — and pointed at S2's SGPR column as the tell. **That claim is
+   wrong, and the data in this very table refutes it.** Counting scalar
+   instructions the same way the table counts vector ones:
+
+   | Case | SALU interp→spec | ratio | VALU interp→spec | ratio |
+   |---|---|---|---|---|
+   | S1 | 74→35 | 2.11× | 44→8 | 5.50× |
+   | S2 | 93→45 | 2.07× | 86→19 | 4.53× |
+   | S3 | 84→48 | 1.75× | 67→27 | 2.48× |
+   | S4 | 133→93 | 1.43× | 139→96 | 1.45× |
+   | S5 | 102→33 | **3.09×** | 84→33 | 2.55× |
+   | S6 | 83→36 | 2.31× | 54→42 | 1.29× |
+   | S7 | 177→141 | 1.26× | 214→210 | 1.02× |
+   | S8 | 87→49 | 1.78× | 71→63 | 1.13× |
+
+   **Scalar instructions fall in all eight cases**, and in S5, S6 and S8 they
+   fall *faster* than vector instructions. Nothing moved to the scalar pipe;
+   scalar work was deleted too, and on the array ops it was deleted harder.
+   §14.3 confirms this at corpus scale — the SALU count falls faster than the
+   VALU count on **26 of 26** circuits, and the *absolute* number of scalar
+   instructions removed exceeds the vector count removed by ~3.8× on the surface
+   family. The mechanism is deletion, not substitution.
+
+   What survives of the original observation is narrower and still true: the
+   *register* column can go up where the *instruction* column goes down (S2's
+   SGPR 13→26), because straight-line scalar code holding many folded literals
+   needs somewhere to hold them. That is a register-pressure effect, not a
+   work-migration effect.
 2. **The spread is enormous — 5.50× down to 1.02× on VALU.** Specialization is
    not a uniform multiplier. It is worth a great deal on frame/flag/index ops
    and almost nothing on data-dependent ops. Which opcodes a circuit is made of
@@ -150,19 +180,22 @@ report:
    pressure. This is the case that predicts the `circuit_d5` regression in §11.1,
    and the corrected register number strengthens that prediction rather than
    weakening it.
-4. **S2 is the one case where SGPR pressure goes *up*, 13→26.** That is the
-   scalar-substitution effect made visible: the work removed from the vector pipe
-   did not vanish, it moved, and it now lives in scalar registers. On the
-   register tier this is a good trade — SGPRs are not the occupancy limiter there
-   — but it is the mechanism, not a free lunch.
+4. **S2 is the one case where SGPR pressure goes *up*, 13→26** — while its
+   scalar *instruction* count falls 93→45 and its branch count falls to zero.
+   Fewer scalar instructions, more scalar registers: the eighteen deleted
+   branches were replaced by `s_cselect`s over folded literals, and those
+   literals have to live somewhere. On the register tier this is a good trade —
+   SGPRs are not the occupancy limiter there — but it is worth flagging as the
+   one place specialization *costs* something measurable, and as the reason the
+   register columns and the instruction columns must be read separately.
 
 <figure>
 <img src="diagrams/spec-classes-gains.svg" alt="Per-class specialization gains" width="100%">
-<figcaption><b>Figure 7.1</b> — Per-class specialization gains, instructions vs
-VALU, ordered by VALU ratio. The gap between the two bars is the
-scalar-substitution effect: work is not only deleted, it is moved off the vector
-pipe — most visibly in S2, whose SGPR count doubles as its branch count goes to
-zero. S7 (noise) is flat on both, and flat on registers too.
+<figcaption><b>Figure 7.1</b> — Per-class specialization gains, three bars per
+case: instructions, VALU and SALU, ordered by VALU ratio. All three fall in all
+eight cases; on S5, S6 and S8 the SALU bar is the tallest, which is the
+microbenchmark form of the corpus-scale finding in §14.3. S7 (noise) is flat on
+all three, and flat on registers too.
 </figcaption>
 </figure>
 
@@ -304,15 +337,23 @@ Three separate costs are visible and all three disappear under specialization:
 The 44 → 8 VALU drop (5.50×) is the sum of (2) and (3), and the whole kernel
 falls 136 → 47 instructions (2.89×) — the largest instruction-level gain in the
 study. Note also VGPR 8 → 3: with the operands and masks resolved, the op needs
-almost no vector registers, which directly raises tier occupancy (§9). The
-scalar side barely moves, 14 → 12 SGPRs, because the *same* frame words are
-still being read and XORed — they are simply addressed by literal masks now
-instead of by computed ones.
+almost no vector registers, which directly raises tier occupancy (§9).
 
-> **This is the mechanism behind the SALU finding in §14.3.** V2's speedup is
-> not primarily "fewer instructions." It is *the same computation moved from the
-> vector pipe to the scalar pipe*, where it runs once per wavefront instead of
-> once per lane, in parallel with vector work.
+The scalar *registers* barely move, 14 → 12, because the same frame words are
+still being read and XORed — they are simply addressed by literal masks now
+instead of by computed ones. But the scalar *instruction count* falls
+substantially, **74 → 35 (2.11×)**: the address arithmetic in (1), the
+`v_readfirstlane` destinations in (2), and the mask construction in (3) were
+scalar work as much as vector work, and specialization removes both.
+
+> **This is the mechanism behind the SALU finding in §14.3, and it is a deletion
+> mechanism.** V2's speedup is not "the same computation moved from the vector
+> pipe to the scalar pipe" — an earlier draft said that, and §7.2's table
+> refutes it. It is that *both* pipes issue less: the interpreter's operand
+> fetch, dispatch and address arithmetic are pure overhead with respect to the
+> simulation, and constants delete them outright. §14.3 shows the effect is
+> larger on the scalar side, by an absolute margin of roughly 3.8× on the
+> surface family.
 
 ---
 
@@ -389,13 +430,18 @@ The **2.94× is the largest instruction ratio of the eight**, though S1's 5.50×
 remains the largest VALU ratio.
 
 This is also the case where **SGPR usage doubles, 13 → 26** — the only such case
-in the study. Nothing was lost: the eighteen deleted branches and the vector work
-behind them were replaced by scalar selects and the literals they select between,
-all of which need scalar registers. It is worth stating plainly because it is the
-clearest single instance of the pattern §14.3 generalizes — specialization does
-not simply *delete* work, it **moves work from the vector pipe to the scalar
-pipe**, and the scalar pipe is not free either. It is just very much cheaper: one
-lane instead of sixty-four, and it issues in parallel with vector instructions.
+in the study, and the one place in this chapter where specialization measurably
+*costs* something. The eighteen deleted branches were replaced by `s_cselect`s
+over folded literals, and those literals need scalar registers to live in.
+
+It is worth being precise about what this does and does not show, because an
+earlier draft read it as evidence that specialization *moves* work from the
+vector pipe to the scalar pipe. It does not: S2's scalar instruction count falls
+93 → 45 at the same time as its scalar register count rises 13 → 26. Fewer
+scalar instructions, more scalar registers. The register pressure is the price
+of straight-lining, not the destination of migrated work — and §14.3 shows the
+scalar instruction count falling faster than the vector one on every circuit in
+the corpus.
 
 Why this matters more on a GPU than the raw count suggests: on AMDGCN a taken
 `s_cbranch` inside a divergent region forces `s_and_saveexec_b64` /
