@@ -108,7 +108,7 @@ baseline it must beat.
 | **SVM** | bytecode interpreter kernel | no | HIP | the baseline; fast, correct, hard to beat |
 | **Hybrid** | per-circuit HIP source, AOT-compiled | yes | HIP | correct and competitive, but HIP-bound and never pulled ahead |
 | **MLIR V1** | per-circuit hand-emitted MLIR text | yes | MLIR→LLVM | **failed**: 5–60× slower, 221 s compiles, 20 MB IR |
-| **V2** | per-circuit C, specialized operands, runtime loops | yes | C→amdgcn (no HIP) | **1.5–3.9× faster than SVM** on 20 of 26 circuits |
+| **V2** | per-circuit C, specialized operands, runtime loops | yes | C→amdgcn (no HIP) | **1.3–4.0× faster than SVM** on 20 of 26 circuits (the other 6 recovered post-fix, §1.3(d)) |
 
 ### 1.2 The headline number
 
@@ -162,9 +162,12 @@ from a corpus whose median is 0.678.
 All 26 are **byte-exact** against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).
 
-> Ratios above are from `20260726T014859Z_all-tier5plus`, which agrees with the
-> retracted run to within 0.4 %. Both are pre-fence-fix — see the provenance
-> notice at the top, and §15 for the authoritative post-fix numbers.
+> **These ratios understate V2.** They are from `20260726T014859Z_all-tier5plus`,
+> which agrees with the retracted run to within 0.4 % — but both are
+> *pre-fence-fix*, and the six losing circuits were silently running the
+> interpreter rather than the specializer because of it. Post-fix spot
+> measurements put them near 0.40 instead of 1.44 (§1.3(d)). The table is kept
+> as the conservative baseline; §15 carries the authoritative post-fix corpus.
 
 ### 1.3 The five results this report argues for
 
@@ -193,11 +196,32 @@ might guess.** It is not floating-point throughput. **SALU instruction count
 falls 3–9× on every circuit V2 wins** — that is the interpreter's `switch`
 dispatch disappearing from the scalar unit. (§14.2)
 
-**(d) V2's one loss is a correctness failure wearing a performance costume.**
-The `circuit_d5` family's specialization fails V2's own correctness gate, so
-those six circuits run the *interpreter*, and the 1.44× measures V2's
-interpreter against SVM's. Every circuit V2 wins ran `clifft_v2_spec`; every
-circuit V2 loses ran `clifft_v2_coop`. The correlation is perfect. (§11.1)
+**(d) V2's one loss was a correctness failure wearing a performance costume —
+and it has since been fixed.** The `circuit_d5` family's specialization failed
+V2's own correctness gate, so those six circuits silently fell back to the
+*interpreter*: the 1.44× "loss" was never measuring specialization at all. The
+correlation in the pre-fix data is perfect — all 20 circuits V2 wins ran
+`clifft_v2_spec`, all 6 it loses ran `clifft_v2_coop`.
+
+The cause was the execution-only `s_barrier` of §11.2. With the fence fix
+(`150d09f`) the gate verdict for `coop_r10_n1720` flips **0 → 1** on disk, the
+specializer is selected, and the six recover (job 50389, median of 5, same node,
+both arms back-to-back):
+
+| circuit | interpreter | specialized | gain |
+|---|---|---|---|
+| `circuit_d5_p0.0005` | 14.76 ms | **8.56 ms** | 1.72× |
+| `circuit_d5_p0.001` | 14.89 ms | **8.56 ms** | 1.74× |
+| `circuit_d5_p0.002` | 15.09 ms | **8.63 ms** | 1.75× |
+| `circuit_d5_p0.003` | 15.30 ms | **8.68 ms** | 1.76× |
+| `circuit_d5_p0.005` | 15.62 ms | **8.87 ms** | 1.76× |
+| `circuit_d3_p0.001` | 0.624 ms | **0.379 ms** | 1.65× |
+
+Against the SVM baselines from the same corpus this turns 1.44–1.45 **losses**
+into ratios near **0.40** — i.e. ~2.5× wins. So the headline "20 of 26" in §1.2
+is a *pre-fix* figure that the report carries only because §15's post-fix
+re-run is the arbiter; the expectation is that it becomes 26 of 26. **§1.2's
+table is the conservative reading, not the optimistic one.** (§11.1, §11.2)
 
 **(e) The f32/f64 "gap" was never really about arithmetic precision.** It was a
 threshold constant calibrated for f64 and left in place when the storage became
