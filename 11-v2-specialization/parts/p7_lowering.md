@@ -401,7 +401,7 @@ amplitudes as `f32` pairs, and both widen to `f64` in exactly the same two
 places, deliberately:
 
 ```cpp
-// V2 — v2_ops.h:193
+// V2 — v2_ops.h:206
 // f64 scalar multiply then narrow — byte-exact with SVM cscale. Do NOT relax.
 static inline CV2Complex cscale(CV2Complex a, double s) {
     CV2Complex r; r.re = (float)((double)a.re * s); r.im = (float)((double)a.im * s); return r;
@@ -440,7 +440,7 @@ B,           12038,            11148,  1380,  1586,        0,         477,      
 <figure>
 <img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" width="100%">
 <figcaption><b>Figure 8.2</b> — V1's f64 instruction volume for <code>circuit_d3</code>,
-decomposed by the A/B experiment. 68 % is 52 inlined copies of a hand-written
+decomposed by the A/B experiment. 68 % is 54 inlined copies of a hand-written
 log polynomial; the 1,380 that remain are the same PRNG, <code>cnorm</code> and
 <code>cscale</code> sites V2 has. V2 keeps <code>log()</code> as a call to
 <code>__ocml_log_f64</code> because it links ROCm device bitcode; V1 had no such
@@ -456,18 +456,22 @@ The count is exact, not estimated. `0x3FD5555555555555` is a coefficient unique
 to that polynomial, so it counts expansions directly:
 
 ```
-per-coefficient occurrence count in the V1 kernel body:
-  0x3FE62E42FEFA39EF  x52     <- ln 2
-  0x3FA1A7B9611A7B96  x52
-  ... all 13 coefficients ...  x52
+per-coefficient occurrence count in the V1 kernel body (circuit_d3.4_optO2.ll):
+  0x3FE62E42FEFA39EF  x54     <- ln 2
+  0x3FA1A7B9611A7B96  x54
+  0x3FD5555555555555  x54     <- the marker the script counts
 ```
 
-52 copies, one per `draw_next_noise` inlined into the kernel (48 emitted call
-sites; LLVM cloned 4 more when it unrolled the surrounding loops). At 37 f64
-ops per copy that is 1,924 IR-level ops — 61.3 % of the kernel's 3,141 — before
-instruction selection turns each `fdiv double` into the `v_rcp_f64` /
-`v_div_scale_f64` / `v_div_fmas_f64` / `v_div_fixup_f64` sequence that pushes
-the ISA-level share to 68 %.
+The count is uniform across every coefficient, which is what makes it a count
+of *whole expansions* rather than of incidental constants: **54 copies**, one
+per `clifft_log` inlined into the kernel. The emitter wrote **48** `clifft_draw_next_noise` call sites (each of which
+contains a `clifft_log` call) plus one direct `clifft_log` site, against a
+single shared `@clifft_log` definition; LLVM inlined all of them and cloned five
+more while unrolling the surrounding loops. At 37 f64 ops per copy that
+is 1,998 IR-level ops — 63.6 % of the kernel's 3,141 — before instruction
+selection turns each `fdiv double` into the `v_rcp_f64` / `v_div_scale_f64` /
+`v_div_fmas_f64` / `v_div_fixup_f64` sequence that pushes the ISA-level share to
+68 %.
 
 #### What is actually left
 
@@ -515,7 +519,7 @@ void emit_log_function_def(std::ostringstream& out) {          // :1422
 
 The hoist worked at *emission* — the emitted MLIR has one `@clifft_log`
 definition and 48 short call sites, and that is what kept `surface_d9_t5`
-emittable at all. Then `opt -O2` inlined all 52 copies back. The emitter
+emittable at all. Then `opt -O2` inlined all 54 copies back. The emitter
 controlled its own output and had no way to control what the optimizer did
 next.
 
@@ -542,7 +546,7 @@ In V2's final ISA the call survives as a relocation, three times:
 	s_swappc_b64 s[30:31], s[0:1]
 ```
 
-Three call sites, one shared body, against V1's 52 expansions.
+Three call sites, one shared body, against V1's 54 expansions.
 
 #### The one real arithmetic difference
 
@@ -570,7 +574,7 @@ path — not 23× on the f64 one.**
 | Where `alloca`s die | LLVM `-O2`, and only on small circuits | clang `-O2`, 2,271 → **3** (99.87 %); the 3 are a fixed per-kernel residue, not circuit-scaling |
 | Whether the optimizer stays enabled | no — detuned by IR size above threshold | yes — IR never gets large enough to matter |
 | Vectorization | none — 0 packed ops, with or without the log inlining | 459 `shufflevector` → 431 `v_pk_add_f32`, 416 `v_pk_mul_f32` |
-| `log()` | hand-written in MLIR, re-inlined 52× by `opt` | `__ocml_log_f64`, one call, three relocations |
+| `log()` | hand-written in MLIR, re-inlined 54× by `opt` | `__ocml_log_f64`, one call, three relocations |
 | f64 instructions, `circuit_d3` | 4,347 — **68 % of it inlined log** | 187 |
 | Final ISA, `circuit_d3` | 17,802 lines | **10,398 lines** |
 | Compile time, `circuit_d3` | 3.58 s | **2.04 s** |
