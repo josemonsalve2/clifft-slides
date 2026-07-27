@@ -1,0 +1,236 @@
+
+    <!-- ============================================================ -->
+    <!-- 1: Title -->
+    <!-- ============================================================ -->
+    <section class="title-slide">
+      <h1>From Interpreter<br/>to Specializer</h1>
+      <div class="subtitle">The clifft GPU Backend: SVM, Hybrid, MLIR V1, and the V2 Rebuild</div>
+      <div class="meta">
+        AMD Instinct MI350X (<code>gfx950</code>) &bull; ROCm 7.2.3 &bull; LLVM <code>upstream_05082025</code><br/>
+        <code>unitaryfoundation/clifft</code>, branch <code>mlir-v2</code> &bull; 26-circuit corpus &bull; 2026-07-27
+      </div>
+      <div class="tagline">Four generations of GPU backend. Three of them lost to a bytecode
+      interpreter. This is what it took for the fourth to win &mdash; and what the losses taught.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 2: The method rule -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>One rule governs this deck</h2>
+      <div class="stat-callout" style="max-width:640px;">
+        <div class="stat-num" style="font-size:1.6em;">Trust data, not text</div>
+        <div class="stat-label">A fact is <em>verified</em> only if it can be re-derived from a committed
+        artifact &mdash; a CSV, a <code>summary.json</code>, a SLURM log, an <code>.hsaco</code> &mdash;
+        or from a file+line in the source tree. Prose in a design doc is a <em>claim</em>, not a fact.</div>
+      </div>
+      <p class="lede" style="margin-top:0.6em;">The <code>clifft</code> tree carries months of design docs,
+      plans, post-mortems and header comments. Much is accurate. Some is stale. A little is simply wrong &mdash;
+      written from a hypothesis that measurement later refuted, and never deleted. Three findings from the
+      audit contradict documents still in the tree:</p>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">V2 does not emit MLIR</div>
+          <div class="d">It emits C. The directory is still called <code>mlir/v2/</code> for historical
+          reasons, and that name is the only MLIR left in it.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">V1 authored zero MLIR passes</div>
+          <div class="d">It ran three stock passes. One of them was a provable no-op on its input.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">V2's one &ldquo;loss&rdquo; ran the wrong kernel</div>
+          <div class="d">Its specialization failed the correctness gate and fell back to the interpreter.
+          An earlier draft of the audit itself got this wrong.</div>
+        </div>
+      </div>
+      <div class="footnote">Audit committed as <code>V2_performance/VERIFIED_FACTS.md</code>; every section
+      cites it. Two facts could not be re-measured and are marked <b>[unverified]</b> in place rather than asserted.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 3: Four generations -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Four generations of GPU backend</h2>
+      <table>
+        <thead>
+          <tr><th>generation</th><th>what it is</th><th>per-circuit compile?</th><th>device language</th><th>verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>SVM</b></td><td>bytecode interpreter kernel</td><td>no</td><td>HIP</td>
+            <td>the baseline; fast, correct, hard to beat</td>
+          </tr>
+          <tr>
+            <td><b>Hybrid</b></td><td>per-circuit HIP source, AOT-compiled</td><td>yes</td><td>HIP</td>
+            <td style="color:var(--warn);">correct and competitive, never pulled ahead</td>
+          </tr>
+          <tr>
+            <td><b>MLIR V1</b></td><td>per-circuit hand-emitted MLIR text</td><td>yes</td><td>MLIR&rarr;LLVM</td>
+            <td style="color:var(--accent);"><b>failed</b>: 5&ndash;60&times; slower, 221 s compiles, 20 MB IR</td>
+          </tr>
+          <tr>
+            <td><b>V2</b></td><td>per-circuit C, specialized operands, runtime loops</td><td>yes</td>
+            <td>C&rarr;amdgcn (no HIP)</td>
+            <td style="color:var(--success);"><b>1.0&ndash;3.9&times; faster than SVM</b> on <b>26 of 26</b></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="insight">Three of four generations tried per-circuit compilation. Two of those lost to an
+      interpreter that compiles once and ships. <b>Per-circuit compilation is not, by itself, a performance
+      strategy</b> &mdash; what you specialize matters more than that you specialize.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 4: The headline number -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>The headline: 26 circuits, 26 wins</h2>
+      <p class="lede">GPU kernel time (not host wall time), V2 against the SVM interpreter. Both backends,
+      one job, one node, zero profiler aborts.</p>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>regime</th><th class="num">n</th><th>V2/SVM</th><th>reading</th></tr></thead>
+            <tbody>
+              <tr><td>Large surface codes, global</td><td class="num">5</td>
+                  <td class="num win">0.256&ndash;0.310</td><td>3.2&ndash;3.9&times; faster</td></tr>
+              <tr><td>Mid surface + QV10, coop</td><td class="num">5</td>
+                  <td class="num win">0.319&ndash;0.534</td><td>1.9&ndash;3.1&times; faster</td></tr>
+              <tr><td>Register tier</td><td class="num">4</td>
+                  <td class="num win">0.509&ndash;0.742</td><td>1.3&ndash;2.0&times; faster</td></tr>
+              <tr><td><code>circuit_d5</code> + <code>cultivation_d5</code></td><td class="num">6</td>
+                  <td class="num win">0.786&ndash;0.856</td><td>1.2&ndash;1.3&times; faster</td></tr>
+              <tr><td>Quantum-volume, rank 20&ndash;24</td><td class="num">6</td>
+                  <td class="num" style="color:var(--warn);">0.732&ndash;0.990</td><td>wins 1&ndash;37%, shrinking with rank</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="summary-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="summary-card"><div class="num" style="color:var(--success);">26/26</div><div class="txt">circuits won</div></div>
+            <div class="summary-card"><div class="num" style="color:var(--highlight);">0.626</div><div class="txt">mean ratio</div></div>
+            <div class="summary-card"><div class="num" style="color:var(--highlight);">0.670</div><div class="txt">median ratio</div></div>
+            <div class="summary-card"><div class="num" style="color:var(--success);">0.573</div><div class="txt">geomean</div></div>
+          </div>
+          <div class="card card-hl" style="margin-top:0.5em;">
+            <div class="d">Job <b>50793</b> &bull; node <code>smci350-rck-g03-d13-21</code> &bull;
+            commit <code>79d4463</code> clean &bull; <code>v2_specialize: true</code>.
+            Every circuit dispatches <code>clifft_v2_spec</code>; none falls back.</div>
+          </div>
+        </div>
+      </div>
+      <div class="footnote">The five regimes sum to exactly 26, and membership is assigned by <em>measured
+      launch geometry</em> &mdash; not by circuit name. <code>surface_d7_t5</code> was filed under coop on the
+      strength of its name; its measured grid is 79 workgroups, which is register geometry.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 5: The corpus, as bars -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>All 26 circuits, sorted</h2>
+      <p class="lede">Bar length is V2/SVM kernel-time ratio. Everything left of the red line at 1.0 is a win.</p>
+      <div class="bars" style="column-count:2; column-gap:1.6em;">
+        <div class="bar-row"><span class="nm">surface_d11_t19</span><span class="tr"><span class="fl" style="width:25.6%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.256</span></div>
+        <div class="bar-row"><span class="nm">surface_d11_t15</span><span class="tr"><span class="fl" style="width:25.8%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.258</span></div>
+        <div class="bar-row"><span class="nm">surface_d9_t19</span><span class="tr"><span class="fl" style="width:26.4%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.264</span></div>
+        <div class="bar-row"><span class="nm">surface_d9_t15</span><span class="tr"><span class="fl" style="width:27.5%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.275</span></div>
+        <div class="bar-row"><span class="nm">surface_d7_t19</span><span class="tr"><span class="fl" style="width:31.0%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.310</span></div>
+        <div class="bar-row"><span class="nm">qv10</span><span class="tr"><span class="fl" style="width:31.9%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.319</span></div>
+        <div class="bar-row"><span class="nm">surface_d11_t10</span><span class="tr"><span class="fl" style="width:46.7%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.467</span></div>
+        <div class="bar-row"><span class="nm">surface_d9_t10</span><span class="tr"><span class="fl" style="width:49.1%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.491</span></div>
+        <div class="bar-row"><span class="nm">circuit_d3_p0.001</span><span class="tr"><span class="fl" style="width:50.9%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.509</span></div>
+        <div class="bar-row"><span class="nm">surface_d7_t15</span><span class="tr"><span class="fl" style="width:51.0%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.510</span></div>
+        <div class="bar-row"><span class="nm">surface_d7_t10</span><span class="tr"><span class="fl" style="width:53.4%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.534</span></div>
+        <div class="bar-row"><span class="nm">four_t</span><span class="tr"><span class="fl" style="width:58.7%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.587</span></div>
+        <div class="bar-row"><span class="nm">surface_d7_t5</span><span class="tr"><span class="fl" style="width:60.8%; background:linear-gradient(90deg,#4ec9b0,#53d8fb);"></span></span><span class="vl win">0.608</span></div>
+        <div class="bar-row"><span class="nm">qv20_L8_seed42</span><span class="tr"><span class="fl" style="width:73.2%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.732</span></div>
+        <div class="bar-row"><span class="nm">qv21_L8_seed42</span><span class="tr"><span class="fl" style="width:73.6%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.736</span></div>
+        <div class="bar-row"><span class="nm">frame_h</span><span class="tr"><span class="fl" style="width:74.2%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.742</span></div>
+        <div class="bar-row"><span class="nm">cultivation_d5</span><span class="tr"><span class="fl" style="width:78.6%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.786</span></div>
+        <div class="bar-row"><span class="nm">circuit_d5_p0.005</span><span class="tr"><span class="fl" style="width:81.5%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.815</span></div>
+        <div class="bar-row"><span class="nm">circuit_d5_p0.003</span><span class="tr"><span class="fl" style="width:83.8%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.838</span></div>
+        <div class="bar-row"><span class="nm">circuit_d5_p0.002</span><span class="tr"><span class="fl" style="width:84.6%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.846</span></div>
+        <div class="bar-row"><span class="nm">circuit_d5_p0.001</span><span class="tr"><span class="fl" style="width:84.7%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.847</span></div>
+        <div class="bar-row"><span class="nm">qv20_seed42</span><span class="tr"><span class="fl" style="width:85.0%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.850</span></div>
+        <div class="bar-row"><span class="nm">circuit_d5_p0.0005</span><span class="tr"><span class="fl" style="width:85.6%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.856</span></div>
+        <div class="bar-row"><span class="nm">qv24_L4_seed42</span><span class="tr"><span class="fl" style="width:88.2%; background:linear-gradient(90deg,#e9a045,#4ec9b0);"></span></span><span class="vl win">0.882</span></div>
+        <div class="bar-row"><span class="nm">qv22_L6_seed42</span><span class="tr"><span class="fl" style="width:98.0%; background:linear-gradient(90deg,#e94560,#e9a045);"></span></span><span class="vl" style="color:var(--warn);">0.980</span></div>
+        <div class="bar-row"><span class="nm">qv23_L5_seed42</span><span class="tr"><span class="fl" style="width:99.0%; background:linear-gradient(90deg,#e94560,#e9a045);"></span></span><span class="vl" style="color:var(--warn);">0.990</span></div>
+      </div>
+      <div class="footnote">Job 50793, <code>per_dispatch_ns_median</code>, five <code>rocprofv3</code>
+      invocations per circuit per backend plus an untraced warm-up. All 26 are <b>byte-exact</b> against the
+      SVM interpreter and the f64 CPU reference.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 6: Provenance warning -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Why one job, one node, matters this much</h2>
+      <div class="grid-2">
+        <div>
+          <div class="card card-warn">
+            <div class="h">The rule</div>
+            <div class="d"><code>mi350x-es</code> is <b>heterogeneous</b>. Ratios are only sound when both
+            arms ran in the same job on the same node. Absolute microseconds never transfer.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">What happened when it was broken</div>
+            <div class="d">An earlier draft <em>projected</em> ~0.40 for the <code>circuit_d5</code> family by
+            chaining an interpreter&rarr;specializer gain measured on <code>d13-21</code> onto an SVM baseline
+            measured on <code>f13-21</code>.<br/><br/>
+            The direct measurement says <b>~0.84</b>. Wrong by a factor of two, in the flattering direction.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">The truncation that flattered</div>
+            <div class="d">Job 50785 ran only 18 of 26 circuits: eight fixture paths had gone stale, aborted
+            silently, and the harness reported <b>&ldquo;wins 18/18&rdquo;</b> over the truncated set.<br/><br/>
+            The eight it dropped included all six QV circuits &mdash; the corpus's weakest wins. Median moved
+            0.670 &rarr; <b>0.518</b>. A better-looking number produced <em>entirely</em> by missing data.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h">The fix</div>
+            <div class="d"><code>bench_all.sh:127-135</code> now aborts the run on a missing fixture rather
+            than continuing past it. A benchmark that silently measures less than it claims is worse than one
+            that fails.</div>
+          </div>
+        </div>
+      </div>
+      <div class="insight">Both errors moved the result in the <b>flattering</b> direction. That is not a
+      coincidence &mdash; it is selection pressure. Errors that make results look worse get investigated
+      immediately; errors that make them look better get published.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- 7: Roadmap -->
+    <!-- ============================================================ -->
+    <section>
+      <h2>Where this deck goes</h2>
+      <div class="grid-2" style="gap:0.7em;">
+        <div>
+          <div class="card card-hl"><div class="h">&sect;2&ndash;3 &nbsp;What is being simulated</div>
+            <div class="d">The factored state, the 32-byte bytecode, the interpreter loop, and the three memory tiers.</div></div>
+          <div class="card card-warn"><div class="h">&sect;4 &nbsp;Hybrid &mdash; correct, never ahead</div>
+            <div class="d">Per-circuit HIP. The first appearance of the HSA/HIP split.</div></div>
+          <div class="card card-accent"><div class="h">&sect;5 &nbsp;V1 &mdash; the failure</div>
+            <div class="d">5&ndash;60&times; slower. What unrolling the operand <em>sequence</em> actually costs.</div></div>
+          <div class="card card-success"><div class="h">&sect;6&ndash;7 &nbsp;V2 &mdash; the rebuild</div>
+            <div class="d">The one rule. Then eight specialization classes, each with its own isolated experiment.</div></div>
+        </div>
+        <div>
+          <div class="card card-purple"><div class="h">&sect;8&ndash;9 &nbsp;Lowering and optimization</div>
+            <div class="d">What each compiler stage actually rewrites, shown as diffs. Twelve commits, in order.</div></div>
+          <div class="card card-hl"><div class="h">&sect;10 &nbsp;Past rank 19</div>
+            <div class="d">The HBM budget, the pool that shrinks, and what rank 20&ndash;26 costs.</div></div>
+          <div class="card card-accent"><div class="h">&sect;11&ndash;13 &nbsp;Pitfalls, the f32/f64 gap, HSA</div>
+            <div class="d">The noise regression. A barrier that ordered execution but not memory. Why HIP goes.</div></div>
+          <div class="card card-success"><div class="h">&sect;14&ndash;16 &nbsp;Evaluation</div>
+            <div class="d">Where the speedup comes from, in hardware counters. Then the full corpus, unabridged.</div></div>
+        </div>
+      </div>
+    </section>

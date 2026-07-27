@@ -1,0 +1,247 @@
+
+    <!-- ============================================================ -->
+    <!-- SECTION 2: The SVM -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">2</div>
+      <h1>What is actually<br/>being simulated</h1>
+      <div class="section-sub">Every design decision downstream &mdash; the tiers, the specialization
+      classes, the f32/f64 gap, even the noise regression &mdash; follows from the structure of one object.</div>
+    </section>
+
+    <section>
+      <h2>The factored state</h2>
+      <p class="lede"><code>clifft</code> does not carry a dense statevector over all <em>N</em> qubits
+      (<code>svm.h:92-103</code>):</p>
+      <div style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:1.15em;
+                  color:var(--highlight); background:var(--code-bg); border:1px solid var(--border);
+                  border-radius:8px; padding:0.5em; margin:0.3em 0;">
+        |psi&gt; = gamma &middot; U_C &middot; P &middot; ( |phi&gt;<sub>A</sub> &otimes; |0&gt;<sub>D</sub> )
+      </div>
+      <table class="tight">
+        <thead><tr><th>symbol</th><th>what it is</th><th>storage</th></tr></thead>
+        <tbody>
+          <tr><td><code>gamma</code></td><td>global scalar: phase + deferred normalization</td><td>one complex scalar</td></tr>
+          <tr><td><code>U_C</code></td><td>the Clifford part, tracked symbolically</td><td>implicit in the frame</td></tr>
+          <tr><td><code>P</code></td><td>a Pauli frame &mdash; one X bit and one Z bit per qubit</td><td>2 &times; &lceil;N/64&rceil; words</td></tr>
+          <tr><td><code>|phi&gt;<sub>A</sub></code></td><td>the <b>active</b> subspace: dense statevector over <code>k</code> qubits</td>
+              <td style="color:var(--accent);"><b>2^k complex amplitudes</b></td></tr>
+          <tr><td><code>|0&gt;<sub>D</sub></code></td><td>the <b>dormant</b> qubits, provably in the computational basis</td>
+              <td style="color:var(--success);">nothing</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">The whole performance story lives in <code>k</code>, the <b>active rank</b>.
+      A pure-Clifford circuit never grows it: every gate is a frame update, <code>2^k = 1</code>, and
+      simulation is polynomial. Each non-Clifford operation may promote a dormant qubit,
+      <code>k &rarr; k+1</code>, <b>doubling</b> the dense array. Each active measurement collapses it back.</div>
+    </section>
+
+    <section>
+      <h2>The factored state, drawn</h2>
+      <figure>
+        <img src="diagrams/factored-state.svg" alt="Factored state representation" class="mid"/>
+        <figcaption><b>Figure 2.1</b> &mdash; Dormant qubits cost zero storage; the Pauli frame costs 2 bits
+        per qubit; only the active subspace costs exponential memory. Rank growth is driven by non-Clifford
+        gates and undone by measurement.</figcaption>
+      </figure>
+      <p class="lede" style="margin-top:0.4em;">The <b>peak rank</b> of a compiled circuit &mdash; the
+      maximum <code>k</code> over the whole program &mdash; determines both the memory footprint and, as
+      &sect;3 shows, <em>which GPU execution strategy is even viable</em>.</p>
+    </section>
+
+    <section>
+      <h2>The bytecode: 41 opcodes, partitioned by cost</h2>
+      <table class="tight">
+        <thead><tr><th>family</th><th class="num">n</th><th>opcodes</th><th>cost</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--success);"><b>Frame</b></td><td class="num">6</td>
+              <td><code>FRAME_{CNOT,CZ,H,S,S_DAG,SWAP}</code></td>
+              <td><b>O(1)</b> &mdash; two bit reads, two bit XORs. No amplitude touched.</td></tr>
+          <tr><td style="color:var(--accent);"><b>Array</b></td><td class="num">13</td>
+              <td><code>ARRAY_{CNOT,CZ,SWAP,MULTI_CNOT,MULTI_CZ,H,S,S_DAG,T,T_DAG,ROT,U2,U4}</code></td>
+              <td><b>O(2^k)</b> &mdash; a sweep over amplitude groups.</td></tr>
+          <tr><td style="color:var(--warn);"><b>Expansion</b></td><td class="num">4</td>
+              <td><code>EXPAND</code>, <code>EXPAND_T</code>, <code>EXPAND_T_DAG</code>, <code>EXPAND_ROT</code></td>
+              <td>O(2^k) and <b>grows k</b></td></tr>
+          <tr><td style="color:var(--highlight);"><b>Measurement</b></td><td class="num">5</td>
+              <td><code>MEAS_DORMANT_*</code>, <code>MEAS_ACTIVE_*</code>, <code>SWAP_MEAS_INTERFERE</code></td>
+              <td>dormant O(1); active O(2^k) reduction, <b>shrinks k</b></td></tr>
+          <tr><td><b>Forced variants</b></td><td class="num">5</td>
+              <td>the five <code>*_FORCED</code> mirrors</td>
+              <td>synthesized at runtime by bytecode rewrite; read outcome from a side buffer</td></tr>
+          <tr><td style="color:var(--purple);"><b>Classical / noise</b></td><td class="num">8</td>
+              <td><code>APPLY_PAULI</code>, <code>NOISE</code>, <code>NOISE_BLOCK</code>, <code>DETECTOR</code>, &hellip;</td>
+              <td>O(1)&ndash;O(words), but <b>PRNG-consuming</b></td></tr>
+        </tbody>
+      </table>
+      <div class="flow-row" style="margin-top:0.2em;">
+        <span class="src">6 + 13 + 4 + 5 + 5 + 8 = <b style="color:var(--success);">41</b> &nbsp;&#10003;
+        &nbsp;(<code>backend.h:25-86</code>, plus the <code>NUM_OPCODES</code> sentinel)</span>
+      </div>
+      <p class="lede" style="margin-top:0.3em;">The count matters later: <b>41 arms that a CPU interpreter
+      must dispatch over, and that a specialized kernel never dispatches over at all.</b></p>
+    </section>
+
+    <section>
+      <h2>The 32-byte instruction &mdash; all a specializer can see</h2>
+      <div class="grid-60-40">
+        <div>
+          <pre><code><span class="kw">struct</span> <span class="fn">alignas</span>(32) Instruction {
+    Opcode   opcode;      <span class="cm">// offset 0</span>
+    uint8_t  _reserved;   <span class="cm">// offset 1</span>
+    uint8_t  flags;       <span class="cm">// offset 2</span>
+    uint8_t  _pad;        <span class="cm">// offset 3</span>
+    uint16_t axis_1;      <span class="cm">// offset 4  virtual axis</span>
+    uint16_t axis_2;      <span class="cm">// offset 6  virtual axis 2</span>
+    <span class="kw">union</span> {               <span class="cm">// offsets 8..31</span>
+      <span class="kw">struct</span>{ <span class="kw">double</span>   weight_re, weight_im;      } math;      <span class="cm">// A</span>
+      <span class="kw">struct</span>{ uint32_t classical_idx, expected_val; } classical; <span class="cm">// B</span>
+      <span class="kw">struct</span>{ uint32_t cp_mask_idx, condition_idx;  } pauli;     <span class="cm">// C</span>
+      <span class="kw">struct</span>{ uint64_t mask;                      } multi_gate;<span class="cm">// D</span>
+      <span class="kw">struct</span>{ uint32_t cp_idx;                    } u2;        <span class="cm">// E</span>
+      <span class="kw">struct</span>{ uint32_t cp_idx;                    } u4;        <span class="cm">// F</span>
+      <span class="kw">struct</span>{ uint32_t cp_exp_val_idx, exp_val_idx; } exp_val;  <span class="cm">// G</span>
+      uint8_t raw[24];
+    };
+};
+<span class="fn">static_assert</span>(<span class="kw">sizeof</span>(Instruction) == 32, <span class="st">"exactly 32 bytes"</span>);</code></pre>
+        </div>
+        <div>
+          <div class="card card-hl">
+            <div class="h">Why 32</div>
+            <div class="d">Two instructions land in one 64-byte cache line
+            (<code>backend.h:92</code>). Asserted, not assumed (<code>:163</code>).</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">Variants E, F, G</div>
+            <div class="d">Their entire payload is a <code>uint32_t</code> <em>index</em>. Anything that does
+            not fit in 24 bytes &mdash; fused 2&times;2 and 4&times;4 unitaries, N-bit Pauli masks,
+            noise-channel tables &mdash; lives in a side <code>ConstantPool</code>.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">The specialization limit, encoded in a struct</div>
+            <div class="d">The <em>index</em> folds to an immediate. The <em>contents</em> stay in a device
+            buffer. A specializer can eliminate the load of the index; it cannot eliminate the load of the
+            matrix. &sect;7's S6 and S8 measure exactly this ceiling.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The instruction, drawn</h2>
+      <figure>
+        <img src="diagrams/bytecode-layout.svg" alt="32-byte instruction encoding"/>
+        <figcaption><b>Figure 2.2</b> &mdash; Every field in the fixed header, and the payload's discriminant,
+        is known to the ahead-of-time compiler. This is the entire raw material available to a
+        specializer.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>The CPU already knew dispatch was the enemy</h2>
+      <p class="lede">The CPU reference uses a <b>computed-goto threaded dispatch table</b>
+      (<code>svm_kernels.inl:2191-2196</code>), sized to 256 so each of the 41 opcodes gets its own
+      indirect-branch history entry:</p>
+      <pre><code><span class="cm">// Threaded dispatch table (computed gotos) gives each opcode its own
+// indirect-branch history entry, dramatically improving prediction.
+// Sized to 256; designated initializers map enums directly to labels.</span>
+<span class="kw">static const</span> <span class="kw">void</span>* dispatch_table[256] = {
+    [<span class="kw">static_cast</span>&lt;uint8_t&gt;(Opcode::OP_FRAME_CNOT)] = &amp;&amp;L_OP_FRAME_CNOT,
+    [<span class="kw">static_cast</span>&lt;uint8_t&gt;(Opcode::OP_FRAME_CZ)]   = &amp;&amp;L_OP_FRAME_CZ,
+    ...
+};</code></pre>
+      <div class="insight">That comment is the thesis of this whole report, stated by the CPU backend years
+      earlier. <b>Dispatch is a first-class cost</b>, and it is worth writing non-portable code to attack &mdash;
+      the <code>#if defined(__GNUC__)</code> guard exists because someone decided the win justified maintaining
+      a portability fallback.</div>
+      <div class="grid-2" style="margin-top:0.2em;">
+        <div class="card card-warn">
+          <div class="h">On a CPU: make dispatch cheaper</div>
+          <div class="d">Fight it with branch-target prediction. Give each opcode its own history entry.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">On a GPU: that option does not exist</div>
+          <div class="d">There is no branch predictor to help. A wavefront hitting an indirect branch does not
+          <em>predict</em> &mdash; it <b>serializes</b> across whatever divergent targets its 64 lanes want.
+          Removing dispatch <em>entirely</em> is the only move available. It is worth
+          <b>2.8&ndash;9.1&times; on the scalar unit</b> (&sect;14.2).</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The PRNG must be bit-exact &mdash; and that is a load-bearing constraint</h2>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title"><b>CPU reference</b> &mdash; <code>svm.h:148-150</code></div>
+          <pre style="margin-top:0.1em;"><code><span class="cm">// CRITICAL: Do NOT use std::uniform_real_distribution
+// -- its output is implementation-defined and varies
+// across compilers (GCC vs Clang vs MSVC).</span>
+[[nodiscard]] <span class="kw">double</span> <span class="fn">random_double</span>() {
+  <span class="kw">return</span> (<span class="kw">double</span>)(rng_() &gt;&gt; 11) * <span class="lit">0x1.0p-53</span>;
+}</code></pre>
+          <div class="diff-title" style="margin-top:0.4em;"><b>V2 device code</b> &mdash; <code>v2_ops.h:155-177</code></div>
+          <pre style="margin-top:0.1em;"><code><span class="kw">static inline</span> u64 <span class="fn">rng_next</span>(u64* s) {
+  u64 result = <span class="fn">v2_rotl64</span>(s[0] + s[3], 23) + s[0];
+  u64 t = s[1] &lt;&lt; 17;
+  s[2] ^= s[0]; s[3] ^= s[1]; s[1] ^= s[2]; s[0] ^= s[3];
+  s[2] ^= t;    s[3] = <span class="fn">v2_rotl64</span>(s[3], 45);
+  <span class="kw">return</span> result;
+}
+<span class="kw">static inline</span> <span class="kw">double</span> <span class="fn">rng_uniform</span>(u64* s) {
+  <span class="kw">return</span> (<span class="kw">double</span>)(<span class="fn">rng_next</span>(s) &gt;&gt; 11) * <span class="lit">0x1.0p-53</span>;
+}</code></pre>
+        </div>
+        <div>
+          <div class="card card-hl">
+            <div class="h">What is deliberately <em>not</em> there</div>
+            <div class="d">No <code>ocml</code> call. No device-library dependency. No fast-math-sensitive
+            arithmetic. The conversion is an integer shift and an exact power-of-two multiply, so it is
+            bit-identical on any target with IEEE doubles.</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">The one place "share the source" failed</div>
+            <div class="d">The CPU side is C++; the device side is freestanding C23. The sequence had to be
+            <em>transliterated</em> and then verified by output comparison rather than shared &mdash; down to
+            the rotate constants.</div>
+          </div>
+          <div class="card card-accent">
+            <div class="h">The consequence &mdash; the key to &sect;12</div>
+            <div class="d"><b>Any divergence in how many random numbers a backend draws is
+            unrecoverable.</b> Not "slightly different results": the two streams decorrelate <em>permanently</em>
+            from the first extra draw.<br/><br/>
+            A branch taken differently, an early-exit that skips a draw, a dust threshold that clamps on one
+            side and rolls on the other &mdash; <b>all of these are the same bug</b>.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Three properties that determine everything downstream</h2>
+      <div class="grid-3">
+        <div class="card card-accent" style="height:100%;">
+          <div class="h">1. The hot loop is a butterfly, not a GEMM</div>
+          <div class="d"><code>ARRAY_U2</code> applies a 2&times;2 complex matrix to 2^(k&minus;1) amplitude
+          pairs; <code>ARRAY_U4</code> a 4&times;4 to 2^(k&minus;2) quadruples.<br/><br/>
+          There is no matrix multiply here &mdash; which is why <code>SQ_INSTS_MFMA</code> is <b>0.0 in every
+          counter block collected</b>, all 52 backend&times;circuit cells of job 50793, none missing.<br/><br/>
+          The matrix cores, the headline feature of this chip, are simply not part of this story.</div>
+        </div>
+        <div class="card card-warn" style="height:100%;">
+          <div class="h">2. The working set spans four orders of magnitude</div>
+          <div class="d">At peak rank 0 the "statevector" is one complex number. At rank 24 it is
+          <b>16.7 million</b>.<br/><br/>
+          No single parallelization strategy is right for both. That is the entire origin of the tier
+          system (&sect;3.2) &mdash; and the reason a specializer has something to decide at all.</div>
+        </div>
+        <div class="card card-hl" style="height:100%;">
+          <div class="h">3. Shots are parallel; each shot is sequential</div>
+          <div class="d">A shot is a walk through the bytecode with a private PRNG stream. The parallelism is
+          <em>across</em> shots; the per-shot work is a <b>dependent chain</b>.<br/><br/>
+          That sets a hard ceiling on what any amount of ILP inside one shot can buy &mdash; and it is why the
+          register tier packs shots into lanes rather than trying to widen one shot.</div>
+        </div>
+      </div>
+    </section>

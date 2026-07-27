@@ -1,0 +1,284 @@
+
+    <!-- ============================================================ -->
+    <!-- SECTION 3: The original GPU SVM -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">3</div>
+      <h1>The original GPU SVM</h1>
+      <div class="section-sub">One interpreter, three tiers. The baseline every later generation is
+      measured against &mdash; and, three rewrites later, still the thing to beat.</div>
+    </section>
+
+    <section>
+      <h2>The kernel is a <code>for(pc) switch</code></h2>
+      <pre><code><span class="cm">// hip_sampler.hip:728-731</span>
+<span class="kw">__device__</span> <span class="kw">void</span> <span class="fn">execute_shot</span>(<span class="kw">const</span> GpuProgram&amp; program, Rng&amp; rng, ShotState&amp; st) {
+    <span class="kw">for</span> (uint32_t pc = 0; pc &lt; program.num_instrs; ++pc) {
+        <span class="kw">const</span> GpuInstr&amp; instr = program.instrs[pc];
+        <span class="kw">switch</span> (instr.opcode) {
+            <span class="kw">case</span> OP_FRAME_CNOT: <span class="fn">frame_cnot</span>(st, instr.axis_1, instr.axis_2); <span class="kw">break</span>;
+            <span class="kw">case</span> OP_FRAME_CZ:   <span class="fn">frame_cz</span>  (st, instr.axis_1, instr.axis_2); <span class="kw">break</span>;
+            ...</code></pre>
+      <p class="lede">Note what the CPU's computed-goto trick has become: <b>a plain <code>switch</code></b>.
+      There is no indirect-branch predictor on a GPU to reward threading the dispatch.</p>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">Every operand is a runtime load</div>
+          <div class="d"><code>instr.axis_1</code>, <code>instr.flags</code>, <code>instr.mask</code> &mdash;
+          all read from memory, every shot, every instruction.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h"><code>st.active_k</code> is a runtime variable</div>
+          <div class="d">Every amplitude sweep computes its trip count as <code>1u &lt;&lt; (st.active_k - 1)</code>
+          at runtime, and every scatter index is recomputed per amplitude.</div>
+        </div>
+      </div>
+      <div class="insight">V2 keeps the shot loop and <b>destroys both of these</b>. That sentence is the
+      entire design, and &sect;6&ndash;7 are its elaboration.</div>
+    </section>
+
+    <section>
+      <h2>Three tiers, because the working set spans 10<sup>7</sup></h2>
+      <table class="tight">
+        <thead><tr><th>tier</th><th>rank</th><th>topology</th><th>amplitude storage</th><th>source</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--success);"><b>register</b></td><td>&le; 4</td>
+              <td>1 shot per <b>thread</b></td><td><code>GpuComplex v[16]</code> in VGPRs</td>
+              <td class="src">hip_sampler.hip:153,1778</td></tr>
+          <tr><td style="color:var(--warn);"><b>coop</b></td><td>5&ndash;10</td>
+              <td>1 shot per <b>workgroup</b> (256 threads)</td>
+              <td><code>__shared__ GpuComplex v[1024]</code></td>
+              <td class="src">hip_sampler.hip:1861</td></tr>
+          <tr><td style="color:var(--accent);"><b>global</b></td><td>11&ndash;26</td>
+              <td>persistent workgroup pool, work-stealing</td><td>HBM slice per workgroup</td>
+              <td class="src">hip_sampler.hip:1937</td></tr>
+        </tbody>
+      </table>
+      <figure style="margin-top:0.3em;">
+        <img src="diagrams/memory-hierarchy-tiers.svg" alt="Three-tier memory hierarchy" class="mid"/>
+        <figcaption><b>Figure 3.1</b> &mdash; The three tiers map rank onto the memory hierarchy:
+        VGPRs &rarr; LDS &rarr; HBM. The tier boundary is where the statevector stops fitting in the level
+        above.</figcaption>
+      </figure>
+      <div class="footnote">Constants: <code>kThreadMaxPeakRank = 4</code>,
+      <code>kSharedMaxPeakRank = 10</code>, <code>kGlobalMaxPeakRank = 26</code>
+      (<code>gpu_types.h:8-18</code>).</div>
+    </section>
+
+    <section>
+      <h2>The coop tier's LDS budget &mdash; and a hint of what is coming</h2>
+      <pre><code><span class="cm">// hip_sampler.hip:1861-1885   One workgroup = one shot; 256 threads cooperate.</span>
+<span class="kw">__shared__</span> GpuComplex v[kSharedMaxAmplitudes];         <span class="cm">// 1024 amps  =  8 KB</span>
+<span class="kw">__shared__</span> GpuComplex scratch[kSharedMaxAmplitudes/2]; <span class="cm">//  512 amps  =  4 KB</span>
+<span class="kw">__shared__</span> uint8_t    meas[kMaxMeas];                  <span class="cm">// 4096 slots =  4 KB</span>
+<span class="kw">__shared__</span> uint64_t   px[kPauliWords], pz[kPauliWords];
+<span class="kw">__shared__</span> <span class="kw">double</span>     red0[256], red1[256];            <span class="cm">//            =  4 KB</span>
+<span class="kw">__shared__</span> uint32_t   scatter_lut[kSharedMaxAmplitudes/2];</code></pre>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">This budget is the occupancy constraint</div>
+          <div class="d">It is where V2's first two optimizations went (&sect;9.1). Every kilobyte reclaimed
+          is a wave of occupancy.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">Note <code>scatter_lut</code></div>
+          <div class="d">The SVM caches computed scatter indices in LDS, keyed by
+          <code>(axis1, axis2, k, mode)</code>. This is a <em>runtime</em> answer to the same problem V2
+          answers at <em>compile</em> time (&sect;7.5).<br/><br/>
+          And the SVM leaves this LUT <b>off</b> for the global tier &mdash; which is precisely why V2's
+          global specialization wins so decisively (&sect;9.3).</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The cooperative reduction &mdash; where the ABI lives</h2>
+      <p class="lede">Active-qubit measurement needs <code>sum |v_i|^2</code> over each half of the array &mdash;
+      a reduction across all 256 threads. Both backends implement the identical two-phase pattern
+      (<code>hip_sampler.hip:948</code>, mirrored in <code>v2_ops.h:224-262</code>).</p>
+      <figure>
+        <img src="diagrams/warp-shuffle-reduction.svg" alt="Two-phase cooperative reduction" class="mid"/>
+        <figcaption><b>Figure 3.2</b> &mdash; Phase 1: 6-step XOR butterfly within each 64-lane wavefront via
+        <code>ds_bpermute</code>. Phase 2: the four wavefront partials combine through LDS.</figcaption>
+      </figure>
+      <div class="insight">The comment above V2's copy is emphatic (<code>v2_ops.h:235-236</code>):
+      <code>// MUST reproduce SVM coop_reduce2's exact summation order or f64 rounding diverges at measurement
+      branch points.</code> &mdash; <b>The summation order is part of the ABI.</b> A reduction is not
+      associative in floating point; two implementations summing the same values in different orders differ in
+      the last bits, and a measurement near the sampling threshold then branches differently, which per
+      &sect;2.4 desynchronizes the PRNG <em>forever</em>. This single constraint rules out most of the obvious
+      optimizations one would reach for.</div>
+    </section>
+
+    <section>
+      <h2>What the SVM does well &mdash; this is not a strawman</h2>
+      <p class="lede">Worth stating plainly, because <em>two successor generations failed to beat it</em>:</p>
+      <div class="grid-3">
+        <div class="card card-success" style="height:100%;">
+          <div class="h">One kernel, compiled once</div>
+          <div class="d">No per-circuit compile latency. No cache. No correctness gate. Ship it and it
+          runs.</div>
+        </div>
+        <div class="card card-success" style="height:100%;">
+          <div class="h">The dispatch loop keeps IR small</div>
+          <div class="d">The bytecode is <em>data</em>. A 16,000-op circuit and a 4-op circuit compile to the
+          same kernel.<br/><br/>V1 forgot this and paid <b>221-second compiles</b> for it (&sect;5.3).</div>
+        </div>
+        <div class="card card-success" style="height:100%;">
+          <div class="h">It is heavily tuned</div>
+          <div class="d">Four rounds, recorded in the tag history:<br/>
+          <code>svm-opt-1-noinline-extended</code><br/>
+          <code>svm-opt-2-noinline-coop-sweeps</code><br/>
+          <code>svm-opt-3-geak-warp-shuffle</code><br/>
+          <code>svm-opt-4-scatter-lut</code><br/><br/>
+          Selective <code>noinline</code> for register pressure, a GEAK-derived warp-shuffle reduction, and the
+          scatter LUT.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What it leaves on the table &mdash; the entire opportunity, in one table</h2>
+      <table>
+        <thead><tr><th>known at compile time</th><th>paid at runtime, every shot</th></tr></thead>
+        <tbody>
+          <tr><td>the opcode at each <code>pc</code></td><td>a <code>switch</code> &mdash; scalar branch-target computation</td></tr>
+          <tr><td><code>axis_1</code>, <code>axis_2</code>, <code>flags</code>, mask index</td>
+              <td>a 32-byte instruction load + field extraction</td></tr>
+          <tr><td><code>active_k</code> before each instruction</td>
+              <td>a load, then <code>1u &lt;&lt; (k-1)</code> for every trip count</td></tr>
+          <tr><td>the scatter-index pattern for fixed axes</td>
+              <td><code>scatter_bits_2()</code> per amplitude &mdash; or an LDS LUT with a cache-validity check</td></tr>
+          <tr><td>which of a measurement's two paths is live</td><td>both paths emitted, one predicated</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">That table <em>is</em> the specialization opportunity. &sect;7 turns each row into
+      an isolated, measured A/B experiment &mdash; including the one where the answer is
+      <b>1.02&times;</b>.</div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 4: Hybrid -->
+    <!-- ============================================================ -->
+    <section class="section-divider">
+      <div class="section-num">4</div>
+      <h1>Hybrid</h1>
+      <div class="section-sub">Compiling the circuit into HIP &mdash; and why, after a whole compile-cache
+      subsystem, the answer came out noise-level.</div>
+    </section>
+
+    <section>
+      <h2>The idea, and the used-function analysis</h2>
+      <p class="lede">If the operands are known when the circuit is compiled, generate a bespoke kernel per
+      circuit. The Hybrid backend (<code>src/clifft/gpu/codegen/</code>) walks the bytecode, emits HIP source
+      with the operands as literals, and compiles it ahead of the sampling run.</p>
+      <div class="grid-2-1">
+        <div class="card card-hl">
+          <div class="h">Used-function analysis &mdash; <code>kernel_codegen.h:17-50</code></div>
+          <div class="d">A <code>UsedFunctions</code> struct with one boolean per opcode family, populated by
+          scanning the bytecode, used to emit <em>only</em> the device functions the circuit actually needs.
+          <br/><br/>A pure-Clifford circuit does not carry the <code>ARRAY_U4</code> code at all.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">A good idea</div>
+          <div class="d">V2 keeps this. It is orthogonal to what went wrong.</div>
+        </div>
+      </div>
+      <div class="diff-title" style="margin-top:0.5em;"><b>The compile path</b> &mdash; <code>kernel_cache.cc:105-170</code></div>
+      <pre style="margin-top:0.1em;"><code><span class="cm">// Step 1: Compile HIP source -> offload bundle (.bundle)
+// --offload-device-only produces a Clang Offload Bundle, not a raw ELF.
+// HSA needs a raw AMDGCN ELF, so we unbundle in step 2.</span>
+cmd &lt;&lt; clangpp &lt;&lt; <span class="st">" -x hip"</span>
+    &lt;&lt; <span class="st">" --offload-arch="</span> &lt;&lt; gpu_arch
+    &lt;&lt; <span class="st">" -O2 -ffast-math"</span>
+    &lt;&lt; <span class="st">" --offload-device-only"</span>
+    &lt;&lt; <span class="st">" -o "</span> &lt;&lt; bundle_path &lt;&lt; <span class="st">" "</span> &lt;&lt; tmp_src;
+<span class="cm">// then: clang-offload-bundler --unbundle  ->  hsa_load_kernel(...)   :191</span></code></pre>
+    </section>
+
+    <section>
+      <h2>Hybrid already dispatched through HSA</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">The awkwardness that seeded &sect;13</div>
+          <div class="d">Hybrid uses HIP only as a <em>source language</em>, then has to fight its way back
+          out of HIP's packaging to get an object HSA will accept.<br/><br/>
+          Write HIP to get a device binary &rarr; unwrap the HIP container &rarr; hand the raw ELF to HSA.
+          <br/><br/>That round trip is the seed of V2's decision to drop HIP entirely.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">Note <code>-ffast-math</code></div>
+          <div class="d">Hybrid was allowed reassociation. <b>V2 explicitly is not</b>
+          (<code>-ffp-contract=off</code>, no fast-math, &sect;6.4).<br/><br/>
+          V2's correctness contract is byte-exactness against the interpreter, and fast-math would break it &mdash;
+          for the reason &sect;3's reduction slide gives: reassociation changes the summation order, the
+          summation order is the ABI.</div>
+        </div>
+      </div>
+      <div class="insight">Two backends, two different answers to the same question about floating point. The
+      difference is not taste &mdash; it is that V2 signed a contract Hybrid never did, and that contract is
+      what makes V2's speedups <em>checkable</em>.</div>
+    </section>
+
+    <section>
+      <h2>The result: correct, competitive, never ahead</h2>
+      <table>
+        <thead><tr><th>circuit</th><th class="num">SVM</th><th class="num">Hybrid</th><th class="num">MLIR (v1)</th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td class="num">0.066</td><td class="num win">0.053</td><td class="num lose">0.271</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">0.074</td><td class="num win">0.058</td><td class="num lose">3.54</td></tr>
+          <tr><td><code>circuit_d5</code></td><td class="num">0.078</td><td class="num win">0.065</td><td class="num lose">1.22</td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">0.090</td><td class="num lose">0.112</td><td class="num lose">5.50</td></tr>
+        </tbody>
+      </table>
+      <div class="card card-warn">
+        <div class="h">[unverified, v1-era] &mdash; quoted for shape, not magnitude</div>
+        <div class="d">These are <code>sample_seconds</code> (host wall time including setup), not isolated
+        kernel time, from a run whose node identity was not recorded. The <em>shape</em> is what matters:
+        Hybrid tracks SVM within &plusmn;25%, and MLIR is off the chart. That shape is corroborated by every
+        later measurement.</div>
+      </div>
+      <div class="verdict verdict-mixed">Hybrid wins by 10&ndash;20% on three of four and loses by 25% on the
+      fourth. After per-circuit code generation, an entire compile-cache subsystem, and an offload-bundle
+      unwrapping dance, the answer is <b>noise-level</b>.</div>
+    </section>
+
+    <section>
+      <h2>Why it stalled: the density measurement</h2>
+      <p class="lede">The cleanest diagnosis is an artifact built for this report &mdash;
+      <code>V2_performance/lowering/ir_density.csv</code>, lines of emitted source per bytecode instruction.</p>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>circuit</th><th class="num">instrs</th><th class="num">Hybrid HIP lines</th><th class="num">lines/instr</th></tr></thead>
+            <tbody>
+              <tr><td><code>reg_circuit_d3</code></td><td class="num">344</td><td class="num">5,301</td><td class="num lose">15.4</td></tr>
+              <tr><td><code>coop_qv10</code></td><td class="num">140</td><td class="num">7,805</td><td class="num lose">55.8</td></tr>
+              <tr><td><code>coop_circuit_d5</code></td><td class="num">1,720</td><td class="num">33,508</td><td class="num lose">19.5</td></tr>
+              <tr><td><code>coop_surface_d7_t10</code></td><td class="num">4,134</td><td class="num">75,409</td><td class="num lose">18.2</td></tr>
+              <tr><td><code>glob_surface_d7_t19</code></td><td class="num">4,296</td><td class="num">75,794</td><td class="num lose">17.6</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card card-warn">
+            <div class="h">Hybrid emits a <em>block</em> per instruction</div>
+            <div class="d">15 to 56 lines of HIP each. Linear in circuit size with a large constant. Not
+            pathological &mdash; V1's is (&sect;5) &mdash; but it means:
+            <ul style="margin-left:0.9em; margin-top:0.3em;">
+              <li>the compiler's problem grows with the circuit, so compile time does;</li>
+              <li>register pressure grows, because the body is one long straight-line region;</li>
+              <li>the win from constant operands is <em>diluted</em> by the volume of code the optimizer must
+              chew through.</li>
+            </ul></div>
+          </div>
+        </div>
+      </div>
+      <div class="insight"><b>The lesson Hybrid teaches:</b> per-circuit compilation is not, by itself, a
+      performance strategy. What matters is <em>what you emit per instruction</em>. Hybrid emitted a block.
+      V2 emits a call (&sect;6.3) &mdash; and the same idea that netted Hybrid ~0% nets V2
+      <b>1.3&ndash;4.0&times;</b>.</div>
+      <div class="footnote">Hybrid's lines-per-instruction is 15.4&ndash;55.8 and does not improve with scale.
+      V2's converges <em>downward</em> to 1.00&ndash;1.27. Same input, same target, same compiler &mdash; a
+      <b>14&ndash;44&times;</b> difference in how much code the optimizer is handed.</div>
+    </section>
