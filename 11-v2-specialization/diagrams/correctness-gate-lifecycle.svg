@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Compile Once, Validate Once, Then Choose</title>
+  <desc id="desc">The V2 specialization lifecycle, its three distinct caches, safe interpreter fallback, and the profiling incident caused by an in-process-only verdict cache.</desc>
+
+  <defs>
+    <linearGradient id="cyanFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="accentFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="redFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowAccent" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#e94560"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#ff8800"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 61 H1100 M0 294 H1100 M0 568 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M24 0 V568 M1076 0 V568" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Compile Once, Validate Once, Then Choose</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">And why a correctness check on the measurement path becomes a performance number</text>
+
+  <!-- Later-run fast path -->
+  <path d="M118 94 V78 H946 V94" fill="none" stroke="#53d8fb" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#arrowCyan)"/>
+  <rect x="390" y="66" width="286" height="18" rx="9" fill="#0d0d1a" stroke="#53d8fb" stroke-opacity="0.55"/>
+  <text x="533" y="78.5" fill="#9cecff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">disk cache hit — the verdict is computed once ever</text>
+
+  <!-- Shape key -->
+  <rect x="24" y="94" width="188" height="184" rx="10" fill="url(#cyanFill)" stroke="#53d8fb" stroke-width="2"/>
+  <rect x="24" y="94" width="188" height="29" rx="9" fill="#53d8fb" fill-opacity="0.20"/>
+  <text x="118" y="113" fill="#9cecff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">SHAPE KEY</text>
+  <text x="118" y="140" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">tname + "_r" +</text>
+  <text x="118" y="156" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">peak_rank + "_n" +</text>
+  <text x="118" y="172" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">num_instrs</text>
+  <text x="118" y="189" fill="#9ba3b8" font-family="monospace" font-size="9" text-anchor="middle">v2_kernel.cc:366-367</text>
+  <rect x="35" y="198" width="166" height="70" rx="6" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.45"/>
+  <text x="43" y="211" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">The key is circuit shape,</text>
+  <text x="43" y="224" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">not circuit name.</text>
+  <text x="43" y="237" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">One binary and verdict</text>
+  <text x="43" y="250" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">are shared by a family.</text>
+  <text x="43" y="263" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">A failure affects it at once.</text>
+
+  <!-- Emit and compile -->
+  <line x1="212" y1="184" x2="232" y2="184" stroke="#53d8fb" stroke-width="2" marker-end="url(#arrowCyan)"/>
+  <rect x="232" y="112" width="156" height="144" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-width="1.5"/>
+  <text x="310" y="134" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">EMIT + COMPILE</text>
+  <path d="M266 157 C266 149 354 149 354 157 V215 C354 223 266 223 266 215 Z" fill="url(#accentFill)" stroke="#e94560" stroke-width="1.5"/>
+  <ellipse cx="310" cy="157" rx="44" ry="8" fill="#e94560" fill-opacity="0.18" stroke="#e94560" stroke-width="1.5"/>
+  <path d="M266 186 C266 194 354 194 354 186 M266 215 C266 223 354 223 354 215" fill="none" stroke="#e94560" stroke-opacity="0.55"/>
+  <text x="310" y="180" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">.hsaco</text>
+  <text x="310" y="204" fill="#ff9bad" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">CACHE 3</text>
+  <text x="310" y="238" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">the compiled binary itself</text>
+
+  <!-- Correctness gate -->
+  <line x1="388" y1="184" x2="410" y2="184" stroke="#e94560" stroke-width="2" marker-end="url(#arrowAccent)"/>
+  <path d="M505 96 L600 184 L505 272 L410 184 Z" fill="url(#accentFill)" stroke="#e94560" stroke-width="2"/>
+  <text x="505" y="126" fill="#ff9bad" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">THE GATE</text>
+  <text x="505" y="148" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">specialized_matches_</text>
+  <text x="505" y="162" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">interpreter(program,</text>
+  <text x="505" y="176" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">spath, spec_sym)</text>
+  <text x="505" y="198" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">run both ways on a shot sample</text>
+  <text x="505" y="212" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">and compare bytes</text>
+  <text x="505" y="234" fill="#9ba3b8" font-family="monospace" font-size="9" text-anchor="middle">v2_kernel.cc:370-398</text>
+
+  <!-- Persisted verdict caches -->
+  <line x1="600" y1="184" x2="620" y2="184" stroke="#e94560" stroke-width="2" marker-end="url(#arrowAccent)"/>
+  <rect x="620" y="94" width="180" height="184" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-width="1.5"/>
+  <text x="710" y="113" fill="#ff9bad" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">PERSIST VERDICT</text>
+  <path d="M638 132 H660 L667 139 H782 V179 H638 Z" fill="#e94560" fill-opacity="0.13" stroke="#e94560"/>
+  <text x="710" y="153" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">&lt;hsaco&gt;.gate</text>
+  <text x="710" y="169" fill="#ff9bad" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">CACHE 2 · ON DISK</text>
+  <rect x="638" y="190" width="144" height="47" rx="5" fill="#e94560" fill-opacity="0.10" stroke="#e94560"/>
+  <path d="M648 201 H772 M648 211 H772 M648 221 H772" stroke="#e94560" stroke-opacity="0.45"/>
+  <text x="710" y="207" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700" text-anchor="middle">static std::map</text>
+  <text x="710" y="231" fill="#ff9bad" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">CACHE 1 · IN PROCESS</text>
+  <text x="710" y="253" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">both keyed by circuit shape</text>
+
+  <!-- Select and exits -->
+  <line x1="800" y1="184" x2="820" y2="184" stroke="#e94560" stroke-width="2" marker-end="url(#arrowAccent)"/>
+  <rect x="820" y="94" width="256" height="184" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.18"/>
+  <text x="948" y="113" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">SELECT</text>
+  <rect x="835" y="125" width="226" height="35" rx="6" fill="#00cc66" fill-opacity="0.16" stroke="#00cc66" stroke-width="1.5"/>
+  <text x="849" y="147" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">verdict 1 →</text>
+  <text x="921" y="147" fill="#00ff80" font-family="monospace" font-size="11.5" font-weight="700">clifft_v2_spec</text>
+  <rect x="835" y="164" width="226" height="50" rx="6" fill="#ff8800" fill-opacity="0.15" stroke="#ff8800" stroke-width="1.5"/>
+  <text x="948" y="178" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">verdict 0, or any thrown exception in</text>
+  <text x="948" y="191" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">emission or compilation → the interpreter</text>
+  <text x="948" y="205" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">safe fallback</text>
+  <text x="948" y="225" fill="#9ba3b8" font-family="monospace" font-size="9" text-anchor="middle">v2_kernel.cc:399-403</text>
+  <text x="835" y="237" fill="#9ba3b8" font-family="monospace" font-size="9">build-v2-nohip/v2_spec_cache/</text>
+  <text x="835" y="249" fill="#00ff80" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">2026-07-27 · 16 of 16 pass</text>
+  <text x="835" y="261" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9">pre-fence: 36 verdicts · 2 failures</text>
+  <text x="829" y="273" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">36 vs 16: not shrinking · 009df59 rebuilt cache</text>
+
+  <!-- Cache reason callout -->
+  <path d="M710 278 V280" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+  <rect x="116" y="280" width="868" height="12" rx="6" fill="#53d8fb" fill-opacity="0.08"/>
+  <text x="550" y="289" fill="#9cecff" font-family="Arial, sans-serif" font-size="9.5" font-style="italic" text-anchor="middle">“NEVER re-run during a profiled sample dispatch — the gate's own validation dispatches would otherwise pollute rocprofv3 kernel traces.”</text>
+
+  <!-- Pollution incident band -->
+  <rect x="0" y="306" width="1100" height="262" fill="url(#redFill)"/>
+  <text x="24" y="328" fill="#ff7777" font-family="Arial, sans-serif" font-size="13" font-weight="700">WHEN THE VERDICT LIVED ONLY IN-PROCESS</text>
+  <line x1="24" y1="336" x2="1076" y2="336" stroke="#cc2222" stroke-width="1.5"/>
+
+  <!-- Fresh-process cause -->
+  <rect x="24" y="347" width="210" height="204" rx="9" fill="#0d0d1a" fill-opacity="0.76" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="129" y="370" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">rocprofv3</text>
+  <rect x="42" y="385" width="174" height="42" rx="6" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-opacity="0.75"/>
+  <text x="129" y="402" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">spawns a fresh process</text>
+  <text x="129" y="416" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">per invocation</text>
+  <line x1="129" y1="427" x2="129" y2="446" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="42" y="450" width="174" height="38" rx="6" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-opacity="0.75"/>
+  <text x="129" y="466" fill="#ff9b9b" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">in-process map is empty</text>
+  <text x="129" y="480" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">the gate re-runs</text>
+  <line x1="129" y1="488" x2="129" y2="505" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <text x="129" y="522" fill="#ff7777" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">inside the profiled region</text>
+  <text x="129" y="539" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">the measurement path now includes validation</text>
+
+  <!-- Kernel trace -->
+  <rect x="248" y="347" width="574" height="204" rx="9" fill="#0d0d1a" fill-opacity="0.76" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="266" y="369" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700">KERNEL TRACE</text>
+  <text x="266" y="388" fill="#ffb3b3" font-family="monospace" font-size="9">noise-fenced-gated   frame_h  clifft_v2_register x1 (19.1us) + clifft_v2_spec x2 (28.8us)</text>
+  <text x="266" y="403" fill="#ffb3b3" font-family="monospace" font-size="9">                     qv10     clifft_v2_coop     x1 (1270.2us) + clifft_v2_spec x2 (1667.2us)</text>
+  <text x="266" y="423" fill="#8ff7bf" font-family="monospace" font-size="9">noise-specialized    frame_h  clifft_v2_spec     x1 (10.5us)</text>
+  <text x="266" y="438" fill="#8ff7bf" font-family="monospace" font-size="9">                     qv10     clifft_v2_spec     x1 (1340.0us)</text>
+  <text x="266" y="459" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">GATED PROFILED REGION: x1 + x2</text>
+  <rect x="266" y="468" width="154" height="31" rx="4" fill="#ff8800" fill-opacity="0.17" stroke="#ff8800"/>
+  <text x="343" y="487" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">one interpreter run</text>
+  <rect x="426" y="468" width="154" height="31" rx="4" fill="#e94560" fill-opacity="0.18" stroke="#e94560"/>
+  <text x="503" y="487" fill="#ff9bad" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">specialized validation</text>
+  <rect x="586" y="468" width="218" height="31" rx="4" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66"/>
+  <text x="695" y="487" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">specialized sampling dispatch</text>
+  <path d="M266 507 V514 H804 V507" fill="none" stroke="#ff7777" stroke-width="1.5"/>
+  <text x="535" y="528" fill="#ff9b9b" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">the digester sums every dispatch into the reported kernel time</text>
+  <text x="535" y="543" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">the gate compares both executions, then the real sampling dispatch runs</text>
+
+  <!-- Apparent regressions and fix -->
+  <rect x="836" y="347" width="240" height="204" rx="9" fill="#0d0d1a" fill-opacity="0.76" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="956" y="369" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">APPARENT RATIOS</text>
+  <text x="852" y="392" fill="#dfe3ed" font-family="monospace" font-size="10">frame_h</text>
+  <text x="936" y="392" fill="#ff7777" font-family="monospace" font-size="11" font-weight="700">0.612 → 2.859</text>
+  <text x="852" y="414" fill="#dfe3ed" font-family="monospace" font-size="10">circuit_d3</text>
+  <text x="936" y="414" fill="#ff7777" font-family="monospace" font-size="11" font-weight="700">1.116 → 2.117</text>
+  <text x="852" y="436" fill="#dfe3ed" font-family="monospace" font-size="10">qv10</text>
+  <text x="936" y="436" fill="#ff7777" font-family="monospace" font-size="11" font-weight="700">0.252 → 0.675</text>
+  <text x="956" y="458" fill="#ff5555" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle" filter="url(#glowRed)">nothing had actually slowed down.</text>
+  <rect x="852" y="471" width="208" height="29" rx="14.5" fill="#00cc66" fill-opacity="0.16" stroke="#00cc66" stroke-width="1.5"/>
+  <text x="956" y="490" fill="#00ff80" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" filter="url(#glowGreen)">bbb5e42 · persisted &lt;hsaco&gt;.gate</text>
+  <text x="956" y="514" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9" font-style="italic" text-anchor="middle">“that polluted kernel traces with</text>
+  <text x="956" y="527" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9" font-style="italic" text-anchor="middle">clifft_v2_coop+spec dispatches summed by</text>
+  <text x="956" y="540" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9" font-style="italic" text-anchor="middle">the digester → inflated times.”</text>
+
+  <!-- Bottom punchline -->
+  <rect x="24" y="574" width="1052" height="40" rx="8" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="591" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700" text-anchor="middle">A correctness mechanism that runs on the measurement path becomes a performance number.</text>
+  <text x="550" y="607" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">Three of these eight circuits would have been reported as 2–4× regressions by anyone reading the table without the commit history.</text>
+</svg>

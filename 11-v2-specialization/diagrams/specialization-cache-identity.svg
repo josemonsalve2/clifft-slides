@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Half a Translation Unit</title>
+  <desc id="desc">The broken specialization cache key omitted device headers, preserving both stale binaries and stale correctness verdicts; the fixed key hashes header content, and binary markers prove which code ran.</desc>
+
+  <defs>
+    <linearGradient id="brokenFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="fixedFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.06"/>
+    </linearGradient>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowGrey" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#aeb4c7"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 59 H1100 M0 280 H1100 M0 386 H1100 M0 545 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M20 0 V545 M1080 0 V545" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Half a Translation Unit</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">A cache key that could not see the code that mattered</text>
+
+  <!-- Broken key -->
+  <rect x="20" y="68" width="365" height="202" rx="10" fill="url(#brokenFill)" stroke="#cc2222" stroke-width="2"/>
+  <rect x="20" y="68" width="365" height="28" rx="9" fill="#cc2222" fill-opacity="0.25"/>
+  <text x="36" y="87" fill="#ff7777" font-family="Arial, sans-serif" font-size="13" font-weight="700">BROKEN — generated C alone</text>
+
+  <rect x="36" y="106" width="178" height="49" rx="6" fill="#0d0d1a" fill-opacity="0.72" stroke="#cc2222" stroke-opacity="0.85"/>
+  <text x="48" y="126" fill="#ffffff" font-family="monospace" font-size="12" font-weight="700">csrc</text>
+  <text x="48" y="145" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">barely half the translation unit</text>
+
+  <text x="36" y="172" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">INCLUDED DEVICE HEADERS</text>
+  <rect x="36" y="180" width="145" height="21" rx="4" fill="#0d0d1a" fill-opacity="0.72" stroke="#69708a"/>
+  <text x="48" y="195" fill="#dfe3ed" font-family="monospace" font-size="10.5">v2_ops.h</text>
+  <rect x="36" y="205" width="145" height="21" rx="4" fill="#0d0d1a" fill-opacity="0.72" stroke="#69708a"/>
+  <text x="48" y="220" fill="#dfe3ed" font-family="monospace" font-size="10.5">v2_ops_body.inc</text>
+  <rect x="36" y="230" width="145" height="21" rx="4" fill="#0d0d1a" fill-opacity="0.72" stroke="#69708a"/>
+  <text x="48" y="245" fill="#dfe3ed" font-family="monospace" font-size="10.5">device_abi.h</text>
+
+  <text x="193" y="187" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">every <tspan font-family="monospace">v2_op_*</tspan> body</text>
+  <text x="193" y="204" fill="#dfe3ed" font-family="monospace" font-size="10">v2_barrier()</text>
+  <text x="193" y="221" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">every tunable constant</text>
+
+  <line x1="214" y1="130" x2="292" y2="130" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <path d="M302 111 H357 L342 148 H317 Z" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="329.5" y="133" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">hash</text>
+  <line x1="329.5" y1="148" x2="329.5" y2="232" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="286" y="238" width="87" height="22" rx="5" fill="#cc2222" fill-opacity="0.22" stroke="#cc2222"/>
+  <text x="329.5" y="253" fill="#ffffff" font-family="monospace" font-size="10.5" font-weight="700" text-anchor="middle">&lt;hash&gt;</text>
+
+  <path d="M181 232 H278" fill="none" stroke="#aeb4c7" stroke-opacity="0.65" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <line x1="286" y1="225" x2="286" y2="239" stroke="#cc2222" stroke-width="2"/>
+  <line x1="279" y1="232" x2="293" y2="232" stroke="#cc2222" stroke-width="2"/>
+  <rect x="199" y="229" width="86" height="20" rx="10" fill="#0d0d1a" stroke="#aeb4c7" stroke-opacity="0.55"/>
+  <text x="242" y="243" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">not in the hash</text>
+
+  <!-- Fixed key -->
+  <rect x="400" y="68" width="680" height="202" rx="10" fill="url(#fixedFill)" stroke="#00cc66" stroke-width="2"/>
+  <rect x="400" y="68" width="680" height="28" rx="9" fill="#00cc66" fill-opacity="0.22"/>
+  <text x="416" y="87" fill="#67f0a9" font-family="Arial, sans-serif" font-size="13" font-weight="700">FIXED — complete identity</text>
+  <text x="1064" y="87" fill="#aeb4c7" font-family="monospace" font-size="9.5" text-anchor="end">v2_compile_cache.cc:125-127</text>
+
+  <rect x="416" y="104" width="648" height="58" rx="6" fill="#0d0d1a" fill-opacity="0.78" stroke="#00cc66" stroke-opacity="0.58"/>
+  <g fill="#ffffff" font-family="monospace" font-size="9.5" xml:space="preserve">
+    <text x="428" y="121">std::string ident = csrc + "|" + llvm_bin("clang") + "|" + arch() + "|" +</text>
+    <text x="428" y="138">                    bitcode_dir() + "|" + device_header_ident();</text>
+    <text x="428" y="155">size_t h = std::hash&lt;std::string&gt;{}(ident);</text>
+  </g>
+
+  <g fill="#0d0d1a" fill-opacity="0.78" stroke="#00cc66" stroke-opacity="0.75">
+    <rect x="416" y="174" width="69" height="22" rx="5"/>
+    <rect x="496" y="174" width="142" height="22" rx="5"/>
+    <rect x="649" y="174" width="76" height="22" rx="5"/>
+    <rect x="736" y="174" width="112" height="22" rx="5"/>
+    <rect x="581" y="208" width="194" height="24" rx="5"/>
+  </g>
+  <g fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">
+    <text x="450.5" y="189">csrc</text>
+    <text x="567" y="189">llvm_bin("clang")</text>
+    <text x="687" y="189">arch()</text>
+    <text x="792" y="189">bitcode_dir()</text>
+    <text x="678" y="224">device_header_ident()</text>
+  </g>
+
+  <g fill="none" stroke="#00cc66" stroke-width="1.5">
+    <path d="M450.5 196 V203"/>
+    <path d="M567 196 V203"/>
+    <path d="M687 196 V203"/>
+    <path d="M792 196 V203"/>
+    <path d="M450.5 203 H924" marker-end="url(#arrowGreen)"/>
+    <path d="M775 220 H924" marker-end="url(#arrowGreen)"/>
+  </g>
+  <path d="M922 192 H1012 L989 236 H945 Z" fill="#00cc66" fill-opacity="0.18" stroke="#00cc66" stroke-width="1.5"/>
+  <text x="967" y="216" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">hash</text>
+  <line x1="967" y1="236" x2="967" y2="244" stroke="#00cc66" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <rect x="923" y="247" width="88" height="18" rx="5" fill="#00cc66" fill-opacity="0.20" stroke="#00cc66"/>
+  <text x="967" y="260" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700" text-anchor="middle">&lt;hash&gt;</text>
+
+  <rect x="788" y="237" width="122" height="25" rx="12.5" fill="#53d8fb" fill-opacity="0.13" stroke="#53d8fb"/>
+  <text x="849" y="253.5" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" filter="url(#glowCyan)">content, not mtime</text>
+  <line x1="788" y1="246" x2="777" y2="228" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <text x="416" y="257" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">mtimes change on every checkout and would defeat the cache for no reason</text>
+
+  <!-- Artifacts and invalidation -->
+  <rect x="20" y="286" width="1060" height="96" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="36" y="301" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">ONE IDENTITY PRODUCES BOTH ARTIFACTS</text>
+
+  <rect x="36" y="326" width="132" height="30" rx="6" fill="#cc2222" fill-opacity="0.16" stroke="#cc2222"/>
+  <text x="102" y="345" fill="#ffaaaa" font-family="monospace" font-size="10.5" font-weight="700" text-anchor="middle">header edit</text>
+
+  <rect x="406" y="325" width="92" height="32" rx="6" fill="#e94560" fill-opacity="0.16" stroke="#e94560"/>
+  <text x="452" y="345" fill="#ffffff" font-family="monospace" font-size="10.5" font-weight="700" text-anchor="middle">&lt;hash&gt;</text>
+
+  <path d="M498 341 H570 V328 H636" fill="none" stroke="#e94560" stroke-width="1.8" marker-end="url(#arrowRed)"/>
+  <path d="M570 341 V358 H636" fill="none" stroke="#e94560" stroke-width="1.8" marker-end="url(#arrowRed)"/>
+  <rect x="642" y="316" width="170" height="25" rx="5" fill="#cc2222" fill-opacity="0.16" stroke="#cc2222"/>
+  <text x="727" y="333" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">&lt;hash&gt;.hsaco</text>
+  <text x="824" y="333" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">the binary</text>
+  <rect x="642" y="345" width="170" height="25" rx="5" fill="#cc2222" fill-opacity="0.16" stroke="#cc2222"/>
+  <text x="727" y="362" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">&lt;hash&gt;.hsaco.gate</text>
+  <text x="824" y="357" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">the correctness verdict, keyed off the same path</text>
+  <text x="824" y="370" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700">so a stale &quot;0&quot; hides the fix</text>
+
+  <g fill="none" stroke="#aeb4c7" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrowGrey)">
+    <path d="M172 334 H290 V310 H700 V313"/>
+    <path d="M172 348 H290 V376 H700 V373"/>
+  </g>
+  <text x="380" y="305" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-style="italic" text-anchor="middle">should invalidate</text>
+  <text x="380" y="371" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-style="italic" text-anchor="middle">should invalidate</text>
+  <g stroke="#cc2222" stroke-width="3">
+    <line x1="504" y1="302" x2="520" y2="318"/><line x1="520" y1="302" x2="504" y2="318"/>
+    <line x1="504" y1="364" x2="520" y2="380"/><line x1="520" y1="364" x2="504" y2="380"/>
+  </g>
+  <text x="1064" y="301" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="end">BROKEN: both survive</text>
+
+  <!-- Proof table -->
+  <rect x="20" y="380" width="716" height="156" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="36" y="399" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">BINARY PROOF — INDEPENDENT MARKERS</text>
+
+  <rect x="36" y="407" width="684" height="24" fill="#ffffff" fill-opacity="0.06"/>
+  <line x1="393" y1="407" x2="393" y2="526" stroke="#ffffff" stroke-opacity="0.12"/>
+  <line x1="558" y1="407" x2="558" y2="526" stroke="#ffffff" stroke-opacity="0.12"/>
+  <g fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">
+    <text x="48" y="423">marker</text>
+    <text x="475.5" y="423" text-anchor="middle">build cache (what the run used)</text>
+    <text x="639" y="423" text-anchor="middle">fresh cache</text>
+  </g>
+
+  <line x1="36" y1="431" x2="720" y2="431" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="48" y="447" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">barriers with <tspan font-family="monospace">ds_*</tspan> in flight and no <tspan font-family="monospace">lgkmcnt(0)</tspan></text>
+  <text x="475.5" y="447" fill="#ff7777" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">1400 / 1509 (92.8 %)</text>
+  <text x="639" y="447" fill="#67f0a9" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">0 / 1509 (0.0 %)</text>
+
+  <line x1="36" y1="456" x2="720" y2="456" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="48" y="472" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5"><tspan font-family="monospace">s_barrier</tspan> preceded by <tspan font-family="monospace">lgkmcnt(0)</tspan> within 3 instrs</text>
+  <text x="475.5" y="472" fill="#ff7777" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">49 / 1509 (3.2 %)</text>
+  <text x="639" y="472" fill="#67f0a9" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">1404 / 1509 (93.0 %)</text>
+
+  <line x1="36" y1="481" x2="720" y2="481" stroke="#ffffff" stroke-opacity="0.10"/>
+  <rect x="36" y="481" width="684" height="45" fill="#53d8fb" fill-opacity="0.06"/>
+  <text x="48" y="498" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">V2_DUST_EPS baked into the binary</text>
+  <text x="475.5" y="498" fill="#ff7777" font-family="monospace" font-size="10.5" font-weight="700" text-anchor="middle">0x3c32725d… = 1e-18</text>
+  <text x="639" y="498" fill="#67f0a9" font-family="monospace" font-size="10.5" font-weight="700" text-anchor="middle">0x3da5fd7f… = 1e-11</text>
+  <text x="48" y="516" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">THE CLEANER MARKER</text>
+  <text x="170" y="516" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">bit pattern, not a heuristic · exactly twice in its binary · zero times in the other · no interpretation involved</text>
+
+  <!-- Cache timeline -->
+  <rect x="748" y="380" width="332" height="156" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="764" y="399" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">CACHE TIMELINE</text>
+
+  <path d="M776 432 V425 H875 V432" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+  <text x="829" y="409" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">every kernel the run dispatched</text>
+  <text x="829" y="420" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">predates both fixes</text>
+
+  <line x1="776" y1="469" x2="1056" y2="469" stroke="#aeb4c7" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <g stroke-width="2">
+    <line x1="780" y1="461" x2="780" y2="477" stroke="#cc2222"/>
+    <line x1="875" y1="461" x2="875" y2="477" stroke="#cc2222"/>
+    <line x1="970" y1="461" x2="970" y2="477" stroke="#00cc66"/>
+    <line x1="1048" y1="461" x2="1048" y2="477" stroke="#00cc66"/>
+  </g>
+  <g font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">
+    <text x="764" y="443" fill="#ffffff" font-weight="700" text-anchor="start">32 of the 36 cached kernels</text>
+    <text x="764" y="455" fill="#ffaaaa" text-anchor="start">2026-07-25</text>
+    <text x="875" y="491" fill="#ffffff" font-weight="700">remaining 4</text>
+    <text x="875" y="504" fill="#ffaaaa">07-26 00:00–01:48</text>
+    <text x="970" y="443" fill="#ffffff" font-weight="700">barrier fix</text>
+    <text x="970" y="455" fill="#67f0a9">07-26 06:33</text>
+    <text x="1066" y="491" fill="#ffffff" font-weight="700" text-anchor="end">dust fix</text>
+    <text x="1066" y="504" fill="#67f0a9" text-anchor="end">07-26 13:31</text>
+  </g>
+  <text x="914" y="525" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">build cache (what the run used) → fresh cache</text>
+
+  <!-- Consequence strip -->
+  <rect x="0" y="545" width="1100" height="75" fill="#0d0d1a"/>
+  <line x1="0" y1="545" x2="1100" y2="545" stroke="#69708a" stroke-opacity="0.45"/>
+  <rect x="18" y="554" width="728" height="57" rx="8" fill="#e94560" fill-opacity="0.13" stroke="#e94560"/>
+  <text x="32" y="570" fill="#ffffff" font-family="Arial, sans-serif" font-size="10.5">The stale run recorded the <tspan font-family="monospace" font-weight="700">coop_r10_n1720</tspan> gate as <tspan fill="#ff7777" font-weight="700">failing</tspan> — a verdict on the <tspan font-weight="700">pre-fence</tspan> binary.</text>
+  <text x="32" y="585" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">An entire section called it “the single largest open correctness item in V2.” <tspan fill="#00ff80" font-weight="700">It was already fixed.</tspan></text>
+  <text x="32" y="598" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">The claim survived only because the cache returned the pre-fix binary.</text>
+  <text x="32" y="606" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">Quarantined:</text>
+  <text x="91" y="606" fill="#aeb4c7" font-family="monospace" font-size="9">V2_performance/history/stale_spec_cache_20260725/</text>
+
+  <rect x="758" y="554" width="324" height="57" rx="8" fill="#ff8800" fill-opacity="0.13" stroke="#ff8800"/>
+  <text x="772" y="567" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10" font-weight="700">KNOWN NEAR-MISS — d5_fence.sh:</text>
+  <text x="772" y="578" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">"The `.gate` verdict is keyed on the generated-C hash,</text>
+  <text x="772" y="589" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">which does NOT change when `v2_ops.h` changes —</text>
+  <text x="772" y="598" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700">a stale '0' would hide the fix."</text>
+  <text x="772" y="607" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9">Every d5_*.sh diagnostic sets its own V2_SPEC_CACHE_DIR.</text>
+</svg>
