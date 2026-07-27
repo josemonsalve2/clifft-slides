@@ -108,7 +108,7 @@ baseline it must beat.
 | **SVM** | bytecode interpreter kernel | no | HIP | the baseline; fast, correct, hard to beat |
 | **Hybrid** | per-circuit HIP source, AOT-compiled | yes | HIP | correct and competitive, but HIP-bound and never pulled ahead |
 | **MLIR V1** | per-circuit hand-emitted MLIR text | yes | MLIR→LLVM | **failed**: 5–60× slower, 221 s compiles, 20 MB IR |
-| **V2** | per-circuit C, specialized operands, runtime loops | yes | C→amdgcn (no HIP) | **1.3–4.0× faster than SVM** on 20 of 26 circuits (the other 6 recovered post-fix, §1.3(d)) |
+| **V2** | per-circuit C, specialized operands, runtime loops | yes | C→amdgcn (no HIP) | **1.0–3.9× faster than SVM** on **26 of 26** circuits |
 
 ### 1.2 The headline number
 
@@ -117,15 +117,21 @@ V2 versus the SVM interpreter:
 
 | regime | circuits | V2/SVM ratio | reading |
 |---|---|---|---|
-| Large surface codes, global tier | 5 | **0.252 – 0.306** | V2 is **3.3–4.0× faster** |
-| Mid-size surface + QV10, coop tier | 5 | 0.317 – 0.530 | V2 is **1.9–3.2× faster** |
-| Register tier (`four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5`) | 4 | 0.519 – 0.773 | V2 is **1.3–1.9× faster** |
-| Quantum-volume, global tier rank 20–24 | 6 | 0.729 – 0.992 | V2 wins **1–27 %**, shrinking with rank (§10.6) |
-| `circuit_d5` + `cultivation_d5`, coop tier | 6 | **1.440 – 1.451** | V2 is **1.44× slower** (§1.3(d)) |
+| Large surface codes, global tier | 5 | **0.256 – 0.310** | V2 is **3.2–3.9× faster** |
+| Mid-size surface + QV10, coop tier | 5 | 0.319 – 0.534 | V2 is **1.9–3.1× faster** |
+| Register tier (`four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5`) | 4 | 0.509 – 0.742 | V2 is **1.3–2.0× faster** |
+| `circuit_d5` + `cultivation_d5`, coop tier | 6 | 0.786 – 0.856 | V2 is **1.2–1.3× faster** (post-fence, §1.3(d)) |
+| Quantum-volume, global tier rank 20–24 | 6 | 0.732 – 0.990 | V2 wins **1–37 %**, shrinking with rank (§10.6) |
 
-**26 circuits, 20 wins.** The five regimes sum to exactly 26, and membership is
+**mean 0.626, median 0.670, wins 26/26** — all 26 circuits, both backends, one
+job (50793), one node (`smci350-rck-g03-d13-21`), zero profiler aborts. Every
+circuit dispatches `clifft_v2_spec`; none falls back to the interpreter.
+
+**26 circuits, 26 wins.** The five regimes sum to exactly 26, and membership is
 assigned by *measured launch geometry* rather than by circuit name — the census
-of §10.5 is precisely the finding that names are unreliable here.
+of §10.5 is precisely the finding that names are unreliable here. (This bit
+during the audit: `surface_d7_t5` was filed under the coop band on the strength
+of its name, and its measured grid is 79 workgroups — register geometry.)
 
 The geometry is unambiguous. Global-tier kernels launch a **resident pool sized
 from the HBM budget** and then work-steal shots; coop-tier kernels launch **one
@@ -157,17 +163,21 @@ Five for five, including the XCD-alignment rounding. So the QV circuits lose
 occupancy geometrically as rank climbs — the pool halves with every added qubit
 — and that compounds with the register spilling of §10.6. Two independent
 mechanisms degrade the same six circuits, which is why their ratios approach 1.0
-from a corpus whose median is 0.678.
+from a corpus whose median is 0.670.
 
 All 26 are **byte-exact** against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).
 
-> **These ratios understate V2.** They are from `20260726T014859Z_all-tier5plus`,
-> which agrees with the retracted run to within 0.4 % — but both are
-> *pre-fence-fix*, and the six losing circuits were silently running the
-> interpreter rather than the specializer because of it. Post-fix spot
-> measurements put them near 0.40 instead of 1.44 (§1.3(d)). The table is kept
-> as the conservative baseline; §15 carries the authoritative post-fix corpus.
+> **Provenance.** The ratios above are job **50793**
+> (`20260727T125310Z_report-final-allfixtures`): 26 circuits, both backends,
+> one node, commit `79d4463` clean, zero `rocprofv3` aborts. It replaces two
+> earlier attempts — a retracted run that dispatched stale kernels (§14.0's
+> §0 notice) and job 50785, which ran only 18 of 26 because eight fixture paths
+> had gone stale, aborted silently, and reported "wins 18/18" over the
+> truncated set. That truncation dropped the six QV circuits, the corpus's
+> weakest wins, and pulled the median from 0.670 to 0.518 — a *flattering*
+> error produced entirely by missing data. `bench_all.sh:127-135` now aborts
+> the run on a missing fixture rather than continuing past it.
 
 ### 1.3 The five results this report argues for
 
@@ -229,31 +239,34 @@ back-to-back in one job. It does *not* directly give a V2/SVM ratio: dividing it
 into the corpus baselines would chain a `d13-21` measurement onto an `f13-21`
 one, and `mi350x-es` is heterogeneous.
 
-The direct measurement now exists (job 50785, both backends in one job on
-`d13-21`) and it confirms the sign flip:
+The direct measurement now exists (job **50793**, all 26 circuits, both
+backends in one job on `d13-21`, zero profiler aborts) and it confirms the sign
+flip:
 
 | circuit | pre-fence, interpreter | **post-fence, specialized** |
 |---|---|---|
-| `circuit_d5_p0.0005` | 1.451 | **0.842** |
-| `circuit_d5_p0.001` | 1.451 | **0.851** |
-| `circuit_d5_p0.002` | 1.451 | **0.843** |
-| `circuit_d5_p0.003` | 1.443 | **0.828** |
-| `circuit_d5_p0.005` | 1.448 | **0.811** |
+| `circuit_d5_p0.0005` | 1.451 | **0.856** |
+| `circuit_d5_p0.001` | 1.451 | **0.847** |
+| `circuit_d5_p0.002` | 1.451 | **0.846** |
+| `circuit_d5_p0.003` | 1.443 | **0.838** |
+| `circuit_d5_p0.005` | 1.448 | **0.815** |
+| `cultivation_d5` | 1.443 | **0.786** |
 
-All six now run `clifft_v2_spec` and win by 15–19 %. Worth stating plainly: an
-earlier draft of this section *projected* ~0.40 for these circuits by chaining
-the two runs, and the direct measurement says **~0.84**. The projection was
-wrong by a factor of two, in the flattering direction, for exactly the reason
-the project's benchmarking rule exists. The 1.7× gain was real; the assumption
-that an SVM baseline transfers across nodes was not.
+All six `circuit_d5` variants *and* `cultivation_d5` now run `clifft_v2_spec`
+and win by 14–21 %. Worth stating plainly: an earlier draft of this section
+*projected* ~0.40 for these circuits by chaining the two runs, and the direct
+measurement says **~0.84**. The projection was wrong by a factor of two, in the
+flattering direction, for exactly the reason the project's benchmarking rule
+exists. The 1.7× gain was real; the assumption that an SVM baseline transfers
+across nodes was not.
 
-So the headline "20 of 26" in §1.2 is a *pre-fix* figure. Post-fix, five of the
-six former losses are measured wins and the corpus stands at **25 of 26
-measured**; the sixth, `cultivation_d5`, shares the coop specialization that
-the other five recovered on but was not paired in job 50785 (its fixture path
-was stale, §14.0), so it is *unmeasured* rather than assumed. **§1.2's table is
-the conservative reading, not the optimistic one**, and §15 carries the full
-post-fix corpus. (§11.1, §11.2)
+So the headline "20 of 26" in §1.2 is a *pre-fix* figure. Post-fix, the corpus
+stands at **26 of 26 — every circuit measured, every circuit a V2 win**, mean
+0.626, median 0.670. An intermediate draft of this paragraph read "25 of 26
+measured", correctly refusing to assume `cultivation_d5` from the five circuits
+that shared its specialization; job 50793 paired it and it wins at 0.786.
+**§1.2's table is the conservative reading, not the optimistic one**, and §15
+carries the full post-fix corpus. (§11.1, §11.2)
 
 **(e) The f32/f64 "gap" was never really about arithmetic precision.** It was a
 threshold constant calibrated for f64 and left in place when the storage became
@@ -273,9 +286,11 @@ Stated plainly, because the failures cost more engineering time than the wins:
 - **Straight-lining noise operations does not help.** Measured gain: 1.10× on
   instruction count, 1.02× on VALU, and **zero** VGPR relief — 56 in both forms
   (§7.9).
-- **MFMA is inapplicable.** `SQ_INSTS_MFMA = 0.0` in every counter block
-  collected — 51 of the 52 backend×circuit cells; the 52nd (`qv24_L4_seed42`,
-  SVM side) has an empty counter block and is *unmeasured* rather than nonzero.
+- **MFMA is inapplicable.** `SQ_INSTS_MFMA = 0.0` on **all 52** backend×circuit
+  cells of job 50793 — 26 circuits × 2 backends, none missing. (An earlier draft
+  could only claim 51 of 52, because `qv24_L4_seed42`'s SVM counter block was
+  absent from the truncated job 50785 and was recorded as *unmeasured* rather
+  than assumed zero. It is now measured, and it is zero.)
   The workload is a butterfly reduction over amplitudes, not a GEMM.
   Any claim that the matrix cores can be brought to bear here is unsupported by
   this corpus. (§14.6)
