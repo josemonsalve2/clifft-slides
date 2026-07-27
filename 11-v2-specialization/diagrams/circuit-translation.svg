@@ -1,4 +1,4 @@
-<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Courier New', monospace;">
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Courier New', monospace;">
   <!-- Background -->
   <rect width="800" height="600" fill="#1a1a2e"/>
 
@@ -108,7 +108,7 @@
   <rect x="290" y="244" width="210" height="55" rx="4" fill="#001a08" stroke="#00cc66" stroke-width="1"/>
   <text x="395" y="258" fill="#00cc66" font-size="9" font-weight="bold" text-anchor="middle">After</text>
   <text x="395" y="271" fill="#ccc" font-size="8" text-anchor="middle">Reordered to minimize T-gate overlap</text>
-  <text x="395" y="283" fill="#ccc" font-size="8" text-anchor="middle">peak_rank ≤ 1  ✓</text>
+  <text x="395" y="283" fill="#ccc" font-size="8" text-anchor="middle" font-family="DejaVu Sans">peak_rank ≤ 1  ✓</text>
   <text x="395" y="295" fill="#66ff99" font-size="8" text-anchor="middle">208 synthetic circuits: all ≤ rank 1</text>
 
   <!-- Critical note -->
@@ -220,7 +220,7 @@
   <text x="692" y="514" fill="#888" font-size="8" text-anchor="middle">(device → host)</text>
   <text x="692" y="528" fill="#00cc66" font-size="8" text-anchor="middle">det[0] = meas[0]⊕meas[1]</text>
   <text x="692" y="542" fill="#ccc" font-size="8" text-anchor="middle">peak_rank enforced ≤ 1</text>
-  <text x="692" y="556" fill="#00cc66" font-size="8" text-anchor="middle">active_k → 0 at exit ✓</text>
+  <text x="692" y="556" fill="#00cc66" font-size="8" text-anchor="middle" font-family="DejaVu Sans">active_k → 0 at exit ✓</text>
   <text x="692" y="570" fill="#888" font-size="8" text-anchor="middle">→ decoder feed</text>
 
   <!-- Arrow from blocks to result -->
