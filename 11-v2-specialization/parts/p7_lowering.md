@@ -273,24 +273,64 @@ is thousands of ops. The op census at `2_clangO0` for `circuit_d3`:
 |---|---|
 | `load` | 4,898 |
 | `store` | 2,488 |
-| **`alloca`** | **2,268** |
-| **`addrspacecast`** | **2,259** |
+| **`alloca`** | **2,271** |
+| **`addrspacecast`** | **2,262** |
 | `call` | 1,770 |
 
 **`clangO0.ll` → `clangO2.ll`: 19,551 → 8,132.** And the census after:
 
 | Op | `-O0` | `-O2` |
 |---|---|---|
-| `alloca` | 2,268 | **0** |
-| `addrspacecast` | 2,259 | **8** |
+| `alloca` | 2,271 | **3** |
+| `addrspacecast` | 2,262 | **8** |
 | `call` | 1,770 | 72 |
 | `load` | 4,898 | 1,014 |
 | `store` | 2,488 | 1,103 |
 | `fmul` | 12 | **448** |
 | `shufflevector` | 0 | **459** |
 
+> **Correction, and a caution about the tooling.** An earlier draft of this table
+> read `alloca` **2,268 → 0**, taken from `stage_stats.csv`. Both numbers were
+> wrong, in the same direction, for two different reasons — and the raw `.ll`
+> files disagree with the CSV:
+>
+> * The `-O2` zero is an artifact of `stage_stats.sh`, which emits only
+>   `hist | head -30`. At `-O2`, `alloca` ranks **36th** with 3 occurrences, so it
+>   falls off the histogram. **The CSV recorded "absent from the top 30" and the
+>   draft read it as "zero."** That is the most dangerous shape a tooling bug can
+>   take: a truncation that produces exactly the number the story wanted.
+> * The `-O0` count of 2,268 misses 3 `%atomic-temp*` / `%.atomictmp*` slots,
+>   which the script's regex drops because clang names them with a leading `.`
+>   and a `-` that the `[0-9a-zA-Z_.]` character class does not accept.
+>
+> Both were found by counting `' = alloca '` in the raw IR instead of reading the
+> summary. The corrected numbers do not weaken the point — 2,271 → 3 is a 99.87 %
+> elimination — but "3" is a more interesting fact than "0", as the next
+> paragraph shows.
+
 Read those last two rows carefully, because they are the whole point. `alloca`
-goes to **zero** — every piece of shot-local state now lives in registers.
+goes from 2,271 to **3** — essentially all shot-local state now lives in
+registers. The three survivors are worth naming, because they are exactly the
+state that *cannot* be promoted:
+
+```llvm
+; the only allocas left in clifft_v2_spec after -O2
+%st   = alloca %struct.V2State,          align 8, addrspace(5)
+%vloc = alloca [16 x %struct.CV2Complex], align 8, addrspace(5)
+%sloc = alloca [8  x %struct.CV2Complex], align 8, addrspace(5)
+```
+
+All three are in `clifft_v2_spec` itself, all in `addrspace(5)` (private/scratch),
+and all three are *aggregates whose address escapes* — `%st` is passed by pointer
+to every `v2_op_*` that SROA could not fully inline away (the `noinline` noise
+ops), and `%vloc`/`%sloc` are the fixed-size complex staging arrays. SROA
+promotes scalars and small aggregates with non-escaping addresses; these are
+neither. This is the residue that shows up in the `private=336` segment size in
+the dispatch log, and it is the mechanism behind the scratch traffic discussed in
+§10. **The interesting claim is not that `alloca` reached zero — it did not —
+but that what remains is a fixed, per-kernel constant rather than something that
+scales with circuit length.** 2,271 grew with the instruction count; 3 does not.
+
 `call` collapses 1,770 → 72 as the `always_inline` op bodies are inlined (the
 72 survivors are the `noinline` noise ops from `V2_NOISE_ATTR` plus ocml calls).
 And `fmul` *rises* from 12 to 448 while `shufflevector` appears from nothing:
@@ -522,7 +562,7 @@ path — not 23× on the f64 one.**
 |---|---|---|
 | Where the representation is largest | at emission (23,002 lines, human-authored) | at `-O0` (19,551 lines, compiler-authored, thrown away) |
 | What the "MLIR stage" contributed | constant dedup + CSE; one pass a no-op | n/a — no MLIR |
-| Where `alloca`s die | LLVM `-O2`, and only on small circuits | clang `-O2`, completely (2,268 → 0) |
+| Where `alloca`s die | LLVM `-O2`, and only on small circuits | clang `-O2`, 2,271 → **3** (99.87 %); the 3 are a fixed per-kernel residue, not circuit-scaling |
 | Whether the optimizer stays enabled | no — detuned by IR size above threshold | yes — IR never gets large enough to matter |
 | Vectorization | none — 0 packed ops, with or without the log inlining | 459 `shufflevector` → 431 `v_pk_add_f32`, 416 `v_pk_mul_f32` |
 | `log()` | hand-written in MLIR, re-inlined 52× by `opt` | `__ocml_log_f64`, one call, three relocations |
