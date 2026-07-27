@@ -1,0 +1,4 @@
+[24-one-library-two-consumers] exit=0 -> diagrams/one-library-two-consumers.svg 12676
+[26-noise-loop-cannot-fold] exit=0 -> diagrams/noise-loop-cannot-fold.svg 15523
+[23-register-tier-topology] exit=0 -> diagrams/register-tier-topology.svg 15893
+[25-xcd-pool-underfill] exit=0 -> diagrams/xcd-pool-underfill.svg 21183

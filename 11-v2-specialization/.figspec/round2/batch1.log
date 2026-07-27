@@ -1,0 +1,3 @@
+[21-rank22-spill-cliff] exit=0 -> diagrams/rank22-spill-cliff.svg 13157
+[20-scalar-pipe-deletion] exit=0 -> diagrams/scalar-pipe-deletion.svg 17450
+[22-hsa-aql-dispatch-path] exit=0 -> diagrams/hsa-aql-dispatch-path.svg 19902

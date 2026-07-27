@@ -1,0 +1,49 @@
+You are a senior technical illustrator and GPU performance engineer auditing a
+long technical report for FIGURE COVERAGE. You will NOT write any SVGs in this
+task. You will produce a prioritized proposal list.
+
+READ, in this order:
+  1. REPORT.md                 -- the full report (~6000 lines). Read all of it.
+  2. .figspec/STYLE.md         -- the house style for figures.
+  3. ls diagrams/              -- the 26 figures that ALREADY exist.
+  4. .figspec/01-factored-state.md and .figspec/14-barrier-race.md
+                               -- two example specs, so you know the spec format.
+
+The report already embeds 19 diagrams. Your job is to find what is STILL
+UNILLUSTRATED and would most benefit from a figure.
+
+The report author specifically wants MORE figures of these kinds:
+  (a) GPU MICROARCHITECTURE figures that explain, step by step, WHY the
+      measured performance is better -- wavefront scheduling, VALU/SALU issue,
+      LDS banking, register file and spilling, cache hierarchy behaviour,
+      occupancy, XCD partitioning. Show the mechanism, not just the number.
+  (b) RUNTIME CONCEPT diagrams -- dispatch paths, queue/packet structure,
+      persistent-kernel work distribution, cache-key derivation and
+      invalidation, compilation pipelines, specialization data flow.
+  (c) Anything where the report currently explains a subtle idea in prose or
+      in a table that a reader would grasp faster from a picture.
+
+RULES for your proposals:
+  - Every figure you propose must be supported by data ALREADY IN THE REPORT.
+    Cite the section number and quote the exact numbers it would use. If the
+    report has no number for something, say so and mark the figure as
+    "qualitative -- no numbers".
+  - Do NOT propose a figure that duplicates one of the 26 existing diagrams.
+    Check the list carefully. If an existing figure is close but incomplete,
+    propose an EXTENSION and say what it adds.
+  - Prefer figures that explain a MECHANISM over figures that restate a table.
+  - Be honest about which proposals are strong and which are marginal.
+
+OUTPUT: write your proposal to .figspec/round2/PROPOSALS.md with one section
+per proposed figure, in priority order, each containing:
+    ## N. <slug> -- <one-line title>
+    **Kind:** microarchitecture | runtime-concept | conceptual | data
+    **Report section:** §X.Y  (and the line numbers)
+    **What it explains:** 2-4 sentences on the MECHANISM.
+    **Why prose is not enough:** 1-2 sentences.
+    **DATA:** the exact numbers, verbatim from the report, that the figure
+              would show -- or "qualitative, no numbers".
+    **Strength:** strong | good | marginal, with one line of justification.
+
+Aim for 15-25 proposals. Write ONLY .figspec/round2/PROPOSALS.md.
+Reply with a one-line confirmation and nothing else.
