@@ -59,24 +59,53 @@ AMDGPU `.set` directives, and counts of `s_load`, `ds_read`/`ds_write`, `v_*`,
 and `s_cbranch`/`s_branch`. Raw output is in
 `V2_performance/lowering/spec_examples/stats.csv`; the `.s` files for both forms
 of all eight cases are checked in alongside it, and `build_examples.sh`
-reproduces all sixteen byte-for-byte.
+reproduces all sixteen byte-for-byte (`ARCH` defaults to `gfx950`; the
+register-tier cases additionally get `-DV2_REGISTER=1`, which is what selects
+`V2_STRIDE 1` over `V2_STRIDE 256`).
 
-> **A measurement note, because an earlier draft of this chapter got it wrong.**
-> The first version of the harness reported an *ISA line count* — `wc -l` of the
-> `.s` file. That number is dominated by assembler directives, comments, labels
-> and the AMDGPU metadata block: 205–316 lines per case, which for these small
-> kernels is more than half the file. Because that constant overhead is
-> approximately equal in both forms, it diluted every ratio toward 1.0 and
-> systematically *understated* the effect this chapter is about. S1 read 1.37×
-> where the instruction ratio is 2.89×. The table below counts instructions —
-> tab-indented lines that are neither `.directive` nor `; comment`. Two further
-> bugs are fixed in the same pass: the resource columns were scraped from the
-> `; NumVgprs:` comment, which LLVM emits as a *symbolic expression*
-> (`max(56, amdgpu.max_num_vgpr)`) for any kernel that calls an external
-> function — so S7, which calls `__ocml_log_f64`, scraped to **0** and appeared
-> to use no vector registers at all, when it in fact uses 56 in both forms — and
-> `; NumSgprs:` does not appear in this LLVM's output at all, so that column read
-> 0 for all sixteen files. All three are read from the `.set` directives now.
+### 7.2 A measurement note, because an earlier draft of this chapter got it wrong
+
+The first version of the harness reported an *ISA line count* — `wc -l` of the
+`.s` file. That number is dominated by assembler directives, comments, labels
+and the AMDGPU metadata block: the non-instruction remainder is 199–316 lines
+per case, which for these small kernels is 41–82 % of the file. Because that
+overhead is nearly constant across the two forms — it differs by 4–23 lines
+where the instruction counts differ by up to 126 — it diluted every ratio
+toward 1.0 and systematically *understated* the effect this chapter is about.
+S1 read 1.37× where the instruction ratio is 2.89×; every case moved the same
+direction:
+
+| Case | line ratio (wrong) | instruction ratio (right) |
+|---|---|---|
+| S1 | 1.37× | 2.89× |
+| S2 | 1.59× | 2.94× |
+| S3 | 1.30× | 1.98× |
+| S4 | 1.23× | 1.38× |
+| S5 | 1.44× | 2.56× |
+| S6 | 1.26× | 1.71× |
+| S7 | 1.07× | 1.10× |
+| S8 | 1.14× | 1.35× |
+
+The table below counts instructions — tab-indented lines that are neither
+`.directive` nor `; comment`. Two further bugs are fixed in the same pass: the
+resource columns were scraped from the `; NumVgprs:` comment, which LLVM emits
+as a *symbolic expression* (`max(56, amdgpu.max_num_vgpr)`) for any kernel that
+calls an external function — so S7, which calls `__ocml_log_f64`, scraped to
+**0** and appeared to use no vector registers at all, when it in fact uses 56 in
+both forms — and `; NumSgprs:` does not appear in this LLVM's output at all
+(only `; TotalNumSgprs:`, itself symbolic), so that column read 0 for all
+sixteen files. All three are read from the `.set` directives now.
+
+A third, subtler bug is documented in `build_examples.sh:38-42` and is worth
+repeating because it is the kind that produces a *plausible* wrong answer:
+
+> A literal tab, not the escape: `/usr/bin/grep` here is ugrep, which does not
+> expand `\t` inside an ERE when the script runs non-interactively (it does when
+> typed at a prompt — so this silently counted 0 in batch and the right number
+> by hand).
+
+An instruction count that reads 0 in the CSV and the correct value when checked
+by hand at a prompt is worse than one that is simply wrong.
 
 ```
 S1_frame_cnot    instrs  136->47   (2.89x)  vgpr   8->3    v_alu   44->8    (5.50x)  branch   6->4
@@ -185,23 +214,34 @@ study, so it is worth reading both sides. The specialized form, in full:
 ```asm
 case_kernel:
 	s_load_dwordx2 s[0:1], s[0:1], 0x0
+	s_mov_b32   s7, 0
+	s_waitcnt   lgkmcnt(0)
 	s_load_dwordx2 s[4:5], s[0:1], 0x0
 	s_load_dwordx2 s[2:3], s[0:1], 0x28
+	s_waitcnt   lgkmcnt(0)
 	s_and_b32   s6, s4, 8               ; fget(px, 3)  -> a constant mask
 	s_cmp_eq_u64 s[6:7], 0
 	s_cbranch_scc1 .LBB0_2
 	s_xor_b32   s4, s4, 0x400           ; fxor(px, 10) -> a constant mask
+	v_mov_b32_e32 v2, 0
 	v_mov_b64_e32 v[0:1], s[4:5]
 	global_store_dwordx2 v2, v[0:1], s[0:1]
 	s_and_b32   s6, s2, 0x400
 	...
 ```
 
-Every frame access is `s_and_b32` / `s_xor_b32` against a **literal mask**
-(`8`, `0x400`, `0x1000`, `64`) on the **scalar** unit. Three CNOT/CZ ops
-compile to 8 VALU instructions total, and those 8 are just the `v_mov`s that
-stage a scalar result into a vector register for `global_store`. The frame
-logic itself has left the vector pipe entirely.
+Every frame access is `s_and_b32` / `s_xor_b32` against a **literal mask** on
+the **scalar** unit. The full set of masks in the specialized kernel is `8`,
+`0x400`, `0x1000` and `64` — respectively bit 3 (`ctrl=3`), bit 10 and bit 12
+(the two CNOT targets) and bit 6 (the CZ target), each appearing exactly where
+the source says it should.
+
+Three CNOT/CZ ops compile to **8 VALU instructions total, and all 8 are `v_mov`**
+— four `v_mov_b32_e32 v2, 0` supplying the zero address offset and four
+`v_mov_b64_e32 v[0:1], s[..]` staging a scalar result into a vector register for
+`global_store`. Not one arithmetic vector instruction survives. The frame logic
+itself has left the vector pipe entirely; what remains is purely the
+scalar→vector staging the store instruction's encoding requires.
 
 The interpreter form for the identical three ops. The instruction fetch
 (`interp/S1_frame_cnot.s:9-18`):
@@ -209,15 +249,20 @@ The interpreter form for the identical three ops. The instruction fetch
 ```asm
 	s_load_dword s6, s[0:1], 0x20       ; pc
 	s_load_dwordx2 s[2:3], s[0:1], 0x18 ; instrs
+	v_mov_b32_e32 v3, 0
+	s_load_dwordx2 s[0:1], s[0:1], 0x0
+	s_waitcnt lgkmcnt(0)
 	s_mul_i32 s7, s6, 40                ; pc * sizeof(CV2Instr) -- address math
 	s_mul_hi_u32 s5, s6, 40
 	s_add_u32 s4, s2, s7
 	s_addc_u32 s5, s3, s5
 	global_load_dword v0, v3, s[4:5] offset:2   ; load the instruction
-	v_readfirstlane_b32 s9, v0                  ; move the operand to the SALU
 ```
 
-and then, for each frame access (`:34-46`):
+The `v_readfirstlane_b32 s9, v0` that moves the loaded operand to the scalar
+unit follows five lines later, at `:23`, after an `s_waitcnt vmcnt(0)` that
+stalls on the load. Then, for each frame access (`:34-46`, with three
+interleaved scalar instructions for the *second* frame word elided):
 
 ```asm
 	v_lshrrev_b32_e32 v2, 3, v0         ; a >> 6 -> word index, DYNAMIC
@@ -225,15 +270,28 @@ and then, for each frame access (`:34-46`):
 	v_readfirstlane_b32 s2, v2
 	s_load_dwordx2 s[6:7], s[0:1], s2 offset:0x0  ; dynamically-indexed frame word
 	v_lshlrev_b64 v[0:1], v0, 1         ; 1 << (a & 63) -> bit mask, DYNAMIC
+	s_waitcnt lgkmcnt(0)
 	v_and_b32_e32 v4, s6, v0
 	v_and_b32_e32 v5, s7, v1
 	v_cmp_eq_u64_e32 vcc, 0, v[4:5]
 ```
 
+Note the two `s_waitcnt`s. They are not incidental: the interpreter's operand
+arrives from memory, so the dependent address math cannot issue until the load
+retires, and the frame word it then addresses is itself a second dependent load.
+The specialized form has no such chain — its masks are immediates in the
+instruction encoding. It contains **2** `s_waitcnt`s against the interpreter
+form's **15**, and both of the two guard the unavoidable two-step
+kernel-argument load (kernarg → `st`, then `st` → the frame words).
+
 Three separate costs are visible and all three disappear under specialization:
 
 1. **Instruction fetch** — `s_mul_i32 s7, s6, 40` plus a `global_load_dword`,
-   per instruction. The bytecode itself is a memory operand.
+   per instruction. The bytecode itself is a memory operand. (`40` is
+   `sizeof(CV2Instr)`, which `device_abi_checks.cc:58` pins equal to
+   `sizeof(GpuInstr)`; the multiply is `pc * sizeof(instr)` with a runtime `pc`,
+   so it needs a 64-bit product — hence the `s_mul_i32`/`s_mul_hi_u32` pair and
+   the `s_add_u32`/`s_addc_u32` that follow.)
 2. **`v_readfirstlane_b32`** — the operand arrives in a *vector* register
    (it came from a `global_load` whose address is uniform but whose result the
    compiler must materialize in a VGPR), so it must be moved to the scalar unit
@@ -416,9 +474,23 @@ count is known; `dagger` being a literal folds the `imag` sign at compile time
 gets a constant displacement instead of a computed one. The `s_load` count drops
 6→4, and the specific load that disappears is visible in the artifacts: the
 interpreter form contains exactly one `s_load_dword ..., 0x278` — the
-`st->active_k` read — and the specialized form contains **none**. (`0x278` is
-`active_k`'s offset in `V2State`; the other removed load is the bytecode fetch
-itself.)
+`st->active_k` read, `active_k`'s offset in `V2State` — and the specialized form
+contains **none**. The full accounting is worth reading, because the count does
+not fall by simple deletion:
+
+| | interpreter | specialized |
+|---|---|---|
+| `0x20` — `pc` | ✓ | — |
+| `0x18` — `instrs` | ✓ | — |
+| `0x0` — kernarg block | ✓ | ✓ |
+| `0x278` — `st->active_k` | ✓ | — |
+| dynamically-indexed frame word (`s10`, `s0`) | ✓ ✓ | — |
+| `st->px` / phase operands at fixed offsets | — | ✓ ✓ ✓ |
+
+Three interpreter-only loads (`pc`, `instrs`, `active_k`) and both
+*dynamically-indexed* frame reads disappear; three *statically*-addressed loads
+appear in their place. The net is 6→4, but the character of what remains is the
+point: every surviving load in the specialized form has a compile-time address.
 
 **What it does not buy, and this is the point:** the loop is still there. At
 rank 8 with `V2_STRIDE = 256` it is a handful of iterations; at rank 22 it is
@@ -597,16 +669,35 @@ then the index math itself, once per loop entry (`:41-48`):
 	s_lshl_b64 s[8:9], 1, s8
 ```
 
-followed by two `s_not_b64` to complete the masks. Every one of those operands
-is a literal in the specialized form, so the entire sequence — both blocks —
-collapses into the five constant-mask instructions quoted above.
+followed at `:49-50` by two `s_not_b64` to complete the masks. Those two
+`s_not_b64` appear **twice** in the interpreter file — at `:49-50` and again at
+`:151-152`, once per call site, since `array_cnot` and `array_cz` each rebuild
+the masks — and **zero** times in the specialized file.
+
+Every one of those operands is a literal in the specialized form, so the entire
+sequence — both blocks, both call sites — collapses into the five constant-mask
+instructions quoted above.
 
 **Result:** 207→81 instructions (2.56×), VALU 84→33 (2.55×), VGPR 16→8, SGPR
 24→10, and **`s_load` 4→1** — the largest relative scalar-load reduction in the
-study. The four interpreter loads are, in file order: the `pc` (`0x20`), the
-`instrs` pointer (`0x18`), the kernel argument block (`0x0`), and `st->active_k`
-(`0x278`). Only the third survives specialization; it is the kernel argument
-pointer, which nothing can remove.
+study. The four interpreter loads are, in file order:
+
+```
+:9   s_load_dword   s6,      s[0:1], 0x20    ; pc
+:10  s_load_dwordx2 s[2:3],  s[0:1], 0x18    ; the instrs pointer
+:27  s_load_dwordx4 s[4:7],  s[0:1], 0x0     ; the kernel argument block
+:31  s_load_dword   s23,     s[4:5], 0x278   ; st->active_k
+```
+
+and the specialized form contains exactly one:
+
+```
+:9   s_load_dwordx4 s[4:7],  s[0:1], 0x0     ; the kernel argument block
+```
+
+Only the third survives — it is the kernel argument pointer, which nothing can
+remove. The other three are, precisely, the three things specialization knows:
+where in the program we are, what the instruction says, and what the rank is.
 
 The 16→8 VGPR halving is significant beyond the instruction count: on the coop
 tier, VGPR count sets waves-per-SIMD occupancy, and array two-qubit ops
@@ -625,7 +716,7 @@ a data-dependent op*, and the case file says so:
 > frame**, so the row is **NOT foldable** — only the table entry `cp` and the
 > axis are.
 
-**The op** (`v2_ops_body.inc:284-304`):
+**The op** (`v2_ops_body.inc:284-305`):
 
 ```c
 static inline __attribute__((always_inline)) void v2_op_array_u2(V2State* st, CV2Complex* v, u32 active_k, u32 axis,
