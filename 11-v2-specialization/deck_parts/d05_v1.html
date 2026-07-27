@@ -1,0 +1,624 @@
+
+    <!-- ================= 5. V1: the MLIR backend and its failure ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">5</div>
+      <h1>V1: the MLIR backend<br/>and its failure</h1>
+      <div class="section-sub">The generation that did not work. It is covered at length because every
+      rule in V2's architecture exists because V1 violated it and paid.</div>
+    </section>
+
+    <section>
+      <h2>5.1 &nbsp;The original idea</h2>
+      <p class="lede">Hybrid proved per-circuit code generation was <em>possible</em> but not
+      <em>profitable</em>. V1's hypothesis: the problem is the <b>intermediate representation</b>.</p>
+      <div class="grid-2">
+        <div>
+          <div class="card card-hl">
+            <div class="h">The argument</div>
+            <div class="d">HIP source is a poor target for a code generator. Clang has to re-parse text the
+            generator just printed, and everything interesting is buried under a general-purpose C++
+            frontend. Emit <b>MLIR</b> instead &mdash; a compiler IR <em>designed</em> to be produced by
+            machines &mdash; and the generator gains direct access to the optimizer.</div>
+          </div>
+          <div class="card card-success">
+            <div class="h">The stated goals &mdash; all things MLIR is genuinely good at</div>
+            <div class="d">
+            <ul style="margin-left:0.9em;">
+              <li>a multi-level IR where quantum structure survives into the middle end;</li>
+              <li>custom passes that understand <code>EXPAND</code>/<code>MEAS</code> rank algebra;</li>
+              <li>progressive lowering from a domain dialect down to <code>amdgpu</code>.</li>
+            </ul></div>
+          </div>
+        </div>
+        <div>
+          <div class="src" style="margin-bottom:0.2em;">src/clifft/gpu/mlir/</div>
+<pre><code>bytecode
+  <span class="cm">→</span> mlir_emit.cc   <span class="cm">(~3,425 lines)</span>
+  <span class="cm">→</span> .mlir text
+  <span class="cm">→</span> mlir-opt --canonicalize --cse \
+             --convert-func-to-llvm
+  <span class="cm">→</span> mlir-translate --mlir-to-llvmir
+  <span class="cm">→</span> opt -O2 <span class="cm">→</span> llc <span class="cm">→</span> ld.lld
+  <span class="cm">→</span> .hsaco</code></pre>
+          <div class="card card-accent">
+            <div class="h">The audit checked those three goals against the artifacts</div>
+            <div class="d">All three failed. The next three slides are the evidence, each one a
+            measurement on emitted IR rather than a reading of a design document.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5.2 &nbsp;Finding 1: V1's MLIR was 100% <code>llvm</code> dialect</h2>
+      <p class="lede">A dialect census on the emitted IR
+      (<code>lowering/v1/frame_h.1_emitted.mlir</code>, <code>circuit_d3.1_emitted.mlir</code>):</p>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>dialect op</th><th class="num">frame_h</th><th class="num">circuit_d3</th></tr></thead>
+            <tbody>
+              <tr><td><code>func.func</code></td><td class="num lose">0</td><td class="num lose">0</td></tr>
+              <tr><td><code>arith.*</code></td><td class="num lose">0</td><td class="num lose">0</td></tr>
+              <tr><td><code>scf.*</code></td><td class="num lose">0</td><td class="num lose">0</td></tr>
+              <tr><td><code>memref.*</code></td><td class="num lose">0</td><td class="num lose">0</td></tr>
+              <tr><td><code>llvm.func</code></td><td class="num">6</td><td class="num">7</td></tr>
+            </tbody>
+          </table>
+          <div class="card card-accent">
+            <div class="h">There is no multi-level IR here</div>
+            <div class="d"><b>V1 used MLIR as a text serialization format for LLVM IR.</b> The op census
+            confirms it &mdash; the emitted <code>frame_h</code> module is
+            <code>llvm.mlir.constant</code>&times;240, <code>llvm.ptr</code>&times;192,
+            <code>llvm.shl</code>&times;73, <code>llvm.xor</code>&times;68&hellip; Pointer arithmetic and
+            bit twiddling, written in MLIR's syntax.</div>
+          </div>
+        </div>
+        <div>
+          <figure>
+            <img src="diagrams/v1-mlir-reality.svg" alt="V1 intended vs actual MLIR usage" />
+            <figcaption><b>Figure 5.1</b> &mdash; Intended (left): a domain dialect lowered progressively
+            through custom passes. Actual (right): direct <code>llvm</code>-dialect emission, three stock
+            passes, one of them a no-op. <b>The middle levels were never built.</b></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5.2 &nbsp;Finding 2: zero custom passes</h2>
+      <p class="lede"><code>mlir_codegen.cc:65-67</code> &mdash; and verbatim again at <code>:172</code> and
+      <code>:239</code> &mdash; runs exactly three stock upstream passes:</p>
+      <pre><code>mlir-opt --canonicalize --cse --convert-func-to-llvm</code></pre>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">No domain dialect</div>
+          <div class="d">Nothing above <code>llvm</code> was ever defined, so there was nothing to lower
+          <em>from</em>.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">No rank-algebra pass</div>
+          <div class="d"><code>EXPAND</code>/<code>MEAS</code> rank tracking &mdash; the one genuinely
+          domain-specific analysis in this problem &mdash; was never written as a pass. <em>V2 does it in
+          the emitter</em> (&sect;7.2).</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">No quantum-aware transform</div>
+          <div class="d">The "progressive lowering" that motivated choosing MLIR in the first place does
+          not exist in the tree.</div>
+        </div>
+      </div>
+      <div class="insight"><b>This is the report's central caution, applied to our own documents.</b> The
+      V1 design notes describe a progressive-lowering compiler. The artifacts describe a text emitter with
+      three stock cleanup passes. When the two disagree, the artifacts win &mdash; which is why every claim
+      in this deck is anchored to a file and a line.</div>
+    </section>
+
+    <section>
+      <h2>5.2 &nbsp;Finding 3: one of those three passes is a <em>provable</em> no-op</h2>
+      <p class="lede">Per-pass snapshots via <code>mlir-opt --mlir-print-ir-tree-dir</code>
+      (<code>lowering/v1_passes/frame_h/</code>). This is the <b>complete</b> diff &mdash; nothing
+      elided:</p>
+      <div class="diff-title"><b>1_cse.mlir</b> &rarr; <b>2_convert-func-to-llvm.mlir</b> &nbsp;
+      &middot;&nbsp; 608 lines in, 608 lines out</div>
+      <div class="diff">
+<span class="hunk">@@ -1,7 +1,7 @@</span>
+<span class="del">-// -----// IR Dump After CSE (cse) //----- //</span>
+<span class="add">+// -----// IR Dump After ConvertFuncToLLVMPass (convert-func-to-llvm) //----- //</span>
+<span class="ctx"> module attributes {llvm.target_triple = "amdgcn-amd-amdhsa"} {</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.workitem.id.x() -&gt; i32</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.workgroup.id.x() -&gt; i32</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.s.barrier()</span>
+<span class="ctx">   llvm.func @llvm.amdgcn.ds.bpermute(i32, i32) -&gt; i32</span>
+<span class="ctx">   llvm.func @clifft_log(%arg0: f64) -&gt; f64 {</span>
+<span class="note">  (end of diff &mdash; the remaining 601 lines are byte-identical)</span>
+      </div>
+      <div class="verdict verdict-bad">Two lines changed, and <b>both are the "IR Dump After" banner
+      comment</b>. There is no <code>func</code> dialect to convert, because the emitter never produced
+      any.</div>
+      <div class="footnote">Rendered in full at
+      <code>V2_performance/lowering/diffs/v1pass.frame_h.1_cse__2_convert-func-to-llvm.{diff,html}</code>.
+      This is the honest answer to "show the MLIR progressive lowering": for V1 there is exactly one pass
+      boundary worth diffing, and the diff is empty. &sect;8 shows where real lowering diffs
+      <em>do</em> exist.</div>
+    </section>
+
+    <section>
+      <h2>What the other two passes <em>did</em> accomplish</h2>
+      <p class="lede">Not nothing &mdash; but read what kind of work it is. On <code>frame_h</code>:</p>
+      <div class="flow-row">
+        <div class="box box-dim">947 lines<br/><span style="font-weight:400;">emitted</span></div>
+        <span class="arrow">&rarr;</span>
+        <div class="box box-warn">736 lines<br/><span style="font-weight:400;">canonicalize</span></div>
+        <span class="arrow">&rarr;</span>
+        <div class="box box-primary">608 lines<br/><span style="font-weight:400;">cse</span></div>
+        <span class="arrow">&rarr;</span>
+        <div class="box box-dim">608 lines<br/><span style="font-weight:400;">convert-func-to-llvm</span></div>
+      </div>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">canonicalize + cse: &minus;36% of emitted text</div>
+          <div class="d">Constant deduplication (<code>llvm.mlir.constant</code>: 240 &rarr; 59) and
+          redundant <code>shl</code>/<code>and</code>/<code>xor</code> elimination.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">This is cleanup after a sloppy emitter, not compilation</div>
+          <div class="d">A third of the emitted IR was redundant on arrival. The passes are recovering
+          ground the generator gave away, not adding optimization the generator could not do itself
+          &mdash; V2 simply does not emit the 240 duplicate constants.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5.3 &nbsp;The actual failure &mdash; one line of the emitter</h2>
+      <p class="lede">The choice of IR was <em>not</em> V1's problem. The problem is structural and visible
+      at <code>mlir_emit.cc:2377</code>:</p>
+      <pre><code>out &lt;&lt; <span class="st">"  // --- Instruction sequence ("</span> &lt;&lt; flat.instrs.size() &lt;&lt; <span class="st">" ops) ---\n"</span>;
+g_emit_ak = <span class="lit">0</span>;
+
+<span class="kw">for</span> (<span class="kw">size_t</span> pc = <span class="lit">0</span>; pc &lt; flat.instrs.size(); ++pc) {
+    <span class="kw">const</span> GpuInstr&amp; ins = flat.instrs[pc];</code></pre>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">That <code>for</code> loop is on the <b>host, at emit time</b></div>
+          <div class="d"><code>pc</code> is a C++ variable that never appears in the generated program.
+          Every bytecode instruction becomes its own block of IR, so the program counter is resolved by
+          the code generator and <b>the GPU never has one</b>. A circuit is not data walked at runtime; it
+          is <em>code</em>.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The contrast with V2 is <em>one character of scope</em></div>
+          <div class="d">V2's emitter has the <b>same host loop</b>. What differs is what it writes into
+          it: a <em>call</em>.
+          <pre style="margin:0.35em 0 0;"><code>v2_op_expand(st, v, 3u);</code></pre>
+          The device program keeps its own <code>for</code> over the instruction array. Same loop,
+          different side of the compile.</div>
+        </div>
+      </div>
+      <div class="insight">This single distinction &mdash; <b>unroll the operand sequence vs. keep it as
+      data</b> &mdash; separates a backend that cannot compile a 16,432-instruction circuit from one that
+      runs it at <b>0.255&times;</b> SVM.</div>
+    </section>
+
+    <section>
+      <h2>The consequences compound</h2>
+      <table class="tight">
+        <thead><tr><th>effect</th><th>measured</th><th>source</th></tr></thead>
+        <tbody>
+          <tr><td>IR size</td><td><code>surface_d11_t5</code> (16,432 ops) &rarr;
+            <b class="lose">19,856,511 bytes</b> of LLVM IR</td><td class="src">results/d11err_49530.log:19</td></tr>
+          <tr><td>Compile time</td><td><code>glob_surface_d7_t19</code>: <b class="lose">221.48 s</b>
+            end-to-end</td><td class="src">lowering/matrix.csv</td></tr>
+          <tr><td>Optimizer viability</td><td>size-adaptive fallback: &gt;4 MB &rarr; <code>llc -O2</code> +
+            <code>opt -O1</code>; &gt;16 MB &rarr; <code>llc -O1</code>, <code>opt</code> skipped
+            <em>entirely</em></td><td class="src">mlir_kernel_cache.cc:105-131</td></tr>
+          <tr><td>Register allocation</td><td>one enormous basic-block chain; the allocator has no loop
+            structure to work with</td><td class="src">&mdash;</td></tr>
+        </tbody>
+      </table>
+      <p class="lede" style="margin-top:0.4em;">The third row deserves emphasis. <b>The build system had to
+      detune the optimizer based on file size</b> to make links complete at all &mdash; the constants are
+      literal in the source:</p>
+      <pre><code><span class="kw">size_t</span> ir_bytes = llvmir.size();
+<span class="kw">const size_t</span> kLargeIrThreshold = <span class="lit">4u</span> * <span class="lit">1024</span> * <span class="lit">1024</span>;   <span class="cm">// 4 MB</span>
+<span class="kw">const size_t</span> kHugeIrThreshold  = <span class="lit">16u</span> * <span class="lit">1024</span> * <span class="lit">1024</span>;  <span class="cm">// 16 MB</span>
+<span class="kw">bool</span> large_ir = ir_bytes &gt; kLargeIrThreshold;
+<span class="kw">bool</span> huge_ir  = ir_bytes &gt; kHugeIrThreshold;
+<span class="kw">const char</span>* llc_opt = huge_ir ? <span class="st">"-O1"</span> : (large_ir ? <span class="st">"-O2"</span> : <span class="st">"-O3"</span>);</code></pre>
+      <div class="verdict verdict-bad">When a code generator's output requires the optimizer to be turned
+      <em>down</em>, the generator is the problem.</div>
+    </section>
+
+    <section>
+      <h2>The maintainer's own rationale</h2>
+      <p class="lede"><code>mlir_kernel_cache.cc:88-92</code>, six lines above the thresholds &mdash; this is
+      V1's failure diagnosed correctly, in V1's own source tree:</p>
+      <pre><code><span class="cm">// Large fully-unrolled circuits (surface codes emit 40MB+ IR from U2/U4</span>
+<span class="cm">// inlining) make opt -O3 + llc -O3 take &gt;300s. For large/huge IR we lower the</span>
+<span class="cm">// opt level (and skip the separate opt pass) so compilation completes.</span>
+<span class="cm">// Correctness is unaffected — only optimization aggressiveness changes.</span></code></pre>
+      <p class="lede">And the detuning was <b>not sufficient</b>. On <code>surface_d11_t5</code> the
+      pipeline ran to completion and still produced nothing loadable:</p>
+      <div class="diff">
+<span class="ctx">[clifft-mlir] generated 19856511 bytes of LLVM-IR for 16432 ops</span>
+<span class="ctx">[clifft-mlir-mlir] large IR (18 MB): llc -O0, opt skipped</span>
+<span class="ctx">[clifft-mlir-mlir] compiled in 32435.2 ms (19391 KB IR)</span>
+<span class="del">[clifft-hsa-dispatch] cannot open .../mlir_db5b1a0c2e405879_gfx950.hsaco</span>
+      </div>
+      <div class="verdict verdict-bad">32 seconds of compilation, then the <code>.hsaco</code> does not
+      exist.</div>
+    </section>
+
+    <section>
+      <h2>It is not a <code>surface_d11</code> quirk &mdash; and it is not rank</h2>
+      <p class="lede">The 10-shot correctness sweep across the whole corpus
+      (<code>results/fullsweep_49529.log</code>, job 49529): 18 circuits pass, and the five that fail all
+      fail the <em>same</em> way.</p>
+      <div class="diff">
+<span class="ctx">surface_d9_t19            13        1        1 OK</span>
+<span class="del">surface_d11_t5             3        0     FAIL NOCOMPILE</span>
+<span class="del">surface_d11_t10            7        0     FAIL NOCOMPILE</span>
+<span class="del">surface_d11_t15           11        0     FAIL NOCOMPILE</span>
+<span class="del">surface_d11_t19           14        0     FAIL NOCOMPILE</span>
+<span class="ctx">qv10                      10    10000    10000 OK</span>
+<span class="del">qv20_seed42               20        ?     FAIL NOCOMPILE</span>
+      </div>
+      <div class="insight"><b>Look at the rank column, because it rules out the obvious explanation.</b>
+      <code>surface_d11_t5</code> fails at <b>rank 3</b>; <code>surface_d9_t19</code> <em>passes</em> at
+      <b>rank 13</b>. The failures are not the high-rank circuits &mdash; rank drives <em>state size</em>,
+      and V1's global tier handled rank 13 fine.</div>
+      <p class="lede">What the five share is <b>emitted IR volume</b> = instruction count &times;
+      per-instruction density &mdash; and they arrive there by two different routes:</p>
+      <table class="tight">
+        <thead><tr><th>failing circuit</th><th class="num">instrs</th><th>density driver</th><th class="num">est. IR</th></tr></thead>
+        <tbody>
+          <tr><td><code>surface_d11_*</code></td><td class="num lose">16,432</td><td>ordinary (~56 lines/instr)</td><td class="num">19.9 MB, <em>measured</em></td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">418</td><td><b class="lose">U2/U4-dense</b> (<code>qv10</code>: 2,407 lines/instr)</td><td class="num">~1.0 M lines</td></tr>
+        </tbody>
+      </table>
+      <div class="footnote"><code>surface_d11_t5</code> is <em>long and ordinary</em>.
+      <code>qv20_seed42</code> is <em>short and dense</em> &mdash; 418 instructions, but a QV circuit is
+      nearly all fused unitaries. Different route, same wall. Both routes are closed by the same fix.</div>
+    </section>
+
+    <section>
+      <h2>V1 fought the symptom &mdash; twice, locally, successfully</h2>
+      <p class="lede">Two bloat sources <em>were</em> mitigated (<code>reference_v1.md:243-250</code>). Read
+      what the fixes actually are:</p>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h"><code>OP_NOISE_BLOCK</code>: unroll &rarr; runtime loop</div>
+          <div class="d">Used to unroll one full site-block <em>per site</em> &mdash; ~1,200 sites for
+          <code>circuit_d5</code>, ~100k lines / 32 MB of IR that OOM'd <code>llc</code>. Converted to a
+          runtime loop over the site index.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h"><code>log(x)</code> / <code>draw_next_noise</code>: inline &rarr; call</div>
+          <div class="d">Inlined at <em>every</em> noise draw &mdash; <code>surface_d9_t5</code>: 1,444
+          draws &times; ~110/~317 lines each. Hoisted to shared <code>@clifft_log</code> /
+          <code>@clifft_draw_next_noise</code> functions.</div>
+        </div>
+      </div>
+      <div class="insight">Both fixes <b>are the V2 principle applied locally</b>: replace an unroll with a
+      loop, replace an inline with a call. They worked. They were just never generalized to the thing that
+      mattered &mdash; <em>the instruction sequence itself</em>.</div>
+      <p class="lede" style="margin-top:0.5em;">And the unmitigated case is spectacular
+      (<code>mlir_emit.cc:1813,1920</code>):</p>
+      <table class="tight">
+        <thead><tr><th>opcode</th><th>unrolls per&hellip;</th><th class="num">branches</th><th class="num">IR ops per <em>instruction</em></th></tr></thead>
+        <tbody>
+          <tr><td><code>OP_ARRAY_U2</code></td><td>incoming-frame-state branch</td><td class="num">4</td><td class="num lose">~150&ndash;200</td></tr>
+          <tr><td><code>OP_ARRAY_U4</code></td><td>incoming-frame-state branch</td><td class="num">up to 16</td><td class="num lose">~800&ndash;1,500+</td></tr>
+        </tbody>
+      </table>
+      <div class="footnote">Each branch wraps a fully unrolled complex matmul.
+      <code>mlir_kernel_cache.cc:89-90</code> records the outcome in one clause: <em>"surface codes emit
+      40MB+ IR from U2/U4 inlining."</em></div>
+    </section>
+
+    <section>
+      <h2>The density measurement makes it concrete</h2>
+      <p class="lede"><code>V2_performance/lowering/ir_density.csv</code> &mdash; lines of emitted MLIR per
+      bytecode instruction:</p>
+      <div class="grid-60-40">
+        <div>
+          <table class="tight">
+            <thead><tr><th>circuit</th><th class="num">instrs</th><th class="num">v1 MLIR lines</th><th class="num">lines/instr</th></tr></thead>
+            <tbody>
+              <tr><td><code>reg_frame_h</code></td><td class="num">4</td><td class="num">947</td><td class="num">236.8</td></tr>
+              <tr><td><code>reg_four_t</code></td><td class="num">11</td><td class="num">1,384</td><td class="num">125.8</td></tr>
+              <tr><td><code>reg_circuit_d3</code></td><td class="num">344</td><td class="num">23,002</td><td class="num">66.9</td></tr>
+              <tr><td><b><code>coop_qv10</code></b></td><td class="num"><b>140</b></td><td class="num"><b>336,988</b></td><td class="num lose"><b>2,407.1</b></td></tr>
+              <tr><td><code>coop_circuit_d5</code></td><td class="num">1,720</td><td class="num">118,493</td><td class="num">68.9</td></tr>
+              <tr><td><code>coop_surface_d7_t10</code></td><td class="num">4,134</td><td class="num">228,544</td><td class="num">55.3</td></tr>
+              <tr><td><code>glob_surface_d7_t19</code></td><td class="num">4,296</td><td class="num">239,803</td><td class="num">55.8</td></tr>
+            </tbody>
+          </table>
+          <div class="stat-callout">
+            <div class="stat-num">1,883&times;</div>
+            <div class="stat-label"><code>qv10</code>: 140 instructions &rarr; <b>336,988</b> lines of MLIR.
+            V2 emits <b>179</b> lines for the same circuit, identical semantics.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-hl">
+            <div class="h">Density does <em>not</em> grow with circuit length</div>
+            <div class="d">The three longest circuits (1,720 &rarr; 4,296 instructions) sit at 55&ndash;69
+            lines/instr &mdash; essentially flat. V1's bloat was <b>per-instruction</b>, not super-linear in
+            length. Which is exactly why a 418-instruction QV circuit could fail while a 4,296-instruction
+            surface circuit compiled.</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">The small-circuit rows are not a U2/U4 effect</div>
+            <div class="d">236.8 and 125.8 are <em>fixed preamble amortized over few instructions</em>. The
+            single genuinely anomalous row is <code>qv10</code> &mdash; anomalous by a factor of <b>35</b>
+            against its neighbours.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Three generations, one axis</h2>
+      <figure>
+        <img src="diagrams/ir-density.svg" alt="Source lines per bytecode instruction, three generations" class="mid" />
+        <figcaption><b>Figure 5.2</b> &mdash; Lines of emitted source per bytecode instruction, log scale.
+        V1 (red) is superlinear on U2/U4-dense circuits. Hybrid (amber) is linear with a constant of ~18.
+        V2 (blue) converges to <b>1.00</b>.</figcaption>
+      </figure>
+      <div class="insight">Three code generators, one metric, and it orders them exactly as the performance
+      results do. This is the single number that predicts whether a per-circuit generator will work:
+      <b>how much code do you emit per bytecode instruction?</b> Hybrid answered ~18 and got ~0%. V1
+      answered 55&ndash;2,407 and could not compile. V2 answers <b>1</b>.</div>
+    </section>
+
+    <section>
+      <h2>5.4 &nbsp;The performance result: 5&ndash;61&times; slower</h2>
+      <p class="lede">The design doc quotes four rows; the primary artifact
+      (<code>results/perf2_49532.log:5-15</code>, job 49532) has nine, reproduced in full because
+      <em>the two outliers are the argument</em>:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">rank</th><th class="num">SVM_s</th><th class="num">HYB_s</th><th class="num">MLIR_s</th><th class="num">MLIR/HYB</th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td class="num">0</td><td class="num">0.0658</td><td class="num">0.0534</td><td class="num lose">0.2712</td><td class="num">5.1&times;</td></tr>
+          <tr><td><code>circuit_d3</code></td><td class="num">4</td><td class="num">0.0729</td><td class="num">0.0552</td><td class="num lose">0.4509</td><td class="num">8.2&times;</td></tr>
+          <tr><td><code>surface_d7_t5</code></td><td class="num">3</td><td class="num">0.0790</td><td class="num">0.0781</td><td class="num lose">2.1165</td><td class="num">27.1&times;</td></tr>
+          <tr><td><b><code>qv10</code></b></td><td class="num">10</td><td class="num">0.0741</td><td class="num">0.0576</td><td class="num lose"><b>3.5449</b></td><td class="num lose"><b>61.5&times;</b></td></tr>
+          <tr><td><code>circuit_d5</code></td><td class="num">10</td><td class="num">0.0778</td><td class="num">0.0649</td><td class="num lose">1.2230</td><td class="num">18.9&times;</td></tr>
+          <tr><td><code>surface_d7_t10</code></td><td class="num">7</td><td class="num">0.0794</td><td class="num">0.0783</td><td class="num lose">2.4039</td><td class="num">30.7&times;</td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">12</td><td class="num">0.0839</td><td class="num">0.0827</td><td class="num lose">2.5316</td><td class="num">30.6&times;</td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">7</td><td class="num">0.0896</td><td class="num">0.1117</td><td class="num lose">5.5035</td><td class="num">49.3&times;</td></tr>
+          <tr><td><b><code>surface_d9_t19</code></b></td><td class="num">13</td><td class="num">0.1018</td><td class="num">&mdash;</td><td class="num lose"><b>aborted</b></td><td class="num">&mdash;</td></tr>
+        </tbody>
+      </table>
+      <div class="card card-warn">
+        <div class="h">[v1-era, quoted for shape]</div>
+        <div class="d"><code>sample_seconds</code> (host wall, not kernel time), node unrecorded,
+        superseded toolchain. Not comparable to &sect;15's ratios, which are kernel-time on a pinned node.
+        The shot count is not recorded either &mdash; the log preserves the harness command only for the
+        run that aborted. Treat the <em>ratios</em> as the finding and the absolute seconds as
+        unnormalized.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Two rows carry the argument</h2>
+      <div class="grid-2">
+        <div>
+          <div class="card card-accent">
+            <div class="h"><code>qv10</code> is the outlier in <em>both</em> columns</div>
+            <div class="d">It is the densest IR in the corpus (<b>2,407 lines/instr</b>) <em>and</em> the
+            worst slowdown (<b>61.5&times;</b>). No other circuit comes close on either axis.
+            <hr/>
+            The IR-density measurement and the runtime measurement were taken by <b>different tools, from
+            different artifacts, at different times</b> &mdash; and they agree on which circuit is worst.
+            That is the corroboration that matters, and it is why U2/U4 unrolling is the <em>accepted
+            explanation</em> rather than one hypothesis among several.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">The last row is not a slow number; it is a <em>missing</em> one</div>
+            <div class="d"><code>surface_d9_t19</code> aborted under a 250-second timeout. The log records
+            the harness command verbatim:</div>
+            <pre style="margin:0.4em 0 0;"><code>timeout 250 <span class="st">"$BIN"</span> --circuit <span class="st">"$f"</span> \
+        --shots <span class="lit">10</span> --seed 42 --mlir</code></pre>
+            <div class="d" style="margin-top:0.4em;"><b>Ten shots</b>, not ten thousand. V1 could not finish
+            <em>ten</em> shots inside four minutes, on a circuit SVM completes in <b>0.10 s at
+            10,000</b>. The job also ended with <code>Detected 7 oom_kill events</code> &mdash; the wall V1
+            hit here is memory as much as time.</div>
+          </div>
+        </div>
+      </div>
+      <div class="verdict verdict-bad">A 61&times; slowdown is a <em>performance</em> result. The compile
+      failures are a <em>viability</em> result &mdash; and that is the one that ended V1.</div>
+    </section>
+
+    <section>
+      <h2>5.5 &nbsp;The spill claim: real, but mis-attributed</h2>
+      <p class="lede"><code>reference_v1.md:265</code> states that <b>"the register-tier kernel reports
+      private = 115 KB/thread"</b> of spill scratch. The number is real. The tier is wrong.</p>
+      <div class="diff">
+<span class="ctx">[clifft-hsa-dispatch] loaded kernel 'compiled_mlir_kernel_global' from</span>
+<span class="ctx">  .../mlir_global_7989aa5d4826ef77_gfx950.hsaco</span>
+<span class="add">  (private=115224 group=8248 kernarg=352 ...)</span>
+<span class="note">  results/gt19_49517.log:11 — the only 115 KB in the entire artifact corpus</span>
+      </div>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th>v1 kernel</th><th class="num">max recorded <code>private=</code></th></tr></thead>
+            <tbody>
+              <tr><td><code>compiled_mlir_kernel</code> (register)</td><td class="num">4,192 B</td></tr>
+              <tr><td><code>compiled_mlir_kernel_coop</code></td><td class="num">608 B</td></tr>
+              <tr><td><b><code>compiled_mlir_kernel_global</code></b></td><td class="num lose"><b>115,224 B</b></td></tr>
+            </tbody>
+          </table>
+          <div class="card card-hl">
+            <div class="h">The corrected attribution makes the fact <em>more</em> striking</div>
+            <div class="d">The register tier never exceeded 4 KB. 115 KB is a <b>global</b>-tier number, on
+            <code>surface_d7_t19</code> &mdash; <b>27&times;</b> the worst register-tier figure.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card card-warn">
+            <div class="h">One qualification the design doc omits</div>
+            <div class="d">Visible two lines up in the same log: that kernel was built at <b><code>llc
+            -O0</code> with <code>opt</code> skipped</b>, because 9,967,049 bytes of IR tripped the huge-IR
+            fallback.
+            <hr/>
+            So 115 KB/thread is <em>not</em> what the optimizer produced from V1's IR &mdash; it is what
+            the optimizer produced <b>after being switched off</b> because V1's IR was too large to
+            optimize. <b>The two failures are the same failure, reported once each.</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What the register tier actually did &mdash; VGPRs, not spills</h2>
+      <p class="lede">Independently measured ISA-level resources at <code>-O2</code> (the level the matrix
+      uses, not the fallback), from <code>lowering/matrix.csv</code>:</p>
+      <table class="tight">
+        <thead><tr><th>v1 circuit</th><th>tier</th><th class="num">ScratchSize</th><th class="num">VGPR</th><th class="num">occupancy</th></tr></thead>
+        <tbody>
+          <tr><td><code>reg_frame_h</code></td><td>register</td><td class="num">0 B</td><td class="num">16</td><td class="num win">8</td></tr>
+          <tr><td><code>reg_four_t</code></td><td>register</td><td class="num">0 B</td><td class="num">16</td><td class="num win">8</td></tr>
+          <tr><td><b><code>reg_circuit_d3</code></b></td><td>register</td><td class="num lose">156 B</td><td class="num lose">128</td><td class="num lose">4</td></tr>
+          <tr><td><code>coop_qv10</code></td><td>coop</td><td class="num">0 B</td><td class="num">53</td><td class="num win">8</td></tr>
+          <tr><td><code>coop_circuit_d5</code></td><td>coop</td><td class="num">48 B</td><td class="num">73</td><td class="num">6</td></tr>
+          <tr><td><code>glob_surface_d7_t19</code></td><td>global</td><td class="num lose">320 B</td><td class="num lose">128</td><td class="num lose">4</td></tr>
+        </tbody>
+      </table>
+      <div class="insight"><b>Note the VGPR column</b> &mdash; that is the register-tier story the scratch
+      number was being used to tell. <code>circuit_d3</code> pins <b>128 VGPRs, the architectural
+      maximum</b>, and drops to occupancy 4, while the two small circuits sit at 16 VGPRs and occupancy 8.
+      The unrolled body <em>does</em> exhaust the register file. It just does so by <b>saturating</b>
+      VGPRs on the register tier rather than by spilling 115 KB, and spills catastrophically only once it
+      reaches the global tier <em>with the optimizer disabled</em>.</div>
+    </section>
+
+    <section>
+      <h2>The emitter documents fighting its own IR shape</h2>
+      <p class="lede">Note <em>which way</em> the trade-off runs (<code>mlir_emit.cc:216-218</code>):</p>
+      <pre><code><span class="cm">// alignment=8 for coop/global tiers enables ds_read_b64 / global_load_b64</span>
+<span class="cm">// EXCLUDED from register tier to avoid VGPR spill catastrophe (P1.9)</span>
+<span class="kw">const char</span>* align = (lds_amplitudes || cooperative_mode) ? <span class="st">" {alignment = 8 : i64}"</span> : <span class="st">""</span>;</code></pre>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">V1 gave up wide 64-bit amplitude loads on the register tier</div>
+          <div class="d">A real, permanent throughput loss &mdash; <code>ds_read_b64</code> /
+          <code>global_load_b64</code> halve the number of memory instructions &mdash; accepted purely to
+          keep the allocator from spilling.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">That is a generator paying for its own IR shape with the hardware's memory
+          bandwidth</div>
+          <div class="d">The unroll did not just cost compile time. It cost <em>runtime</em>, indirectly,
+          by forcing a defensive codegen choice everywhere else.</div>
+        </div>
+      </div>
+      <div class="insight"><b>The ground rule cuts both ways.</b> The first audit pass rejected 115 KB as
+      unreproducible &mdash; wrong; it was looking at <code>matrix.csv</code>'s register rows for a
+      global-tier number. Design documents are claims rather than facts, but <em>so is any single artifact
+      read in isolation</em>.</div>
+    </section>
+
+    <section>
+      <h2>5.6 &nbsp;The duplication tax</h2>
+      <p class="lede">By V1, every opcode was implemented <b>three to four times</b> &mdash; with register
+      and coop variants doubling several of those. A fix in one did not propagate. Tracing a single opcode,
+      <code>MULTI_CNOT</code>:</p>
+      <table class="tight">
+        <thead><tr><th>file</th><th>role</th></tr></thead>
+        <tbody>
+          <tr><td><code>svm/svm_kernels.inl</code></td><td>CPU + GPU SVM interpreter (the de-facto spec)</td></tr>
+          <tr><td><code>gpu/sampler/hip_sampler.hip</code></td><td>GPU SVM dispatch</td></tr>
+          <tr><td><code>gpu/codegen/ops/multi_qubit_ops.inc</code></td><td>Hybrid HIP-source emitter</td></tr>
+          <tr><td><code>gpu/mlir/ops/mlir_array_ops.inc</code></td><td class="lose"><b>V1 MLIR emitter &mdash; where the bug was</b></td></tr>
+          <tr><td><code>gpu/mlir/v2/v2_ops_body.inc</code></td><td class="win">V2 shared operand library</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">Four independent transcriptions of one gate's semantics, plus V2's. <b>The last
+      row is the fix</b>: V2 adds a <em>fifth</em> file precisely so it can eventually be the only
+      one.</div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">The canonical incident</div>
+          <div class="d"><code>OP_ARRAY_MULTI_CNOT</code> had <code>px</code>/<code>pz</code> <b>swapped
+          only in the MLIR frame update</b>, while SVM and Hybrid were correct &mdash; corrupting the frame
+          for every controlled measurement that followed.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">Why it survived</div>
+          <div class="d">Only cross-backend output diffing catches this class of bug &mdash; and because
+          the GPU legitimately differs from the CPU in f32-vs-f64 rounding (&sect;12), <b>there is no
+          bit-exact oracle to diff against.</b> "Wrong" and "just f32" look alike.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The tax, made literal</h2>
+      <p class="lede">The post-mortem is still inline at
+      <code>src/clifft/gpu/mlir/ops/mlir_array_ops.inc:428-435</code>:</p>
+      <pre><code><span class="cm">// SVM ref exec_array_multi_cnot -&gt; exec_frame_cnot (svm_kernels.inl:502/exec_frame_cnot).</span>
+<span class="cm">// NOTE: read pz[target] ONCE up front — the per-control pz[c] ^= pz[target]</span>
+<span class="cm">// never touches pz[target] (target is not a control), so it stays stable;</span>
+<span class="cm">// likewise accumulate Σ px[c] before writing px[target]. (The previous</span>
+<span class="cm">// emission had px/pz swapped here, corrupting the frame for controlled</span>
+<span class="cm">// measurements that follow — the circuit_d5 coop MX bug.)</span></code></pre>
+      <div class="insight"><b>Read what that comment is doing.</b> It cites the SVM implementation
+      <em>by file and line</em> as the specification, then re-derives the correct ordering by hand. That is
+      the duplication tax made literal &mdash; the correctness of one backend maintained by a prose
+      reference to another, checked by a human.</div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">And note <em>which</em> backend was wrong</div>
+          <div class="d">The <b>newest</b> one &mdash; with the <b>most code generated per opcode</b>. The
+          duplication tax is not paid evenly; it is paid hardest by whichever backend emits the most.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">V2's answer</div>
+          <div class="d">A single shared operand library (<code>v2_ops.h</code>) compiled <em>two ways</em>
+          (&sect;6.2), which makes the interpreter and the specialized kernel byte-exact <b>by
+          construction</b> rather than by testing.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5.7 &nbsp;The three lessons V2 is built on</h2>
+      <div class="card card-success" style="padding:1em;">
+        <div class="h" style="font-size:1em;">1. &nbsp;Never unroll the operand sequence</div>
+        <div class="d" style="font-size:0.78em;">The bytecode is <b>data</b>. This is the disease, and it
+        is the <em>only</em> disease &mdash; V1's choice of IR was irrelevant. A HIP-source generator that
+        unrolled the same way would have failed the same way; V2 in MLIR would have worked.</div>
+      </div>
+      <div class="card card-success" style="padding:1em;">
+        <div class="h" style="font-size:1em;">2. &nbsp;One implementation of each opcode</div>
+        <div class="d" style="font-size:0.78em;">Divergence between backends is invisible until an output
+        diff, and <b>there is no exact oracle</b> &mdash; f32-vs-f64 noise hides real bugs.</div>
+      </div>
+      <div class="card card-success" style="padding:1em;">
+        <div class="h" style="font-size:1em;">3. &nbsp;Small IR is not an aesthetic preference</div>
+        <div class="d" style="font-size:0.78em;">It is what keeps the optimizer <b>at full strength</b>
+        (no size-adaptive detuning) and the register allocator <b>able to see loop structure</b> (VGPRs
+        allocated for a body, not a 16,432-block chain).</div>
+      </div>
+      <div class="stat-callout">
+        <div class="stat-num">rank 3 &middot; 16,432 instrs</div>
+        <div class="stat-label"><code>surface_d11_t5</code> &mdash; V1 produced 19.9 MB of IR and no
+        loadable binary. V2's cache holds a specialized kernel for it with
+        <b><code>vgpr_spill = 0</code></b>, and &sect;15 reports <code>surface_d11_t19</code> at
+        <b>0.255&times;</b> SVM &mdash; <em>the best result in the corpus, on a circuit its predecessor
+        could not compile.</em></div>
+      </div>
+      <div class="diff">
+<span class="ctx">specialized,reg_r3_n16432_db0365e190589c49.hsaco,clifft_v2_spec,128,64,108,0,0,1168,0</span>
+<span class="note">                └tier┘└rank┘└─instrs─┘                      vgpr agpr sgpr  ↑  ↑</span>
+<span class="note">                                                            vgpr_spill ┘  scratch</span>
+      </div>
+    </section>
