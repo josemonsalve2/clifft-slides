@@ -1,0 +1,464 @@
+
+    <!-- ================= 14. Performance evaluation: V2 vs SVM ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">14</div>
+      <h1>Performance evaluation</h1>
+      <div class="section-sub">V2 against SVM &mdash; 26 circuits, both backends, hardware counters, and an
+      attempt to answer the only question that matters: <em>where does the time actually go, and why is V2
+      faster?</em></div>
+    </section>
+
+    <section>
+      <h2>14.1 &nbsp;Method &mdash; one SLURM job, <b>50793</b>, on one node</h2>
+      <table class="tight">
+        <tbody>
+          <tr><td>run</td><td><code>20260727T125310Z_report-final-allfixtures</code></td></tr>
+          <tr><td>node</td><td><code>smci350-rck-g03-d13-21</code> (<code>mi350x-es</code>, gfx950)</td></tr>
+          <tr><td>commit</td><td><code>79d4463</code>, working tree clean</td></tr>
+          <tr><td>circuits</td><td>26, all paired (V2 + SVM), <b>zero <code>rocprofv3</code> aborts</b></td></tr>
+          <tr><td>metric</td><td><b>GPU kernel time</b>, <code>per_dispatch_ns_median</code> from <code>rocprofv3</code></td></tr>
+        </tbody>
+      </table>
+      <p class="lede">Counters are collected in <b>three separate profiling passes</b>, because the hardware
+      cannot capture them all simultaneously:</p>
+      <table class="tight">
+        <thead><tr><th>pass</th><th>counters</th></tr></thead>
+        <tbody>
+          <tr><td><code>pmcA</code></td><td><code>SQ_INSTS_{VALU,SALU,LDS,MFMA}</code>, <code>SQ_WAVES</code></td></tr>
+          <tr><td><code>pmcB</code></td><td><code>TCC_HIT_sum</code>, <code>TCC_MISS_sum</code></td></tr>
+          <tr><td><code>pmcC</code></td><td><code>GRBM_GUI_ACTIVE</code>, <code>SQ_BUSY_CYCLES</code>, <code>SQ_WAIT_INST_LDS</code>, <code>SQ_WAVE_CYCLES</code></td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad">Each pass is a <b>separate execution of the kernel</b>. Counters from
+      the same pass may be combined freely; <b>counters from different passes may not be divided into each
+      other</b> without an argument that both executions did the same work. <b>&sect;14.5 turns on exactly
+      this point, and an earlier draft of this chapter got it wrong.</b></div>
+    </section>
+
+    <section>
+      <h2>Three methodological commitments &mdash; each learned the hard way</h2>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">1. Kernel time, not host wall time</div>
+          <div class="d">The host path <b>differs between the two backends</b> (&sect;13 is entirely about
+          that difference), so wall time would measure <b>the dispatch mechanism rather than the generated
+          code</b>. Where dispatch overhead is the subject, &sect;13 measures it directly.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">2. Both arms in one job on one node</div>
+          <div class="d"><code>mi350x-es</code> is <b>heterogeneous</b>; <code>node.json</code> in every run
+          directory carries the warning <code>"Do NOT compare ratios across nodes."</code>
+          <hr/>
+          &sect;1.3(d) records what happens when this is violated &mdash; <b>a projection off by 2&times;, in
+          the flattering direction.</b></div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">3. The denominator is checked against the <em>expected</em> denominator</div>
+          <div class="d">Job 50785 reported <code>wins 18/18</code> over a <b>26-circuit</b> corpus because
+          eight fixture paths had gone stale and <code>rocprofv3</code> aborted on each.</div>
+        </div>
+      </div>
+      <pre><code><span class="cm"># Fail loudly on a stale fixture path. Job 50785 lost 8 of 26 circuits to</span>
+<span class="cm"># renamed fixtures: rocprofv3 aborted on every pass, stderr went to</span>
+<span class="cm"># /dev/null, and the summary reported "wins 18/18" over a silently</span>
+<span class="cm"># truncated corpus. A missing input must not look like a clean result.</span>
+<span class="kw">if</span> [ ! -f <span class="st">"$c"</span> ]; <span class="kw">then</span>
+  <span class="fn">echo</span> <span class="st">"  *** FIXTURE MISSING: $c -- aborting run ***"</span> &gt;&amp;2
+  <span class="fn">exit</span> 1
+<span class="kw">fi</span></code></pre>
+      <div class="verdict verdict-bad">That truncation was <b>not a wash</b>: the six dropped QV circuits are
+      the corpus's <em>weakest</em> wins, so their absence moved the median from <b>0.670 to 0.518</b>. <b>A
+      silent loss of data flattered the result by 23%.</b></div>
+    </section>
+
+    <section>
+      <h2>14.2 &nbsp;The result</h2>
+      <div class="summary-grid">
+        <div class="card card-success"><div class="h">mean</div><div class="d" style="font-size:1.8em;"><b>0.626</b></div></div>
+        <div class="card card-success"><div class="h">median</div><div class="d" style="font-size:1.8em;"><b>0.670</b></div></div>
+        <div class="card card-success"><div class="h">wins</div><div class="d" style="font-size:1.8em;"><b>26 / 26</b></div></div>
+        <div class="card card-hl"><div class="h">fallbacks</div><div class="d" style="font-size:1.8em;"><b>0</b></div></div>
+      </div>
+      <div class="insight">Every circuit dispatches <code>clifft_v2_spec</code>; <b>not one falls back to the
+      interpreter.</b></div>
+    </section>
+
+    <section>
+      <h2>All 26 circuits, kernel time</h2>
+      <table class="tight" style="font-size:0.72em;">
+        <thead><tr><th>circuit</th><th class="num">V2 (µs)</th><th class="num">SVM (µs)</th><th class="num">V2/SVM</th><th class="num">speedup</th></tr></thead>
+        <tbody>
+          <tr><td><code>surface_d11_t19</code></td><td class="num">20,423</td><td class="num">79,842</td><td class="num win"><b>0.256</b></td><td class="num win">3.9&times;</td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">19,589</td><td class="num">75,947</td><td class="num win">0.258</td><td class="num win">3.9&times;</td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">11,926</td><td class="num">45,208</td><td class="num win">0.264</td><td class="num win">3.8&times;</td></tr>
+          <tr><td><code>surface_d9_t15</code></td><td class="num">11,369</td><td class="num">41,325</td><td class="num win">0.275</td><td class="num win">3.6&times;</td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">6,247</td><td class="num">20,152</td><td class="num win">0.310</td><td class="num win">3.2&times;</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">1,386</td><td class="num">4,350</td><td class="num win">0.319</td><td class="num win">3.1&times;</td></tr>
+          <tr><td><code>surface_d11_t10</code></td><td class="num">37,986</td><td class="num">81,369</td><td class="num win">0.467</td><td class="num win">2.1&times;</td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">21,632</td><td class="num">44,094</td><td class="num win">0.491</td><td class="num win">2.0&times;</td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">221</td><td class="num">434</td><td class="num win">0.509</td><td class="num win">2.0&times;</td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">11,225</td><td class="num">21,998</td><td class="num win">0.510</td><td class="num win">2.0&times;</td></tr>
+          <tr><td><code>surface_d7_t10</code></td><td class="num">11,044</td><td class="num">20,674</td><td class="num win">0.534</td><td class="num win">1.9&times;</td></tr>
+          <tr><td><code>four_t</code></td><td class="num">13.1</td><td class="num">22.3</td><td class="num win">0.587</td><td class="num win">1.7&times;</td></tr>
+          <tr><td><code>surface_d7_t5</code></td><td class="num">2,051</td><td class="num">3,372</td><td class="num win">0.608</td><td class="num win">1.6&times;</td></tr>
+          <tr><td><code>qv20_L8_seed42</code></td><td class="num">1,583,246</td><td class="num">2,162,954</td><td class="num">0.732</td><td class="num">1.4&times;</td></tr>
+          <tr><td><code>qv21_L8_seed42</code></td><td class="num">2,977,386</td><td class="num">4,045,316</td><td class="num">0.736</td><td class="num">1.4&times;</td></tr>
+          <tr><td><code>frame_h</code></td><td class="num">12.1</td><td class="num">16.3</td><td class="num">0.742</td><td class="num">1.3&times;</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td class="num">16,421</td><td class="num">20,901</td><td class="num">0.786</td><td class="num">1.3&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.005</code></td><td class="num">8,727</td><td class="num">10,714</td><td class="num">0.815</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.003</code></td><td class="num">8,809</td><td class="num">10,516</td><td class="num">0.838</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.002</code></td><td class="num">8,730</td><td class="num">10,319</td><td class="num">0.846</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num">8,600</td><td class="num">10,158</td><td class="num">0.847</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">1,804,649</td><td class="num">2,123,250</td><td class="num">0.850</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.0005</code></td><td class="num">8,643</td><td class="num">10,102</td><td class="num">0.856</td><td class="num">1.2&times;</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td class="num">7,241,815</td><td class="num">8,211,443</td><td class="num">0.882</td><td class="num">1.1&times;</td></tr>
+          <tr><td><code>qv22_L6_seed42</code></td><td class="num">3,179,445</td><td class="num">3,243,842</td><td class="num">0.980</td><td class="num">1.0&times;</td></tr>
+          <tr><td><code>qv23_L5_seed42</code></td><td class="num">6,086,167</td><td class="num">6,146,952</td><td class="num">0.990</td><td class="num">1.0&times;</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-mixed">The spread &mdash; <b>3.9&times; down to 1.01&times;</b> &mdash; is
+      the chapter's real subject. <b>A single average would hide the entire mechanism.</b></div>
+    </section>
+
+    <section>
+      <h2>14.3 &nbsp;Where the time goes: the <em>scalar</em> pipe</h2>
+      <div class="verdict verdict-good">The strongest and most consistent signal in the corpus is <b>not</b>
+      the vector instruction count. <b>It is the scalar one.</b></div>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">V2/SVM time</th><th class="num">VALU ratio</th><th class="num">SALU ratio</th><th class="num">SALU reduction</th></tr></thead>
+        <tbody>
+          <tr><td><code>four_t</code></td><td class="num">0.587</td><td class="num">0.432</td><td class="num win"><b>0.110</b></td><td class="num win">9.1&times;</td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">0.264</td><td class="num">0.482</td><td class="num win">0.137</td><td class="num win">7.3&times;</td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">0.258</td><td class="num">0.482</td><td class="num win">0.138</td><td class="num win">7.3&times;</td></tr>
+          <tr><td><code>surface_d11_t19</code></td><td class="num">0.256</td><td class="num">0.490</td><td class="num win">0.138</td><td class="num win">7.2&times;</td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">0.509</td><td class="num">0.817</td><td class="num win">0.150</td><td class="num win">6.7&times;</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num">0.847</td><td class="num">0.639</td><td class="num win">0.156</td><td class="num win">6.4&times;</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">0.319</td><td class="num">0.445</td><td class="num win">0.198</td><td class="num win">5.1&times;</td></tr>
+          <tr><td><code>frame_h</code></td><td class="num">0.742</td><td class="num">0.429</td><td class="num win">0.218</td><td class="num win">4.6&times;</td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">0.850</td><td class="num">0.821</td><td class="num">0.345</td><td class="num">2.9&times;</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td class="num">0.882</td><td class="num">0.863</td><td class="num"><b>0.361</b></td><td class="num">2.8&times;</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>On 26 of 26 circuits the SALU ratio is below the VALU ratio</b>
+      &mdash; the scalar count falls faster than the vector count, <b>without exception</b>. The range is
+      0.110&ndash;0.361: <b>V2 issues between 2.8&times; and 9.1&times; fewer scalar instructions</b> than the
+      SVM interpreter.</div>
+    </section>
+
+    <section>
+      <h2>Absolute deltas &mdash; and where they invert</h2>
+      <p class="lede">On the surface and <code>circuit_d5</code> families the reduction is larger in
+      <em>absolute</em> terms as well, by a factor of <b>3.8&times;&ndash;7.3&times;</b>:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">&Delta;SALU</th><th class="num">&Delta;VALU</th><th class="num">|&Delta;SALU| / |&Delta;VALU|</th></tr></thead>
+        <tbody>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">&minus;6 M</td><td class="num">&minus;0.8 M</td><td class="num win"><b>7.31</b></td></tr>
+          <tr><td><code>surface_d11_t10</code></td><td class="num">&minus;17,152 M</td><td class="num">&minus;2,832 M</td><td class="num win">6.06</td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">&minus;4,603 M</td><td class="num">&minus;761 M</td><td class="num win">6.05</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td class="num">&minus;4,053 M</td><td class="num">&minus;693 M</td><td class="num win">5.85</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num">&minus;2,029 M</td><td class="num">&minus;352 M</td><td class="num win">5.76</td></tr>
+          <tr><td><code>surface_d11_t19</code></td><td class="num">&minus;8,691 M</td><td class="num">&minus;2,275 M</td><td class="num win">3.82</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">On the <b>QV family this inverts</b>: <code>qv20_seed42</code> removes
+      <b>9,094 M</b> scalar instructions against <b>37,752 M</b> vector ones, a ratio of <b>0.24</b>. The
+      scalar <em>ratio</em> still improves more (0.345 vs 0.821), but the QV circuits are so
+      <b>vector-dominated in absolute terms</b> that the vector reduction is the larger number.
+      <hr/>
+      <b>Both statements are true of the same data</b>, and which one matters depends on <b>which pipe is the
+      limiter</b> &mdash; a distinction &sect;14.5 develops.</div>
+    </section>
+
+    <section>
+      <h2>What those scalar instructions <em>were</em></h2>
+      <pre><code><span class="kw">for</span> (u32 pc = 0; pc &lt; num_instrs; ++pc) {
+    CV2Instr ins = instrs[pc];      <span class="cm">// a load</span>
+    u32 k = st-&gt;active_k;           <span class="cm">// another load</span>
+    <span class="kw">switch</span> (ins.opcode) { ... }     <span class="cm">// a jump table</span></code></pre>
+      <p class="lede">Per bytecode instruction that is: an <b>address computation</b> (<code>pc * 40</code>,
+      needing a 64-bit multiply &mdash; see &sect;7.3), a <b><code>global_load</code></b>, a
+      <b><code>v_readfirstlane</code></b> to move the operand to the scalar unit, an <b><code>s_load</code>
+      of <code>active_k</code></b>, a <b>bounds compare</b>, and a <b>jump through a switch table</b>.</p>
+      <div class="verdict verdict-good"><b>None of it computes an amplitude.</b> V2 emits the call directly
+      with its operands as literals, and <b>all of it disappears</b> &mdash; which is exactly what the eight
+      microbenchmarks of &sect;7 predicted, case by case.</div>
+    </section>
+
+    <section>
+      <h2>A retraction, because an earlier draft got the mechanism backwards</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="d">&sect;7 previously described this as work <em>moved</em> from the vector pipe to the
+        scalar pipe &mdash; <em>"the same computation, once per wavefront instead of once per lane."</em>
+        <b>That is wrong.</b>
+        <hr/>
+        Counting scalar instructions in the <b>same sixteen <code>.s</code> files</b> that produced &sect;7's
+        VALU numbers shows <b>SALU falling in all eight cases</b> (1.26&times;&ndash;3.09&times;), and the
+        corpus shows it falling <em>faster</em> than VALU on <b>26 of 26</b> circuits.
+        <hr/>
+        <b>Nothing migrates. Both pipes issue less, and the scalar pipe issues much less.</b></div>
+      </div>
+      <div class="insight">The claim survived several drafts because it was <b>plausible</b> and because
+      <code>stats.csv</code> had a <code>v_alu</code> column and <b>no <code>s_alu</code> column</b> &mdash;
+      <b>the falsifying number was one <code>grep</code> away and structurally invisible.</b></div>
+    </section>
+
+    <section>
+      <h2>14.4 &nbsp;Why the speedup varies: instruction mix</h2>
+      <p class="lede">&sect;7 ended with a taxonomy &mdash; what specialization folds and what it cannot.
+      <b>The corpus tests it.</b></p>
+      <div class="grid-3">
+        <div class="card card-success">
+          <div class="h">surface family &mdash; 0.256&ndash;0.534</div>
+          <div class="d">Dominated by <b>frame ops and dormant measurements</b>, precisely the <b>S1 and
+          S2</b> classes that fold hardest (5.50&times; and 4.53&times; on VALU, <b>18 branches &rarr;
+          0</b>).</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h"><code>circuit_d5</code> family &mdash; 0.786&ndash;0.856</div>
+          <div class="d"><b>19.1% noise ops by call count</b> &mdash; the <b>S7</b> class, which folds at
+          <b>1.02&times;</b> &mdash; and those ops are individually <b>the most expensive in the ISA</b>
+          (447 interpreter-form instructions against 136 for a frame op), so <b>their share of <em>time</em>
+          far exceeds their share of <em>call sites</em>.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">QV family &mdash; 0.732&ndash;0.990</div>
+          <div class="d">Weak <b>for a different reason</b>, developed next.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">The prediction &sect;7.9 made <b>from a single microbenchmark, before
+      any of these circuits were measured</b>, was that <code>circuit_d5</code> would be the corpus's weakest
+      coop-tier result. <b>It is.</b></div>
+    </section>
+
+    <section>
+      <h2>14.5 &nbsp;Why the QV family resists: <b>the resident pool shrinks</b></h2>
+      <p class="lede">The QV circuits have <em>better</em> VALU and SALU ratios than <code>circuit_d5</code>
+      (0.82&ndash;0.86 and 0.34&ndash;0.36 against 0.64&ndash;0.66 and 0.16), <b>yet worse time ratios.
+      Instruction count is not what limits them.</b></p>
+      <pre><code><span class="kw">const</span> uint64_t amp = 1ull &lt;&lt; flat.peak_rank;
+<span class="kw">const</span> uint64_t bytes_per_wg = amp * <span class="kw">sizeof</span>(GpuComplex) + (amp / 2) * <span class="kw">sizeof</span>(GpuComplex);
+<span class="kw">const</span> uint64_t budget = 32ull &lt;&lt; 30;  <span class="cm">// 32 GB</span>
+uint64_t wgs = budget / bytes_per_wg;
+<span class="kw">if</span> (wgs &lt; 1) wgs = 1;               <span class="cm">// rank 26+: at least one resident wg</span>
+<span class="kw">if</span> (wgs &gt; 2048) wgs = 2048;
+global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
+<span class="kw">if</span> (global_grid_wgs &gt; kNumXCDs) global_grid_wgs -= global_grid_wgs % kNumXCDs;</code></pre>
+      <div class="footnote">Global-tier kernels size a persistent workgroup pool from an HBM budget: each
+      workgroup owns an amplitude slice plus a half-size scratch &mdash; <b>12 bytes per amplitude</b>, since
+      <code>GpuComplex</code> is <code>{float re; float im;}</code> &mdash; against a 32 GB budget, capped at
+      2,048 and rounded down to a multiple of <code>kNumXCDs = 8</code>
+      (<code>v2_kernel.cc:436-445</code>).</div>
+    </section>
+
+    <section>
+      <h2>Five predictions, five exact matches</h2>
+      <table class="tight">
+        <thead><tr><th class="num">rank</th><th class="num">bytes/wg</th><th class="num">predicted wgs</th><th class="num">measured wgs</th></tr></thead>
+        <tbody>
+          <tr><td class="num">20</td><td class="num">12 MB</td><td class="num">2,048 (capped)</td><td class="num win"><b>2,048</b> ✓</td></tr>
+          <tr><td class="num">21</td><td class="num">24 MB</td><td class="num">1,360</td><td class="num win"><b>1,360</b> ✓</td></tr>
+          <tr><td class="num">22</td><td class="num">48 MB</td><td class="num">680</td><td class="num win"><b>680</b> ✓</td></tr>
+          <tr><td class="num">23</td><td class="num">96 MB</td><td class="num">336</td><td class="num win"><b>336</b> ✓</td></tr>
+          <tr><td class="num">24</td><td class="num">192 MB</td><td class="num">168</td><td class="num win"><b>168</b> ✓</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad"><b>Every added qubit halves the pool.</b> By rank 24 there are
+      <b>168 workgroups on a device with 256 CUs</b> &mdash; <b>the machine cannot be filled</b>, and no
+      amount of instruction-level improvement changes that.</div>
+      <div class="insight">This is the clearest single explanation for the QV band, and it is <b>structural
+      rather than incidental</b>: it follows from the budget constant and the rank, <b>both known before the
+      kernel launches.</b></div>
+    </section>
+
+    <section>
+      <h2>The second mechanism: register spilling &mdash; measured, not inferred</h2>
+      <p class="lede">The three weakest circuits &mdash; <code>qv22_L6</code> (0.980), <code>qv23_L5</code>
+      (0.990), <code>qv24_L4</code> (0.882) &mdash; are <b>exactly the three whose kernels spill.</b> This
+      does not require interpreting a performance counter: <b>the AMDHSA metadata note in each
+      <code>.hsaco</code> states it directly.</b></p>
+      <table class="tight" style="font-size:0.78em;">
+        <thead><tr><th class="num">rank</th><th>circuit</th><th class="num">ratio</th><th class="num"><code>.vgpr_count</code></th><th class="num"><code>.agpr_count</code></th><th class="num"><code>.vgpr_spill</code></th><th class="num"><code>.sgpr_spill</code></th><th class="num">scratch</th></tr></thead>
+        <tbody>
+          <tr><td class="num">20</td><td><code>qv20_seed42</code></td><td class="num">0.850</td><td class="num">104</td><td class="num">40</td><td class="num win"><b>0</b></td><td class="num win"><b>0</b></td><td class="num">96</td></tr>
+          <tr><td class="num">20</td><td><code>qv20_L8</code></td><td class="num">0.732</td><td class="num">106</td><td class="num">42</td><td class="num win"><b>0</b></td><td class="num win"><b>0</b></td><td class="num">112</td></tr>
+          <tr><td class="num">21</td><td><code>qv21_L8</code></td><td class="num">0.736</td><td class="num">104</td><td class="num">40</td><td class="num win"><b>0</b></td><td class="num win"><b>0</b></td><td class="num">112</td></tr>
+          <tr><td class="num">22</td><td><code>qv22_L6</code></td><td class="num lose">0.980</td><td class="num">128</td><td class="num">64</td><td class="num lose"><b>136</b></td><td class="num lose"><b>762</b></td><td class="num lose">448</td></tr>
+          <tr><td class="num">23</td><td><code>qv23_L5</code></td><td class="num lose">0.990</td><td class="num">128</td><td class="num">64</td><td class="num lose"><b>199</b></td><td class="num lose"><b>662</b></td><td class="num lose">576</td></tr>
+          <tr><td class="num">24</td><td><code>qv24_L4</code></td><td class="num lose">0.882</td><td class="num">128</td><td class="num">64</td><td class="num lose"><b>152</b></td><td class="num lose"><b>594</b></td><td class="num lose">480</td></tr>
+        </tbody>
+      </table>
+      <pre><code><span class="cm"># llvm-readelf --notes, rank 22</span>
+.vgpr_count:       128       .agpr_count:       64
+.vgpr_spill_count: 136       .sgpr_spill_count: 762
+.private_segment_fixed_size: 448</code></pre>
+      <div class="verdict verdict-bad">Ranks 20 and 21 sit <em>below</em> the VGPR 128 / AGPR 64 cap and
+      <b>spill nothing</b>. Rank 22 and above <b>take the cap and spill 594&ndash;762 scalars to
+      scratch</b> &mdash; which is <b>HBM-backed, and therefore the same memory these kernels are already
+      bandwidth-bound on. Spilling and the collapse in speedup begin at exactly the same rank.</b></div>
+    </section>
+
+    <section>
+      <h2>A note on two register numbers that disagree</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="d"><code>rocprofv3</code> reports <b>52, 56 and 64</b> VGPRs for these kernels where the
+        metadata says <b>104, 106 and 128</b>. The <b>scratch sizes match one-to-one</b> across the two
+        sources (96/112/112/448/576/480), <b>so these are certainly the same kernels.</b>
+        <hr/>
+        The counts differ by <b>roughly 2&times;</b> and <code>rocprofv3</code> reports
+        <code>Accum_VGPR_Count = 0</code> where the metadata reports 40&ndash;64 AGPRs, so <b>the profiler is
+        evidently reporting a different quantity</b> &mdash; an allocation granule or an architected-only
+        count &mdash; <b>rather than contradicting the binary.</b>
+        <hr/>
+        &sect;15.5 tabulates the profiler's numbers because that is what that chapter's other columns come
+        from; <b>the spill counts above are from the <code>.hsaco</code> and are the authoritative
+        ones.</b></div>
+      </div>
+      <div class="insight">&sect;10 establishes what this is <em>not</em>: <b>it is not driven by circuit
+      length.</b> The three spilling kernels are the three <b>shortest</b> in the tier (320&ndash;359
+      instructions), while a rank-14 kernel emitting <b>16,521 instructions &mdash; 46&times; more</b> &mdash;
+      spills <b>4</b> SGPRs. What changes at the boundary is <b>a single baked constant, the
+      <code>amp_capacity</code> crossing 2²²</b>. <b>The mechanism inside LLVM's allocator has not been
+      isolated, and &sect;16 keeps that as the top open item.</b></div>
+    </section>
+
+    <section>
+      <h2>What this section does <em>not</em> claim</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="h">An earlier draft argued the QV band was explained by an <b>occupancy inversion</b></div>
+        <div class="d"><em>"V2 runs a third as many waves, each 3&times; longer"</em> &mdash; computed as
+        <code>SQ_WAVE_CYCLES / SQ_WAVES</code>. <b>That quotient is not admissible here.</b>
+        <hr/>
+        <b>Reason 1 &mdash; cross-pass division.</b> <code>SQ_WAVES</code> is collected in pass
+        <code>pmcA</code> and <code>SQ_WAVE_CYCLES</code> in pass <code>pmcC</code>: <b>different executions
+        of the kernel.</b>
+        <hr/>
+        <b>Reason 2 &mdash; the numerator's denominator does not reconcile.</b> <code>SQ_WAVES</code> does not
+        match launch geometry on <b>precisely these circuits</b>: SVM launches an identical 512-workgroup,
+        256-thread grid on <code>qv20</code>, <code>qv21_L8</code> and <code>qv22_L6</code> and reports
+        <b>8,832, 10,240 and 8,000</b> waves respectively, where the geometry implies <b>2,048 in all
+        three</b>. On the other <b>20 circuits <code>SQ_WAVES</code> equals workgroups &times; 4
+        exactly.</b>
+        <hr/>
+        Whatever the rank-&ge;20 counts measure, <b>dividing a pass-C cycle count by a pass-A wave count that
+        disagrees with the launch geometry does not measure per-wave cost. The claim was removed rather than
+        repaired.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>14.6 &nbsp;What V2 does <em>not</em> spend</h2>
+      <p class="lede">Three counters are worth reporting <b>for what they rule out.</b></p>
+      <div class="stat-callout">
+        <div class="stat-num">MFMA = 0</div>
+        <div class="stat-label">on all 52 cells &mdash; 26 circuits &times; 2 backends, none missing</div>
+      </div>
+      <div class="insight">Neither backend issues <b>a single matrix-core instruction</b>. The workload is a
+      <b>butterfly reduction over amplitude pairs</b> &mdash; <code>cadd</code>/<code>csub</code>/<code>cmul</code>
+      on 2-element complex values with a strided access pattern &mdash; <b>not a GEMM.</b> Any proposal to
+      bring the matrix cores to bear on this workload is <b>unsupported by this corpus</b>, and <b>the zero
+      is measured rather than assumed.</b></div>
+      <div class="footnote">An earlier draft could only claim 51 of 52: <code>qv24_L4_seed42</code>'s SVM
+      counter block was missing from the truncated job 50785, and was recorded as <b><em>unmeasured</em>
+      rather than rounded down to zero.</b></div>
+    </section>
+
+    <section>
+      <h2>LDS is cheaper on V2 <em>by construction</em>, not by optimization</h2>
+      <table class="tight">
+        <thead><tr><th>tier</th><th class="num">V2 LDS</th><th class="num">SVM LDS</th><th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><td>coop</td><td class="num">13,312 B</td><td class="num">23,040 B</td><td class="num win">0.578</td></tr>
+          <tr><td>global</td><td class="num">1,024 B</td><td class="num">8,704 B</td><td class="num win"><b>0.118</b></td></tr>
+          <tr><td>register</td><td class="num">0 B</td><td class="num">0 B</td><td class="num">&mdash;</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">The coop figure is the sum of the declared arrays &mdash; <code>lds_v[1024]</code>
+      and <code>lds_red_scratch[512]</code> at 8 B each is 12,288 B, plus
+      <code>lds_red0</code>/<code>lds_red1</code> (128 B) and <code>lds_state</code>, for <b>13,064 B in the
+      ELF</b> &mdash; and the global-tier kernel <b>declares neither amplitude array</b>, because at rank
+      &gt; 10 the amplitudes live in HBM. Its ELF figure is <b>784 B</b> of <code>lds_state</code> and
+      <code>lds_shot</code> alone (<code>v2_specializer.cc:204-205</code>). <b>The 8.5&times; gap is therefore
+      a consequence of the tier's design, not a tuning result.</b></div>
+      <div class="footnote">The table quotes <code>rocprofv3</code>'s <code>LDS_Block_Size</code>, which is
+      the ELF <code>.group_segment_fixed_size</code> <b>rounded up to a 256-byte granule</b>: 13,064 &rarr;
+      13,312 and 784 &rarr; 1,024. <b>Both columns are rounded the same way, so the ratios are
+      unaffected.</b> See &sect;9.3 for how this granule was mistaken for a code change.</div>
+    </section>
+
+    <section>
+      <h2>The dynamic counters agree &mdash; with one honest exception</h2>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h"><code>SQ_INSTS_LDS</code></div>
+          <div class="d">Coop tier: <b>0.60&ndash;0.77&times; SVM</b>. Register tier: V2 executes <b>zero</b>
+          LDS instructions against SVM's <b>25,280</b>.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">But on the surface family's coop and global circuits, V2 issues <em>more</em></div>
+          <div class="d"><b>1.13&ndash;1.25&times;</b> &mdash; folded axes turn some LDS traffic into direct
+          indexed access, and <b>the direction of that trade depends on the circuit.</b></div>
+        </div>
+      </div>
+      <div class="stat-callout">
+        <div class="stat-num">4.3&times;</div>
+        <div class="stat-label">smaller scratch on the register tier &mdash; 656&ndash;1,040 B against SVM's uniform 4,480 B</div>
+      </div>
+      <div class="insight"><b>The SVM kernel must provision for the worst opcode it <em>might</em>
+      interpret; V2 provisions for the opcodes this circuit <em>actually contains</em>.</b></div>
+    </section>
+
+    <section>
+      <h2>14.7 &nbsp;A sanity check: does the counter model explain the time?</h2>
+      <p class="lede">If the story above is right, <b>a single derived quantity should predict the measured
+      ratio.</b> <code>SQ_BUSY_CYCLES</code> &mdash; cycles during which the SQ has work &mdash; is the
+      natural candidate, and <b>unlike &sect;14.5's rejected quotient it is a ratio of the same counter
+      between two arms, not a division across passes.</b></p>
+      <div class="summary-grid">
+        <div class="card card-success"><div class="h">Pearson r</div><div class="d" style="font-size:1.8em;"><b>0.942</b></div></div>
+        <div class="card card-success"><div class="h">median rel. error</div><div class="d" style="font-size:1.8em;"><b>5.5 %</b></div></div>
+        <div class="card card-hl"><div class="h">mean rel. error</div><div class="d" style="font-size:1.8em;"><b>9.0 %</b></div></div>
+      </div>
+      <div class="verdict verdict-mixed"><b>The residual is informative.</b> The six largest errors are, in
+      order, <code>circuit_d5_p0.0005</code> (28.2%), <code>circuit_d5_p0.001</code> (27.2%),
+      <code>circuit_d5_p0.002</code> (26.4%), <code>circuit_d5_p0.003</code> (25.0%),
+      <code>circuit_d5_p0.005</code> (21.2%) and <code>cultivation_d5</code> (17.9%) &mdash; <b>the entire d5
+      family, and nothing else.</b>
+      <hr/>
+      &sect;14.8 is about <b>the same six circuits</b>, and the two observations are <b>plausibly the same
+      phenomenon seen through two counters.</b></div>
+    </section>
+
+    <section>
+      <h2>14.8 &nbsp;One result that does not fit</h2>
+      <p class="lede">The <code>circuit_d5</code> family wins, but its <b>L2 hit rate is still
+      depressed</b>: <b>91.1&ndash;92.1%</b> for V2 against <b>97.6&ndash;98.4%</b> for SVM, and
+      <code>cultivation_d5</code> shows <b>90.9% against 98.9%</b>.</p>
+      <div class="insight">This is a <b>residue of the regression documented in &sect;11.1</b> &mdash; the
+      same circuits, the same direction, <b>at a fraction of the magnitude</b> (pre-fence the gap was
+      <b>71.5% against 98.0%</b>, <code>VERIFIED_FACTS.md:158</code>).</div>
+      <div class="verdict verdict-mixed">They win anyway, on the strength of a <b>0.64 VALU ratio and a
+      0.16 SALU ratio</b>. But <b>a 6-point L2 deficit on the one circuit family V2 finds hardest</b>,
+      showing up in <b>the same six circuits as &sect;14.7's busy-cycle residual</b>, is <b>not explained by
+      anything in this chapter.</b> &sect;16 records it as open.
+      <hr/>
+      The honest summary: <b>V2 wins these circuits <em>despite</em> a memory-system disadvantage it did not
+      have to have.</b></div>
+    </section>
+
+    <section>
+      <h2>A second unexplained result, in the opposite direction</h2>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">V2 L2 hit</th><th class="num">SVM L2 hit</th><th class="num">V2/SVM time</th></tr></thead>
+        <tbody>
+          <tr><td><code>four_t</code></td><td class="num lose">52.3 %</td><td class="num">74.4 %</td><td class="num win">0.587</td></tr>
+          <tr><td><code>frame_h</code></td><td class="num lose">52.2 %</td><td class="num">66.8 %</td><td class="num win">0.742</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">On the two smallest register-tier circuits V2's L2 hit rate is far <em>worse</em>
+      than SVM's &mdash; <b>and V2 wins both anyway.</b> At <b>13 µs and 12 µs</b> these kernels are small
+      enough that <b>cache behaviour is dominated by cold misses on first touch</b>, and the hit
+      <em>rate</em> is computed over a small denominator.</div>
+      <div class="verdict verdict-mixed"><b>The result is recorded because it was measured, not because it is
+      understood.</b></div>
+    </section>

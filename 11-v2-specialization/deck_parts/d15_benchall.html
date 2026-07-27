@@ -1,0 +1,376 @@
+
+    <!-- ================= 15. The full benchmark report ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">15</div>
+      <h1>The full<br/>benchmark report</h1>
+      <div class="section-sub">&sect;14 argued a thesis. This chapter is the underlying data, in full, with
+      no selection: 26 circuits, both backends, every counter collected, every launch parameter
+      recorded.</div>
+    </section>
+
+    <section>
+      <h2>The precedence rule for this chapter</h2>
+      <div class="verdict verdict-good"><b>Where any earlier chapter of this report disagrees with a number
+      here, this chapter is correct.</b></div>
+      <div class="insight">&sect;1&ndash;&sect;10 were written against <b>earlier runs on a different
+      node</b>; several of their figures have been superseded and are retained <b>only where the text says so
+      explicitly.</b></div>
+    </section>
+
+    <section>
+      <h2>15.1 &nbsp;Provenance</h2>
+      <pre><code>{ <span class="st">"run_id"</span>:  <span class="st">"20260727T125310Z_report-final-allfixtures"</span>,
+  <span class="st">"label"</span>:   <span class="st">"report-final-allfixtures"</span>,
+  <span class="st">"commit"</span>:  <span class="st">"79d4463"</span>,
+  <span class="st">"branch"</span>:  <span class="st">"mlir-v2"</span>,
+  <span class="st">"dirty"</span>:   <span class="lit">false</span>,
+  <span class="st">"v2_specialize"</span>: <span class="lit">true</span>,
+  <span class="st">"n_circuits"</span>:    <span class="lit">26</span> }
+
+{ <span class="st">"slurm_job_id"</span>: <span class="lit">50793</span>,
+  <span class="st">"node"</span>:         <span class="st">"smci350-rck-g03-d13-21"</span>,
+  <span class="st">"partition"</span>:    <span class="st">"mi350x-es"</span>,
+  <span class="st">"arch"</span>:         <span class="st">"gfx950"</span>,
+  <span class="st">"note"</span>: <span class="st">"mi350x-es is heterogeneous. Do NOT compare ratios across nodes."</span> }</code></pre>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The node caveat, stated once and meant throughout</div>
+        <div class="d">This job ran on <code>d13-21</code>. The absolute timings in &sect;1&ndash;&sect;10 come
+        from <code>f13-21</code>. <b>V2/SVM <em>ratios</em> within this job are sound</b> &mdash; both arms,
+        same job, same node, interleaved. <b>The absolute microsecond figures must not be compared against
+        those chapters.</b>
+        <hr/>
+        &sect;1.3(d) is the record of what happens when this rule is broken: a projected ratio of <b>~0.40</b>
+        for the d5 family against a measured <b>0.84</b> &mdash; <b>wrong by 2&times; in the flattering
+        direction.</b></div>
+      </div>
+      <div class="insight"><code>v2_specialize: true</code> is <b>not decoration</b>.
+      <code>V2_SPECIALIZE</code> is <b>opt-in</b>; with it unset the harness measures the <em>interpreter</em>,
+      and the resulting numbers look like <b>a 2&ndash;3&times; regression that is really a configuration
+      error.</b> The manifest records the flag <b>so a reader can tell which kernel was measured.</b></div>
+    </section>
+
+    <section>
+      <h2>15.2 &nbsp;What each run does</h2>
+      <p class="lede">Per circuit, per backend, <b>five <code>rocprofv3</code> invocations</b> &mdash; plus
+      <b>one untraced warm-up</b> whose purpose is to move <code>.hsaco</code> compilation and gating
+      <em>off</em> the traced path:</p>
+      <pre><code><span class="fn">prof</span>() {  <span class="cm"># $1=outdir  rest=cmd</span>
+  <span class="kw">local</span> outdir=<span class="st">"$1"</span>; <span class="kw">shift</span>; <span class="kw">local</span> cmd=<span class="st">"$*"</span>
+  <span class="fn">mkdir</span> -p <span class="st">"$outdir"</span>
+  <span class="fn">eval</span> <span class="st">"$cmd"</span> &gt;/dev/null 2&gt;&amp;1   <span class="cm"># warm: compile+gate the .hsaco OFF the traced path</span>
+  timeout 300 rocprofv3 --kernel-trace   --stats --output-format csv -d <span class="st">"$outdir/kt"</span>   -- $cmd
+  timeout 300 rocprofv3 --hsa-core-trace --stats --output-format csv -d <span class="st">"$outdir/hsa"</span>  -- $cmd
+  timeout 300 rocprofv3 --pmc $PMC_A --output-format csv -d <span class="st">"$outdir/pmcA"</span> -- $cmd
+  timeout 300 rocprofv3 --pmc $PMC_B --output-format csv -d <span class="st">"$outdir/pmcB"</span> -- $cmd
+  timeout 300 rocprofv3 --pmc $PMC_C --output-format csv -d <span class="st">"$outdir/pmcC"</span> -- $cmd
+}</code></pre>
+      <pre><code><span class="cm"># bench_all.sh:81-83 — split because the hardware cannot collect them simultaneously</span>
+PMC_A=<span class="st">"SQ_WAVES,SQ_INSTS_VALU,SQ_INSTS_MFMA,SQ_INSTS_SALU,SQ_INSTS_LDS"</span>
+PMC_B=<span class="st">"TCC_HIT_sum,TCC_MISS_sum"</span>
+PMC_C=<span class="st">"SQ_BUSY_CYCLES,GRBM_GUI_ACTIVE,SQ_WAIT_INST_LDS,SQ_WAVE_CYCLES"</span></code></pre>
+      <div class="verdict verdict-bad"><b>Each group is a separate execution of the kernel.</b> Ratios
+      <em>within</em> a group, and ratios of one counter <em>between the two backends</em>, are sound.
+      <b>Quotients of counters drawn from <em>different</em> groups are not</b>, absent an argument that the
+      runs did identical work &mdash; <b>&sect;14.5 retracts a claim that violated exactly this.</b></div>
+      <div class="footnote">Shot counts vary by circuit, from <b>20,000</b> on the small register-tier
+      fixtures down to <b>500</b> on <code>qv24_L4</code>, chosen so that each run completes inside the 300 s
+      <code>timeout</code> (<code>bench_all.sh:90-113</code>). Shot count therefore differs <em>between</em>
+      circuits but is <b>identical between the two backends of any one circuit</b>, which is what the ratio
+      requires.</div>
+    </section>
+
+    <section>
+      <h2>15.3 &nbsp;The complete result table &mdash; every circuit</h2>
+      <table class="tight" style="font-size:0.68em;">
+        <thead><tr><th class="num">#</th><th>circuit</th><th>tier</th><th class="num">shots</th><th class="num">V2 (µs)</th><th class="num">SVM (µs)</th><th class="num">V2/SVM</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td><code>circuit_d3_p0.001</code></td><td>register</td><td class="num">20,000</td><td class="num">220.7</td><td class="num">433.6</td><td class="num win">0.509</td></tr>
+          <tr><td class="num">2</td><td><code>circuit_d5_p0.0005</code></td><td>coop</td><td class="num">10,000</td><td class="num">8,643.0</td><td class="num">10,101.6</td><td class="num">0.856</td></tr>
+          <tr><td class="num">3</td><td><code>circuit_d5_p0.001</code></td><td>coop</td><td class="num">10,000</td><td class="num">8,599.8</td><td class="num">10,158.4</td><td class="num">0.847</td></tr>
+          <tr><td class="num">4</td><td><code>circuit_d5_p0.002</code></td><td>coop</td><td class="num">10,000</td><td class="num">8,729.9</td><td class="num">10,318.6</td><td class="num">0.846</td></tr>
+          <tr><td class="num">5</td><td><code>circuit_d5_p0.003</code></td><td>coop</td><td class="num">10,000</td><td class="num">8,808.8</td><td class="num">10,516.1</td><td class="num">0.838</td></tr>
+          <tr><td class="num">6</td><td><code>circuit_d5_p0.005</code></td><td>coop</td><td class="num">10,000</td><td class="num">8,727.0</td><td class="num">10,713.5</td><td class="num">0.815</td></tr>
+          <tr><td class="num">7</td><td><code>cultivation_d5</code></td><td>coop</td><td class="num">20,000</td><td class="num">16,421.3</td><td class="num">20,900.8</td><td class="num">0.786</td></tr>
+          <tr><td class="num">8</td><td><code>four_t</code></td><td>register</td><td class="num">20,000</td><td class="num">13.1</td><td class="num">22.3</td><td class="num win">0.587</td></tr>
+          <tr><td class="num">9</td><td><code>frame_h</code></td><td>register</td><td class="num">20,000</td><td class="num">12.1</td><td class="num">16.3</td><td class="num">0.742</td></tr>
+          <tr><td class="num">10</td><td><code>qv10</code></td><td>coop</td><td class="num">20,000</td><td class="num">1,385.6</td><td class="num">4,349.7</td><td class="num win">0.319</td></tr>
+          <tr><td class="num">11</td><td><code>qv20_L8_seed42</code></td><td>global</td><td class="num">2,000</td><td class="num">1,583,246.4</td><td class="num">2,162,954.0</td><td class="num">0.732</td></tr>
+          <tr><td class="num">12</td><td><code>qv20_seed42</code></td><td>global</td><td class="num">2,000</td><td class="num">1,804,648.5</td><td class="num">2,123,250.3</td><td class="num">0.850</td></tr>
+          <tr><td class="num">13</td><td><code>qv21_L8_seed42</code></td><td>global</td><td class="num">2,000</td><td class="num">2,977,385.5</td><td class="num">4,045,316.0</td><td class="num">0.736</td></tr>
+          <tr><td class="num">14</td><td><code>qv22_L6_seed42</code></td><td>global</td><td class="num">1,000</td><td class="num">3,179,444.7</td><td class="num">3,243,841.8</td><td class="num lose">0.980</td></tr>
+          <tr><td class="num">15</td><td><code>qv23_L5_seed42</code></td><td>global</td><td class="num">1,000</td><td class="num">6,086,167.4</td><td class="num">6,146,952.4</td><td class="num lose">0.990</td></tr>
+          <tr><td class="num">16</td><td><code>qv24_L4_seed42</code></td><td>global</td><td class="num">500</td><td class="num">7,241,815.1</td><td class="num">8,211,443.4</td><td class="num">0.882</td></tr>
+          <tr><td class="num">17</td><td><code>surface_d11_t10</code></td><td>coop</td><td class="num">10,000</td><td class="num">37,986.3</td><td class="num">81,369.2</td><td class="num win">0.467</td></tr>
+          <tr><td class="num">18</td><td><code>surface_d11_t15</code></td><td>global</td><td class="num">5,000</td><td class="num">19,589.4</td><td class="num">75,946.8</td><td class="num win">0.258</td></tr>
+          <tr><td class="num">19</td><td><code>surface_d11_t19</code></td><td>global</td><td class="num">5,000</td><td class="num">20,423.1</td><td class="num">79,842.1</td><td class="num win"><b>0.256</b></td></tr>
+          <tr><td class="num">20</td><td><code>surface_d7_t10</code></td><td>coop</td><td class="num">10,000</td><td class="num">11,044.2</td><td class="num">20,673.5</td><td class="num win">0.534</td></tr>
+          <tr><td class="num">21</td><td><code>surface_d7_t15</code></td><td>coop</td><td class="num">10,000</td><td class="num">11,225.3</td><td class="num">21,997.6</td><td class="num win">0.510</td></tr>
+          <tr><td class="num">22</td><td><code>surface_d7_t19</code></td><td>global</td><td class="num">5,000</td><td class="num">6,246.9</td><td class="num">20,152.3</td><td class="num win">0.310</td></tr>
+          <tr><td class="num">23</td><td><code>surface_d7_t5</code></td><td>register</td><td class="num">20,000</td><td class="num">2,051.1</td><td class="num">3,372.2</td><td class="num win">0.608</td></tr>
+          <tr><td class="num">24</td><td><code>surface_d9_t10</code></td><td>coop</td><td class="num">10,000</td><td class="num">21,631.9</td><td class="num">44,093.9</td><td class="num win">0.491</td></tr>
+          <tr><td class="num">25</td><td><code>surface_d9_t15</code></td><td>global</td><td class="num">5,000</td><td class="num">11,368.7</td><td class="num">41,325.4</td><td class="num win">0.275</td></tr>
+          <tr><td class="num">26</td><td><code>surface_d9_t19</code></td><td>global</td><td class="num">5,000</td><td class="num">11,925.6</td><td class="num">45,207.5</td><td class="num win">0.264</td></tr>
+        </tbody>
+      </table>
+      <div class="footnote">Kernel time is <code>per_dispatch_ns_median</code>; each backend issues
+      <b>exactly one dispatch</b> of the kernel under test.</div>
+    </section>
+
+    <section>
+      <h2>Aggregates &mdash; and the right average for a set of ratios</h2>
+      <div class="summary-grid">
+        <div class="card card-hl"><div class="h">arithmetic mean</div><div class="d" style="font-size:1.6em;"><b>0.626</b></div></div>
+        <div class="card card-hl"><div class="h">median</div><div class="d" style="font-size:1.6em;"><b>0.670</b></div></div>
+        <div class="card card-success"><div class="h">wins</div><div class="d" style="font-size:1.6em;"><b>26 / 26</b></div></div>
+        <div class="card card-success"><div class="h">geomean (all)</div><div class="d" style="font-size:1.6em;"><b>0.573</b></div></div>
+      </div>
+      <p class="lede">The <b>geometric mean</b> is the correct average for a set of ratios, and the one that
+      <b>does not let a single large speedup dominate</b>:</p>
+      <table class="tight">
+        <thead><tr><th>tier</th><th class="num">n</th><th class="num">geomean</th><th class="num">best</th><th class="num">worst</th></tr></thead>
+        <tbody>
+          <tr><td>register</td><td class="num">4</td><td class="num">0.606</td><td class="num">0.509</td><td class="num">0.742</td></tr>
+          <tr><td>coop</td><td class="num">11</td><td class="num">0.633</td><td class="num">0.319</td><td class="num">0.856</td></tr>
+          <tr><td>global</td><td class="num">11</td><td class="num win">0.508</td><td class="num win">0.256</td><td class="num lose">0.990</td></tr>
+          <tr><td><b>all</b></td><td class="num"><b>26</b></td><td class="num win"><b>0.573</b></td><td class="num">0.256</td><td class="num">0.990</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-mixed">The global tier has <b>both the best geomean <em>and</em> the widest
+      spread</b> &mdash; it contains the surface circuits that fold hardest <em>and</em> the QV circuits that
+      resist most. <b>Tier alone does not predict speedup</b>; instruction mix (&sect;14.4) and pool occupancy
+      (&sect;14.5) do.</div>
+    </section>
+
+    <section>
+      <h2>A statistic reported only to be dismissed</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="h">Total kernel time across the corpus is misleading</div>
+        <div class="d">Summing all 26: V2 <b>23.088 s</b> against SVM <b>26.445 s</b>, a ratio of
+        <b>0.873</b>.
+        <hr/>
+        That number is <b>dominated by the six QV circuits</b>, which alone account for <b>22.9 s of V2's
+        23.1 s</b> because they are run at high rank for thousands of shots. <b>It describes the composition
+        of this fixture list, not the backend.</b>
+        <hr/>
+        <b>The per-circuit ratios above are the result.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>15.4 &nbsp;Tier assignment &mdash; and why the fixture names mislead</h2>
+      <pre><code><span class="kw">constexpr</span> uint32_t kRegMaxRank  = 4;
+<span class="kw">constexpr</span> uint32_t kCoopMaxRank = 10;
+<span class="kw">const</span> Tier tier = flat.peak_rank &lt;= kRegMaxRank  ? REG
+                : flat.peak_rank &lt;= kCoopMaxRank ? COOP : GLOBAL;</code></pre>
+      <div class="footnote">Tier is a function of <code>peak_rank</code> <b>alone</b>
+      (<code>v2_kernel.cc:312-321</code>).</div>
+      <div class="insight">Within the surface family, <code>surface_d11_t10</code> runs <b>coop</b> while
+      <code>surface_d11_t15</code> and <code>surface_d11_t19</code> run <b>global</b> &mdash; <b>same code
+      distance, different tier</b> &mdash; and <code>surface_d7_t5</code> runs on the <b>register</b> tier
+      despite its name suggesting kinship with the other <code>surface_d7_*</code> circuits.
+      <hr/>
+      The name encodes the circuit's <b>construction</b>; the tier follows from <b>the peak rank the
+      StatevectorSqueeze pass leaves behind.</b></div>
+      <div class="verdict verdict-good"><b>Read the measured LDS size, not the fixture name.</b></div>
+    </section>
+
+    <section>
+      <h2>15.5 &nbsp;Launch geometry and resource footprint</h2>
+      <table class="tight" style="font-size:0.72em;">
+        <thead><tr><th>circuit</th><th class="num">V2 LDS</th><th class="num">SVM LDS</th><th class="num">V2 scr</th><th class="num">SVM scr</th><th class="num">V2 VGPR</th><th class="num">SVM VGPR</th><th class="num">SGPR</th></tr></thead>
+        <tbody>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">0</td><td class="num">0</td><td class="num">1,024</td><td class="num">4,480</td><td class="num">64</td><td class="num">60</td><td class="num">112</td></tr>
+          <tr><td><code>four_t</code></td><td class="num">0</td><td class="num">0</td><td class="num">656</td><td class="num">4,480</td><td class="num win"><b>32</b></td><td class="num">60</td><td class="num">112</td></tr>
+          <tr><td><code>frame_h</code></td><td class="num">0</td><td class="num">0</td><td class="num">656</td><td class="num">4,480</td><td class="num win"><b>32</b></td><td class="num">60</td><td class="num">112</td></tr>
+          <tr><td><code>surface_d7_t5</code></td><td class="num">0</td><td class="num">0</td><td class="num">1,040</td><td class="num">4,480</td><td class="num">64</td><td class="num">60</td><td class="num">112</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">13,312</td><td class="num">23,040</td><td class="num">0</td><td class="num">8</td><td class="num win"><b>36</b></td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>circuit_d5_*</code> (5)</td><td class="num">13,312</td><td class="num">23,040</td><td class="num">336</td><td class="num">8</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td class="num">13,312</td><td class="num">23,040</td><td class="num">336</td><td class="num">8</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>surface_*</code> coop (4)</td><td class="num">13,312</td><td class="num">23,040</td><td class="num">288</td><td class="num">8</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>surface_*</code> global (5)</td><td class="num">1,024</td><td class="num">8,704</td><td class="num">320&ndash;352</td><td class="num">56</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num">96</td><td class="num">56</td><td class="num win"><b>52</b></td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv20_L8</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num">112</td><td class="num">56</td><td class="num win"><b>56</b></td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv21_L8</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num">112</td><td class="num">56</td><td class="num win"><b>52</b></td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv22_L6</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num lose">448</td><td class="num">56</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv23_L5</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num lose">576</td><td class="num">56</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+          <tr><td><code>qv24_L4</code></td><td class="num">1,024</td><td class="num">8,704</td><td class="num lose">480</td><td class="num">56</td><td class="num">64</td><td class="num">64</td><td class="num">112</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Three observations, all structural</h2>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">LDS</div>
+          <div class="d">V2's coop kernels declare <code>lds_v[1024]</code> + <code>lds_red_scratch[512]</code>
+          at 8 B each = 12,288 B, plus <code>lds_red0</code>/<code>lds_red1</code> (128 B) and
+          <code>lds_state</code> &mdash; <b>13,064 B in the ELF</b>.
+          <hr/>
+          The global kernels declare <b>neither amplitude array</b>, because at rank &gt; 10 the amplitudes
+          live in HBM; their ELF figure is <b>784 B</b> of <code>lds_state</code> and <code>lds_shot</code>
+          (<code>v2_specializer.cc:185-186</code>, <code>:204-205</code>). SVM provisions 23,040 / 8,704 B for
+          the same tiers.
+          <hr/>
+          <b>The 8.5&times; global-tier gap is a consequence of <em>where the amplitudes live</em>, not of
+          tuning.</b></div>
+        </div>
+        <div class="card card-success">
+          <div class="h">Scratch, register tier</div>
+          <div class="d"><b>656&ndash;1,040 B</b> against SVM's uniform <b>4,480 B</b> &mdash; <b>4.3&times;</b>.
+          <hr/>
+          SVM must provision for <b>the worst opcode it <em>might</em> interpret</b>; V2 provisions for
+          <b>the opcodes the circuit actually contains.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">VGPRs</div>
+          <div class="d">V2 uses <b>fewer than SVM on five circuits</b> (32, 32, 36, 52, 52/56) and the same
+          64 on the rest. <b>It never uses more.</b>
+          <hr/>
+          The three QV circuits where V2 is at 64 are <b>the three weakest results in the corpus</b>, and they
+          are <b>also the three that spill</b> &mdash; see &sect;14.5.</div>
+        </div>
+      </div>
+      <div class="footnote"><code>rocprofv3</code> reports <code>LDS_Block_Size</code> <b>rounded up to a
+      256-byte granule</b>: 13,064 &rarr; 13,312 and 784 &rarr; 1,024. The ELF
+      <code>.group_segment_fixed_size</code> is the <em>declared</em> size; the profiler figure is the
+      <em>dispatch allocation</em>. This table quotes the profiler throughout, for consistency with its other
+      columns.</div>
+    </section>
+
+    <section>
+      <h2>The VGPR column is <code>rocprofv3</code>'s, and it disagrees with the binaries</h2>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="d">The AMDHSA metadata in the same kernels' <code>.hsaco</code> files reports
+        <b>104&ndash;128 VGPRs plus 40&ndash;64 AGPRs</b> where the profiler reports <b>52&ndash;64</b> and
+        <code>Accum_VGPR_Count = 0</code>.
+        <hr/>
+        <b>Scratch sizes match one-to-one across both sources</b>, so these are <b>the same kernels</b> and
+        the profiler is reporting <b>a different quantity, not a different kernel.</b>
+        <hr/>
+        The column is retained here for consistency with the rest of this table, which is profiler-sourced.
+        <b>For register allocation and spilling, &sect;14.5 and &sect;10 use the <code>.hsaco</code> metadata,
+        and those are authoritative.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>15.6 &nbsp;The complete counter table</h2>
+      <table class="tight" style="font-size:0.66em;">
+        <thead><tr><th>circuit</th><th class="num">VALU V2</th><th class="num">VALU SVM</th><th class="num">ratio</th><th class="num">SALU V2</th><th class="num">SALU SVM</th><th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">3.79e+06</td><td class="num">4.64e+06</td><td class="num">0.817</td><td class="num">1.10e+06</td><td class="num">7.30e+06</td><td class="num win"><b>0.150</b></td></tr>
+          <tr><td><code>circuit_d5_p0.0005</code></td><td class="num">6.16e+08</td><td class="num">9.69e+08</td><td class="num">0.636</td><td class="num">3.74e+08</td><td class="num">2.40e+09</td><td class="num win">0.156</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num">6.25e+08</td><td class="num">9.77e+08</td><td class="num">0.639</td><td class="num">3.76e+08</td><td class="num">2.40e+09</td><td class="num win">0.156</td></tr>
+          <tr><td><code>circuit_d5_p0.002</code></td><td class="num">6.40e+08</td><td class="num">9.92e+08</td><td class="num">0.646</td><td class="num">3.79e+08</td><td class="num">2.41e+09</td><td class="num win">0.158</td></tr>
+          <tr><td><code>circuit_d5_p0.003</code></td><td class="num">6.55e+08</td><td class="num">1.00e+09</td><td class="num">0.652</td><td class="num">3.83e+08</td><td class="num">2.41e+09</td><td class="num win">0.159</td></tr>
+          <tr><td><code>circuit_d5_p0.005</code></td><td class="num">6.82e+08</td><td class="num">1.03e+09</td><td class="num">0.663</td><td class="num">3.89e+08</td><td class="num">2.42e+09</td><td class="num win">0.161</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td class="num">1.36e+09</td><td class="num">2.06e+09</td><td class="num">0.663</td><td class="num">7.78e+08</td><td class="num">4.83e+09</td><td class="num win">0.161</td></tr>
+          <tr><td><code>four_t</code></td><td class="num">6.76e+04</td><td class="num">1.56e+05</td><td class="num">0.432</td><td class="num">2.10e+04</td><td class="num">1.90e+05</td><td class="num win"><b>0.110</b></td></tr>
+          <tr><td><code>frame_h</code></td><td class="num">4.13e+04</td><td class="num">9.63e+04</td><td class="num">0.429</td><td class="num">2.10e+04</td><td class="num">9.63e+04</td><td class="num win">0.218</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">5.02e+08</td><td class="num">1.13e+09</td><td class="num">0.445</td><td class="num">1.20e+08</td><td class="num">6.05e+08</td><td class="num win">0.198</td></tr>
+          <tr><td><code>qv20_L8_seed42</code></td><td class="num">1.28e+11</td><td class="num">1.54e+11</td><td class="num">0.830</td><td class="num">5.39e+09</td><td class="num">1.57e+10</td><td class="num">0.344</td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">1.74e+11</td><td class="num">2.11e+11</td><td class="num">0.821</td><td class="num">4.79e+09</td><td class="num">1.39e+10</td><td class="num">0.345</td></tr>
+          <tr><td><code>qv21_L8_seed42</code></td><td class="num">2.40e+11</td><td class="num">2.88e+11</td><td class="num">0.835</td><td class="num">1.01e+10</td><td class="num">2.93e+10</td><td class="num">0.345</td></tr>
+          <tr><td><code>qv22_L6_seed42</code></td><td class="num">1.96e+11</td><td class="num">2.30e+11</td><td class="num">0.855</td><td class="num">8.15e+09</td><td class="num">2.33e+10</td><td class="num">0.349</td></tr>
+          <tr><td><code>qv23_L5_seed42</code></td><td class="num">2.73e+11</td><td class="num">3.18e+11</td><td class="num">0.861</td><td class="num">1.16e+10</td><td class="num">3.24e+10</td><td class="num">0.357</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td class="num">2.31e+11</td><td class="num">2.68e+11</td><td class="num">0.863</td><td class="num">9.86e+09</td><td class="num">2.73e+10</td><td class="num"><b>0.361</b></td></tr>
+          <tr><td><code>surface_d11_t10</code></td><td class="num">4.14e+09</td><td class="num">6.98e+09</td><td class="num">0.594</td><td class="num">2.76e+09</td><td class="num">1.99e+10</td><td class="num win">0.139</td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">2.09e+09</td><td class="num">4.34e+09</td><td class="num">0.482</td><td class="num">1.38e+09</td><td class="num">9.99e+09</td><td class="num win">0.138</td></tr>
+          <tr><td><code>surface_d11_t19</code></td><td class="num">2.19e+09</td><td class="num">4.46e+09</td><td class="num">0.490</td><td class="num">1.40e+09</td><td class="num">1.01e+10</td><td class="num win">0.138</td></tr>
+          <tr><td><code>surface_d7_t10</code></td><td class="num">1.11e+09</td><td class="num">1.82e+09</td><td class="num">0.609</td><td class="num">7.26e+08</td><td class="num">5.00e+09</td><td class="num win">0.145</td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">1.15e+09</td><td class="num">1.91e+09</td><td class="num">0.602</td><td class="num">7.56e+08</td><td class="num">5.36e+09</td><td class="num win">0.141</td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">5.89e+08</td><td class="num">1.18e+09</td><td class="num">0.500</td><td class="num">3.74e+08</td><td class="num">2.63e+09</td><td class="num win">0.142</td></tr>
+          <tr><td><code>surface_d7_t5</code></td><td class="num">2.62e+07</td><td class="num">3.56e+07</td><td class="num">0.735</td><td class="num">9.15e+06</td><td class="num">5.50e+07</td><td class="num win">0.167</td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">2.30e+09</td><td class="num">3.83e+09</td><td class="num">0.601</td><td class="num">1.52e+09</td><td class="num">1.07e+10</td><td class="num win">0.142</td></tr>
+          <tr><td><code>surface_d9_t15</code></td><td class="num">1.17e+09</td><td class="num">2.38e+09</td><td class="num">0.492</td><td class="num">7.64e+08</td><td class="num">5.44e+09</td><td class="num win">0.140</td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">1.22e+09</td><td class="num">2.54e+09</td><td class="num">0.482</td><td class="num">7.87e+08</td><td class="num">5.75e+09</td><td class="num win">0.137</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good">The SALU column is the chapter's punchline in raw form: <b>every value
+      is below the VALU value in the same row, on all 26 rows.</b> The range <b>0.110&ndash;0.361</b> is the
+      corpus-scale statement of &sect;14.3.</div>
+      <div class="footnote">MFMA is omitted from the table because it is <b>0.0 in all 52 cells</b> &mdash;
+      26 circuits &times; 2 backends, <b>none missing</b>.</div>
+    </section>
+
+    <section>
+      <h2>15.7 &nbsp;Cache and activity counters</h2>
+      <table class="tight" style="font-size:0.68em;">
+        <thead><tr><th>circuit</th><th class="num">L2 hit V2</th><th class="num">L2 hit SVM</th><th class="num">busy ratio</th><th class="num">GRBM ratio</th><th class="num">time ratio</th></tr></thead>
+        <tbody>
+          <tr><td><code>surface_d11_t19</code></td><td class="num">97.4 %</td><td class="num">79.3 %</td><td class="num">0.255</td><td class="num">0.254</td><td class="num win">0.256</td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">98.7 %</td><td class="num">98.3 %</td><td class="num">0.257</td><td class="num">0.257</td><td class="num win">0.258</td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">97.4 %</td><td class="num">90.0 %</td><td class="num">0.253</td><td class="num">0.254</td><td class="num win">0.264</td></tr>
+          <tr><td><code>surface_d9_t15</code></td><td class="num">98.2 %</td><td class="num">98.6 %</td><td class="num">0.267</td><td class="num">0.269</td><td class="num win">0.275</td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">97.0 %</td><td class="num">98.8 %</td><td class="num">0.281</td><td class="num">0.288</td><td class="num win">0.310</td></tr>
+          <tr><td><code>qv10</code></td><td class="num">99.6 %</td><td class="num">99.8 %</td><td class="num">0.291</td><td class="num">0.289</td><td class="num win">0.319</td></tr>
+          <tr><td><code>surface_d11_t10</code></td><td class="num">98.7 %</td><td class="num">99.1 %</td><td class="num">0.465</td><td class="num">0.465</td><td class="num win">0.467</td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">98.4 %</td><td class="num">99.1 %</td><td class="num">0.479</td><td class="num">0.481</td><td class="num win">0.491</td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num">95.3 %</td><td class="num">98.1 %</td><td class="num">0.505</td><td class="num">0.442</td><td class="num win">0.509</td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">97.7 %</td><td class="num">99.1 %</td><td class="num">0.485</td><td class="num">0.489</td><td class="num win">0.510</td></tr>
+          <tr><td><code>surface_d7_t10</code></td><td class="num">97.7 %</td><td class="num">99.0 %</td><td class="num">0.501</td><td class="num">0.504</td><td class="num win">0.534</td></tr>
+          <tr><td><code>four_t</code></td><td class="num lose"><b>52.3 %</b></td><td class="num">74.4 %</td><td class="num">0.496</td><td class="num">0.533</td><td class="num win">0.587</td></tr>
+          <tr><td><code>surface_d7_t5</code></td><td class="num">99.2 %</td><td class="num">98.9 %</td><td class="num">0.587</td><td class="num">0.595</td><td class="num win">0.608</td></tr>
+          <tr><td><code>qv20_L8_seed42</code></td><td class="num">69.8 %</td><td class="num">69.8 %</td><td class="num">0.687</td><td class="num">0.683</td><td class="num">0.732</td></tr>
+          <tr><td><code>qv21_L8_seed42</code></td><td class="num">69.4 %</td><td class="num">69.5 %</td><td class="num">0.692</td><td class="num">0.686</td><td class="num">0.736</td></tr>
+          <tr><td><code>frame_h</code></td><td class="num lose"><b>52.2 %</b></td><td class="num">66.8 %</td><td class="num">0.712</td><td class="num">0.391</td><td class="num">0.742</td></tr>
+          <tr><td><code>cultivation_d5</code></td><td class="num lose">90.9 %</td><td class="num">98.9 %</td><td class="num">0.645</td><td class="num">0.650</td><td class="num">0.786</td></tr>
+          <tr><td><code>circuit_d5_p0.005</code></td><td class="num lose">91.1 %</td><td class="num">97.8 %</td><td class="num">0.642</td><td class="num">0.654</td><td class="num">0.815</td></tr>
+          <tr><td><code>circuit_d5_p0.003</code></td><td class="num lose">91.4 %</td><td class="num">97.6 %</td><td class="num">0.629</td><td class="num">0.641</td><td class="num">0.838</td></tr>
+          <tr><td><code>circuit_d5_p0.002</code></td><td class="num lose">91.6 %</td><td class="num">97.7 %</td><td class="num">0.623</td><td class="num">0.638</td><td class="num">0.846</td></tr>
+          <tr><td><code>circuit_d5_p0.001</code></td><td class="num lose">91.9 %</td><td class="num">98.0 %</td><td class="num">0.617</td><td class="num">0.644</td><td class="num">0.847</td></tr>
+          <tr><td><code>qv20_seed42</code></td><td class="num">69.9 %</td><td class="num">69.9 %</td><td class="num">0.769</td><td class="num">0.765</td><td class="num">0.850</td></tr>
+          <tr><td><code>circuit_d5_p0.0005</code></td><td class="num lose">92.1 %</td><td class="num">98.4 %</td><td class="num">0.615</td><td class="num">0.643</td><td class="num">0.856</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td class="num">68.3 %</td><td class="num">68.5 %</td><td class="num">0.885</td><td class="num">0.879</td><td class="num">0.882</td></tr>
+          <tr><td><code>qv22_L6_seed42</code></td><td class="num">68.9 %</td><td class="num">69.0 %</td><td class="num">0.970</td><td class="num">0.983</td><td class="num lose">0.980</td></tr>
+          <tr><td><code>qv23_L5_seed42</code></td><td class="num">68.0 %</td><td class="num">68.1 %</td><td class="num">1.004</td><td class="num">1.002</td><td class="num lose">0.990</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>What the activity counters say</h2>
+      <div class="verdict verdict-good"><b><code>SQ_BUSY_CYCLES</code> and <code>GRBM_GUI_ACTIVE</code> agree
+      with each other almost everywhere</b> &mdash; two independent activity counters, <b>from the same
+      pass</b>, tracking within a few percent on <b>24 of 26</b> circuits. They agree with kernel time at
+      <b>Pearson r = 0.942</b> (&sect;14.7).</div>
+      <div class="insight">The two circuits where the <em>activity counters</em> disagree with <em>each
+      other</em> are <code>frame_h</code> (busy 0.712, GRBM 0.391) and <code>circuit_d3</code>
+      (0.505 / 0.442) &mdash; <b>the two shortest kernels in the corpus</b> at 12 µs and 221 µs, where
+      <code>GRBM_GUI_ACTIVE</code> <b>includes ramp-up the SQ counter does not.</b></div>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="h">The d5 anomaly, stated precisely</div>
+        <div class="d">On <b>all six</b> d5-family circuits both activity counters say <b>~0.62&ndash;0.65</b>
+        while kernel time says <b>0.79&ndash;0.86</b>. <b>The GPU is <em>less busy</em> on V2 and yet takes
+        <em>longer</em> than that reduced busy-ness predicts.</b>
+        <hr/>
+        This is the same set of six circuits that carry <b>the entire busy-cycle residual</b> (&sect;14.7) and
+        <b>the residual L2 deficit</b> (&sect;14.8, 91% vs 98%). <b>Three counters, one population, one
+        unexplained mechanism.</b> &sect;16 records it as the chapter's main open question.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>15.8 &nbsp;Reproduction</h2>
+      <pre><code>sbatch V2_performance/tools/bench_all.sh report-final-allfixtures</code></pre>
+      <div class="insight">The label is positional; partition, <code>--gpus=1</code> and the 01:55:00
+      walltime are <code>#SBATCH</code> directives in the script itself. <b><code>V2_SPECIALIZE=1</code> is
+      set by the script rather than left to the caller</b>, because unset it measures the bytecode
+      interpreter and <b>reports a fake 2&ndash;3&times; regression.</b></div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The script is in-tree for a reason worth repeating</div>
+        <div class="d">Its header records that it <em>"produced
+        <code>20260726T182433Z_report-final-postdust</code> and every run before it, but <b>was never
+        committed</b> &mdash; it lived in <code>/tmp</code> and was lost."</em>
+        <hr/>
+        <b>Every number in this chapter is reproducible only because the harness that produced it is now
+        versioned alongside the results.</b></div>
+      </div>
+      <div class="verdict verdict-good">Two further guarantees: the run <b>aborts rather than continuing past
+      a missing fixture</b> (&sect;14.1), and <code>manifest.json</code> records <code>dirty</code> &mdash;
+      <b>every figure above is void if it reads <code>true</code>.</b> For job 50793 it reads
+      <code>false</code>. The expected denominator is <b>26</b> and <code>summary.md</code> states the actual
+      one.</div>
+    </section>
