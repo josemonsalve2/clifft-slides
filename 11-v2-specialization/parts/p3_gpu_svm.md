@@ -95,7 +95,7 @@ Active-qubit measurement needs `sum |v_i|^2` over each half of the array — a
 reduction across all 256 threads. Both backends implement the identical
 two-phase pattern: an intra-wavefront butterfly using `ds_bpermute` (64 lanes,
 6 steps), then an inter-wavefront combine through LDS
-(`hip_sampler.hip:948`, mirrored in `v2_ops.h:224-247`).
+(`hip_sampler.hip:948`, mirrored in `v2_ops.h:224-262`, `coop_reduce2`).
 
 <figure>
 <img src="diagrams/warp-shuffle-reduction.svg" alt="Two-phase cooperative reduction" width="100%">
@@ -106,7 +106,7 @@ change it and f64 rounding diverges at measurement branch points.</figcaption>
 </figure>
 
 The comment above V2's copy is emphatic and explains a constraint that recurs
-throughout this report (`v2_ops.h:222-223`):
+throughout this report (`v2_ops.h:235-236`):
 
 > `// MUST reproduce SVM coop_reduce2's exact summation order or f64 rounding`
 > `// diverges at measurement branch points.`
@@ -247,8 +247,10 @@ same idea that netted Hybrid ~0 % nets V2 **1.3–4.0×**.
 
 Note the shape of the density column, because it is the whole argument in one
 number: Hybrid's lines-per-instruction is 15.4–55.8 and does not improve with
-scale, while V2's converges *downward* to 1.00–1.11 on every circuit large
-enough to matter. Same input, same target, same compiler — a 15–55× difference
-in how much code the optimizer is handed.
+scale, while V2's converges *downward* to 1.00–1.27 on every circuit large
+enough to matter — 1.00–1.11 on the three Clifford-dominated ones, and 1.27 on
+`qv10`, whose fused unitaries are the one gate family V2 still emits more than
+one line for. Same input, same target, same compiler — a 14–44× difference in
+how much code the optimizer is handed.
 
 ---
