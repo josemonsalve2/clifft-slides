@@ -160,7 +160,7 @@ explicitly-specified expression (`svm.h:148-150`):
 [[nodiscard]] double random_double() { return static_cast<double>(rng_() >> 11) * 0x1.0p-53; }
 ```
 
-The V2 device code reproduces this byte-for-byte (`v2_ops.h:143-164`), down to
+The V2 device code reproduces this byte-for-byte (`v2_ops.h:155-177`, `rng_next`/`rng_uniform`), down to
 the rotate constants and the same `>> 11` / `0x1.0p-53` mapping:
 
 ```c
