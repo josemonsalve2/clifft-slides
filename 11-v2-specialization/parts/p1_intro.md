@@ -86,10 +86,10 @@ attributed rather than asserted. There are two such items, both flagged in place
 | 9 | [Optimizations, tier by tier](#9-optimizations-tier-by-tier) |
 | 10 | [Extending past rank 19](#10-extending-past-rank-19) |
 | 11 | [Pitfalls](#11-pitfalls) |
-| 12 | [The gap: f32 vs f64](#12-the-gap-f32-vs-f64) |
+| 12 | [The gap: f32 vs f64](#12-the-gap-f32-vs-f64-and-how-it-was-narrowed) |
 | 13 | [Removing HIP, introducing HSA](#13-removing-hip-introducing-hsa) |
-| 14 | [Performance evaluation: V2 vs SVM](#14-performance-evaluation-v2-vs-svm) |
-| 15 | [Full benchmark report](#15-full-benchmark-report) |
+| 14 | [Performance evaluation: V2 vs SVM](#14-performance-evaluation-v2-against-svm) |
+| 15 | [Full benchmark report](#15-the-full-benchmark-report) |
 | 16 | [Conclusions and open items](#16-conclusions-and-open-items) |
 
 ---
