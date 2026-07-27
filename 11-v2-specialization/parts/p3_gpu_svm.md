@@ -243,6 +243,12 @@ linear in circuit size with a large constant. That is not pathological (V1's is,
 **The lesson Hybrid teaches, and the reason it is in this report:** per-circuit
 compilation is not, by itself, a performance strategy. What matters is *what you
 emit per instruction*. Hybrid emitted a block. V2 emits a call (§6.3), and the
-same idea that netted Hybrid ~0% nets V2 1.5–3.9×.
+same idea that netted Hybrid ~0 % nets V2 **1.3–4.0×**.
+
+Note the shape of the density column, because it is the whole argument in one
+number: Hybrid's lines-per-instruction is 15.4–55.8 and does not improve with
+scale, while V2's converges *downward* to 1.00–1.11 on every circuit large
+enough to matter. Same input, same target, same compiler — a 15–55× difference
+in how much code the optimizer is handed.
 
 ---
