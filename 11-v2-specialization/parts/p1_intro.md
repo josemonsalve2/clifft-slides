@@ -118,8 +118,8 @@ V2 versus the SVM interpreter:
 | regime | circuits | V2/SVM ratio | reading |
 |---|---|---|---|
 | Large surface codes, global tier | 5 | **0.252 – 0.306** | V2 is **3.3–4.0× faster** |
-| Mid-size surface + QV10, coop tier | 6 | 0.317 – 0.595 | V2 is **1.7–3.2× faster** |
-| Register tier (`four_t`, `frame_h`, `circuit_d3`) | 3 | 0.519 – 0.773 | V2 is **1.3–1.9× faster** |
+| Mid-size surface + QV10, coop tier | 5 | 0.317 – 0.530 | V2 is **1.9–3.2× faster** |
+| Register tier (`four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5`) | 4 | 0.519 – 0.773 | V2 is **1.3–1.9× faster** |
 | Quantum-volume, global tier rank 20–24 | 6 | 0.729 – 0.992 | V2 wins **1–27 %**, shrinking with rank (§10.6) |
 | `circuit_d5` + `cultivation_d5`, coop tier | 6 | **1.440 – 1.451** | V2 is **1.44× slower** (§1.3(d)) |
 
@@ -133,11 +133,11 @@ workgroup per shot**. Reading grid ÷ 256 from the measured runs:
 
 | circuits | workgroups | shape |
 |---|---|---|
-| `surface_d9/d11_t15/t19`, `qv20` | 2,048 | global pool, capped (`v2_kernel.cc:441`) |
+| `surface_d7/d9/d11_t19`, `surface_d9/d11_t15`, `qv20` (×2) | 2,048 | global pool, capped (`v2_kernel.cc:441`) |
 | `qv21` → `qv24` | 1,360 → 680 → 336 → 168 | global pool, **shrinking as rank grows** |
-| `circuit_d5`, `surface_*_t10` | 10,000 | coop, = shot count |
+| `circuit_d5` (×5), `surface_d7/d9/d11_t10`, `surface_d7_t15` | 10,000 | coop, = shot count |
 | `cultivation_d5`, `qv10` | 20,000 | coop, = shot count |
-| `four_t`, `frame_h`, `circuit_d3` | 79 | register, = ⌈shots/256⌉ |
+| `four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5` | 79 | register, = ⌈shots/256⌉ |
 
 The QV row is the §10.2 budget mechanism visible from the outside, and it can be
 predicted exactly rather than merely described. Each resident workgroup owns one
@@ -212,8 +212,8 @@ correlation in the pre-fix data is perfect — all 20 circuits V2 wins ran
 
 The cause was the execution-only `s_barrier` of §11.2. With the fence fix
 (`150d09f`) the gate verdict for `coop_r10_n1720` flips **0 → 1** on disk, the
-specializer is selected, and the six recover (job 50389, median of 5, same node,
-both arms back-to-back):
+specializer is selected, and the six recover (job 50389, median of 5, both arms
+back-to-back on node `smci350-rck-g03-d13-21`):
 
 | circuit | interpreter | specialized | gain |
 |---|---|---|---|
@@ -224,9 +224,13 @@ both arms back-to-back):
 | `circuit_d5_p0.005` | 15.62 ms | **8.87 ms** | 1.76× |
 | `circuit_d3_p0.001` | 0.624 ms | **0.379 ms** | 1.65× |
 
-Against the SVM baselines from the same corpus this turns 1.44–1.45 **losses**
-into ratios near **0.40** — i.e. ~2.5× wins. So the headline "20 of 26" in §1.2
-is a *pre-fix* figure that the report carries only because §15's post-fix
+Against the SVM baselines from the corpus this turns 1.44–1.45 **losses** into
+ratios near **0.40** — i.e. ~2.5× wins. That last step crosses nodes (the corpus
+ran on `f13-21`, this A/B on `d13-21`) and `mi350x-es` is heterogeneous, so the
+**1.65–1.76× interpreter→specializer gain is the measured result** and the
+~0.40 is a projection. §15 measures the ratio directly, both arms in one job.
+
+So the headline "20 of 26" in §1.2 is a *pre-fix* figure that the report carries only because §15's post-fix
 re-run is the arbiter; the expectation is that it becomes 26 of 26. **§1.2's
 table is the conservative reading, not the optimistic one.** (§11.1, §11.2)
 
@@ -248,8 +252,10 @@ Stated plainly, because the failures cost more engineering time than the wins:
 - **Straight-lining noise operations does not help.** Measured gain: 1.10× on
   instruction count, 1.02× on VALU, and **zero** VGPR relief — 56 in both forms
   (§7.9).
-- **MFMA is inapplicable.** `SQ_INSTS_MFMA = 0.0` on all 26 circuits in both
-  backends. The workload is a butterfly reduction over amplitudes, not a GEMM.
+- **MFMA is inapplicable.** `SQ_INSTS_MFMA = 0.0` in every counter block
+  collected — 51 of the 52 backend×circuit cells; the 52nd (`qv24_L4_seed42`,
+  SVM side) has an empty counter block and is *unmeasured* rather than nonzero.
+  The workload is a butterfly reduction over amplitudes, not a GEMM.
   Any claim that the matrix cores can be brought to bear here is unsupported by
   this corpus. (§14.6)
 
