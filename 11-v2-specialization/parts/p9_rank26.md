@@ -196,12 +196,12 @@ where V2's advantage thins out:
 
 | circuit | rank | V2 (µs) | SVM (µs) | ratio | VGPR spill | SGPR spill | scratch |
 |---|---|---|---|---|---|---|---|
-| qv20_seed42 | 20 | 1,780,109 | 2,121,123 | 0.839 | 0 | 0 | 96 |
-| qv20_L8_seed42 | 20 | 1,560,026 | 2,158,259 | 0.723 | 0 | 0 | 112 |
-| qv21_L8_seed42 | 21 | 2,946,337 | 4,045,623 | 0.728 | 0 | 0 | 112 |
-| qv22_L6_seed42 | 22 | 3,176,355 | 3,237,575 | **0.981** | **136** | **762** | 448 |
-| qv23_L5_seed42 | 23 | 6,083,877 | 6,142,585 | **0.990** | **199** | **662** | 576 |
-| qv24_L4_seed42 | 24 | 7,240,955 | 8,225,562 | 0.880 | **152** | **594** | 480 |
+| qv20_seed42 | 20 | 1,804,648 | 2,123,250 | 0.850 | 0 | 0 | 96 |
+| qv20_L8_seed42 | 20 | 1,583,246 | 2,162,954 | 0.732 | 0 | 0 | 112 |
+| qv21_L8_seed42 | 21 | 2,977,386 | 4,045,316 | 0.736 | 0 | 0 | 112 |
+| qv22_L6_seed42 | 22 | 3,179,445 | 3,243,842 | **0.980** | **136** | **762** | 448 |
+| qv23_L5_seed42 | 23 | 6,086,167 | 6,146,952 | **0.990** | **199** | **662** | 576 |
+| qv24_L4_seed42 | 24 | 7,241,815 | 8,211,443 | 0.882 | **152** | **594** | 480 |
 
 The break is sharp and it is at rank 22. Below it, zero spilling and V2 wins
 0.72–0.84. At and above it, the three worst-spilling kernels in the entire
@@ -216,28 +216,34 @@ by VGPR spill — and the advantage collapses to 0.98–0.99.
 >
 > | kernel | pre (B) | post (B) | Δ | bytes differing | `vgpr_spill` | `sgpr_spill` | `sgpr_count` | scratch |
 > |---|---|---|---|---|---|---|---|---|
-> | `global_r22_n359` | 217,424 | 218,576 | +1,152 | **83.9 %** | 136 = 136 | 762 = 762 | 108 = 108 | 448 = 448 |
-> | `global_r23_n335` | 190,480 | 191,568 | +1,088 | **83.0 %** | 199 = 199 | 662 = 662 | 108 = 108 | 576 = 576 |
-> | `global_r24_n320` | 172,880 | 173,904 | +1,024 | **82.9 %** | 152 = 152 | 594 = 594 | 108 = 108 | 480 = 480 |
+> | `global_r22_n359` | 217,424 | 218,576 | +1,152 | **83.8 %** | 136 = 136 | 762 = 762 | 108 = 108 | 448 = 448 |
+> | `global_r23_n335` | 190,480 | 191,568 | +1,088 | **82.9 %** | 199 = 199 | 662 = 662 | 108 = 108 | 576 = 576 |
+> | `global_r24_n320` | 172,880 | 173,904 | +1,024 | **82.8 %** | 152 = 152 | 594 = 594 | 108 = 108 | 480 = 480 |
 >
 > **Five-sixths of the binary changed and not one resource number moved.**
 > Register pressure is a property of what the specializer emits, not of the
 > fences around it, so the spill table is unaffected by the §11.4 invalidation.
 >
 > The **timing columns are post-fence**, and an earlier provisional note in this
-> section saying otherwise has been retired. Every cell above comes from
-> `20260726T182433Z_report-final-postdust`, run at commit `f565075` — and
-> `git merge-base --is-ancestor 150d09f f565075` confirms the fence fix is an
-> ancestor of it. The published figures reproduce exactly from that run's raw
-> `total_kernel_ns`.
+> section saying otherwise has been retired. Every cell above comes from the
+> report's canonical run — `20260727T125310Z_report-final-allfixtures`, SLURM
+> job 50793, node `smci350-rck-g03-d13-21`, commit `79d4463`, clean tree — the
+> same run §14 and §15 draw on, so this table is directly comparable with
+> theirs. `git merge-base --is-ancestor 150d09f 79d4463` confirms the fence fix
+> is an ancestor of it. The published figures reproduce exactly from that run's
+> raw `total_kernel_ns`.
 >
-> The pre-fence runs are now usable as corroboration rather than as the source.
-> Three of them — `fullbench-rank26` (`000322Z`), `fullbench-3way` (`011254Z`)
-> and `all-tier5plus` (`014859Z`) — bracket the published ratios within 0.6 %
-> on every circuit (0.844/0.728/0.731/0.980/0.992/0.880 in the first, against
-> the published 0.839/0.723/0.728/0.981/0.990/0.880), with identical scratch
-> sizes throughout. All four runs, pre- and post-fence, executed on the same
-> node `smci350-rck-g03-f13-21`, so the comparison is within-node.
+> A second post-fence full-corpus run — `report-final-postdust` (job 50469,
+> commit `f565075`) — landed on a **different node**, `smci350-rck-g03-f13-21`.
+> Its ratios agree to within 1.3 % on every circuit
+> (0.839/0.723/0.728/0.981/0.990/0.880 against the published
+> 0.850/0.732/0.736/0.980/0.990/0.882), with identical scratch sizes. That is
+> corroboration of the *conclusion*, not a source for the table: `mi350x-es` is
+> heterogeneous and ratios are not comparable across node types, so the two
+> runs are never mixed within a row. Three pre-fence runs on `f13-21` —
+> `fullbench-rank26` (`000322Z`), `fullbench-3way` (`011254Z`) and
+> `all-tier5plus` (`014859Z`) — bracket the same shape, the first reporting
+> 0.844/0.728/0.731/0.980/0.992/0.880.
 >
 > That the fence made no measurable difference here is the expected result and
 > not a null finding to be embarrassed about: the fence bug corrupted reduction
