@@ -12,25 +12,57 @@ benchmark run archived under `V2_performance/runs/`; the full progression is in
 
 ### 9.1 The progression
 
-V2/SVM kernel-time ratio, lower is better, `< 1` means V2 wins. Six of the
-twelve archived runs, chosen at the points where something changed:
+V2/SVM kernel-time ratio, lower is better, `< 1` means V2 wins. Seven of the
+twelve archived runs, chosen at the points where something changed. Column 5 is
+included **because it regressed** — see the note below it:
 
-| circuit | baseline | after P0+P1 | after specializer | noise-specialized | global-specialized | **final** |
-|---|---|---|---|---|---|---|
-| frame_h | **28.258** | 1.215 | 0.612 | 0.614 | 0.645 | **0.626** |
-| circuit_d3_p0.001 | 15.193 | 1.081 | 1.116 | 0.524 | 0.504 | **0.525** |
-| qv10 | 1.313 | 1.237 | **0.252** | 0.308 | 0.310 | **0.310** |
-| surface_d7_t15 | 1.650 | 1.469 | 1.787 | **0.503** | 0.507 | **0.505** |
-| surface_d9_t10 | 1.642 | 1.473 | 1.796 | **0.484** | 0.481 | **0.481** |
-| surface_d7_t19 | 0.968 | 0.872 | 1.014 | 1.015 | **0.312** | **0.298** |
-| surface_d9_t19 | 0.906 | 0.817 | 0.973 | 0.972 | **0.262** | **0.262** |
-| surface_d11_t15 | 0.938 | 0.854 | 1.005 | 1.005 | **0.259** | **0.256** |
+| circuit | baseline | after P0+P1 | after specializer | *fenced+gated* | noise-specialized | global-specialized | **final** |
+|---|---|---|---|---|---|---|---|
+| frame_h | **28.258** | 1.215 | 0.612 | *2.859* | 0.614 | 0.645 | **0.626** |
+| circuit_d3_p0.001 | 15.193 | 1.081 | 1.116 | *2.117* | 0.524 | 0.504 | **0.525** |
+| qv10 | 1.313 | 1.237 | **0.252** | *0.675* | 0.308 | 0.310 | **0.310** |
+| surface_d7_t15 | 1.650 | 1.469 | 1.787 | *1.427* | **0.503** | 0.507 | **0.505** |
+| surface_d9_t10 | 1.642 | 1.473 | 1.796 | *1.402* | **0.484** | 0.481 | **0.481** |
+| surface_d7_t19 | 0.968 | 0.872 | 1.014 | 1.017 | 1.015 | **0.312** | **0.298** |
+| surface_d9_t19 | 0.906 | 0.817 | 0.973 | 0.971 | 0.972 | **0.262** | **0.262** |
+| surface_d11_t15 | 0.938 | 0.854 | 1.005 | 1.005 | 1.005 | **0.259** | **0.256** |
 
 Read the bolded cells: **each tier's win arrives in exactly one step, and does
 not move afterwards.** That is the signature of a structural change rather than
 a tuning change. Register tier lands at P0. Coop lands at the specializer.
 Noise-heavy coop lands at the noise fence. Global lands at the global emitter.
-Nothing regresses when the next step ships.
+
+> **The italic column is a measurement artifact, and it is shown rather than
+> dropped.** At `9d9cc68` the correctness gate existed but its verdict was
+> cached only in-process. `rocprofv3` spawns a fresh process per invocation, so
+> the gate's own validation dispatches re-ran *inside the profiled region* and
+> the digester summed them into the kernel time — `frame_h` 0.612 → 2.859,
+> `circuit_d3` 1.116 → 2.117, `qv10` 0.252 → 0.675. Nothing had actually slowed
+> down. The next commit (`bbb5e42`) persisted the verdict to `<hsaco>.gate` so it
+> is computed once ever, and the numbers returned to trend. Its message names the
+> mechanism exactly: *"that polluted kernel traces with clifft_v2_coop+spec
+> dispatches summed by the digester → inflated times."* The lesson is worth more
+> than the column: **a correctness mechanism that runs on the measurement path
+> becomes a performance number**, and three of these eight circuits would have
+> been reported as 2–4× regressions by anyone reading the table without the
+> commit history.
+
+Two further caveats on this table, both of which follow from the project's own
+benchmarking rule that ratios must not be compared across nodes:
+
+- **The runs were not all on the same node.** Columns 1–8 ran on
+  `smci350-rck-g03-d13-21`; columns 9–12, including **final**, ran on
+  `smci350-rck-g03-f13-21` (recovered via `sacct`; only the final run recorded
+  node identity in `node.json`, whose own note warns that "mi350x-es is
+  heterogeneous — do not compare ratios across nodes"). Because every cell is a
+  V2/SVM *ratio* with both halves measured in the same job, the node change
+  affects the two backends together and the comparison survives; but the
+  step-to-step deltas between columns 8 and 9 carry a node change as well as a
+  code change, and should not be read as pure code effects.
+- **`frame_h`'s 0.085 in the omitted `specializer-verify` column is not a real
+  10× step.** That run's SVM side measured 128.2 µs against 16–20 µs everywhere
+  else — a baseline outlier on a 12 µs kernel, not a V2 improvement. It is left
+  out for that reason, and named here so the omission is not silent.
 
 <figure>
 <img src="diagrams/optimization-timeline.svg" alt="V2/SVM ratio over the optimization sequence" width="100%">
