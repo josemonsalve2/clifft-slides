@@ -175,7 +175,11 @@ The framing this section inherited — f32 vs f64 — is not what was fixed, and
 saying so plainly matters more than preserving the tidier story:
 
 - The gap was **not** about precision in the *arithmetic*. No accumulation order
-  was changed, no reduction was promoted to f64, no amplitude was widened.
+  was changed, no reduction was promoted to f64, no amplitude was widened. §8.6
+  makes the same point from the codegen side: V1's 23× larger f64 instruction
+  count is 68 % inlined `log()` polynomial, and once that is factored out both
+  backends widen to f64 in exactly the same three places, deliberately, to stay
+  byte-exact with the interpreter.
 - It was about a **threshold constant calibrated for one precision and left in
   place when the storage format changed** — whose effect was to make one side
   consume a random number the other side did not.
