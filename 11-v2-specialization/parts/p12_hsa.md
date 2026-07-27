@@ -196,15 +196,35 @@ and `n_dispatches` is `1` for all 26 tier-5+ circuits in the corpus. So the
 4,671 ns saving is paid once, and its weight is 4,671 ns divided by the whole
 kernel time:
 
-| circuit | kernel time | HSA saving as % of kernel |
-|---|---|---|
-| `four_t` | 13.2 µs | **35.5 %** |
-| `frame_h` | 13.6 µs | **34.3 %** |
-| `circuit_d3_p0.001` | 221 µs | 2.11 % |
-| `qv10` | 1.38 ms | 0.34 % |
-| `circuit_d5_p0.001` | 14.8 ms | 0.032 % |
-| `cultivation_d5` | 30.1 ms | 0.016 % |
-| `qv24_L4_seed42` | 7.25 s | 0.00006 % |
+Given two independent full-corpus runs on the same node (`f13-21`), both columns
+are shown rather than one — the spread is itself informative:
+
+| circuit | kernel (run A) | % | kernel (run B) | % |
+|---|---|---|---|---|
+| `four_t` | 13.2 µs | **35.4 %** | 10.1 µs | **46.3 %** |
+| `frame_h` | 13.6 µs | **34.4 %** | 10.0 µs | **46.7 %** |
+| `circuit_d3_p0.001` | 221.0 µs | 2.11 % | 224.8 µs | 2.08 % |
+| `qv10` | 1.383 ms | 0.338 % | 1.361 ms | 0.343 % |
+| `circuit_d5_p0.001` | 14.76 ms | 0.032 % | 14.87 ms | 0.031 % |
+| `cultivation_d5` | 30.15 ms | 0.016 % | 30.17 ms | 0.016 % |
+| `qv24_L4_seed42` | 7.246 s | 0.00006 % | 7.241 s | 0.00006 % |
+
+Run A is `20260726T014859Z_all-tier5plus`, run B is
+`20260726T182433Z_report-final-postdust`; both on `smci350-rck-g03-f13-21`.
+Everything from `circuit_d3` down agrees between them to better than 2 %, but
+`four_t` and `frame_h` differ by ~30 % — 13.2 vs 10.1 µs. At ten microseconds a
+kernel is close enough to the measurement floor that run-to-run variation is
+comparable to the effect being measured, so the short-tail percentages should be
+read as **~35–47 %**, not as a single figure. That range does not change any
+conclusion; it is large either way.
+
+One thing makes these two rows unusually trustworthy despite run B having been
+affected by the stale-cache bug (§11.4): `four_t` and `frame_h` are **register
+tier** (LDS = 0, VGPR = 32), and §11.2's A/B rebuild showed the register-tier
+binary is *byte-identical* before and after the barrier fix — 4,457 instructions,
+zero barriers, nothing to fence. The stale cache therefore served the correct
+kernel for exactly these circuits, so both columns are valid measurements of the
+same code.
 
 The conclusion is unambiguous and cuts against a naive reading of §13.3:
 **for V2's production workloads, the HSA-vs-HIP dispatch difference is
@@ -212,9 +232,9 @@ negligible.** At the median circuit it is 0.03 % of kernel time. The 1.74× is a
 real property of the dispatch path and it is not where V2's speedup comes from
 — §14 attributes that to the kernel.
 
-Where it *does* matter is the short tail. `four_t` and `frame_h` run for ~13 µs,
-so a single HIP dispatch would add ~35 % to their cost, and the ~198 µs naive
-path would have cost **15× the kernel itself**. Those two circuits are also
+Where it *does* matter is the short tail. `four_t` and `frame_h` run for 10–13 µs,
+so a single HIP dispatch would add 35–47 % to their cost, and the ~198 µs naive
+path would have cost **15–20× the kernel itself**. Those two circuits are also
 exactly the ones a user iterates on interactively. And the correctness gate
 (§9) dispatches per validation, as does any future per-batch structure.
 
@@ -230,8 +250,9 @@ The policy is not free, and §11.2 is the invoice.
 `v2_barrier()` was hand-rolled to avoid HIP's `__syncthreads()`. HIP's version
 expands to a release/acquire fence pair around `s_barrier`; V2's expanded to a
 bare `s_barrier`, which on AMDGCN orders **execution but not memory**. The
-result was a workgroup-level data race in 95.4 % of the specialized kernel's
-barriers, which corrupted reduction totals, which flipped measurement outcomes.
+result was a workgroup-level data race exposed at 92.8 % of the specialized
+kernel's barriers, which corrupted reduction totals, which flipped measurement
+outcomes.
 
 > V2 hand-rolled the barrier to avoid HIP and lost the fence with it.
 
