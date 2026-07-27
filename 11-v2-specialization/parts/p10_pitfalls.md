@@ -51,21 +51,42 @@ build so `-O2` cannot merge or reassociate across the copies.
    is deterministic for a fixed binary, so any disagreement is proof of
    nondeterminism. Result:
 
-   | comparison | seeds diverging |
-   |---|---|
-   | interpreter vs itself | 0 / 6 |
-   | **specialized vs itself** | **4 / 6** |
+   Per-seed, 5,000 shots each, `circuit_d5_p0.001` (job 50361). The counts are
+   `obs0` ones from run A vs run B of the *same binary*:
 
-   No rounding model explains a binary disagreeing with itself. This is a race.
+   | seed | interp vs interp | verdict | spec vs spec | verdict |
+   |---|---|---|---|---|
+   | 1 | 1620 / 1620 | deterministic | 1620 / **1619** | **NONDETERMINISTIC** |
+   | 7 | 1724 / 1724 | deterministic | 1724 / **1723** | **NONDETERMINISTIC** |
+   | 42 | 1704 / 1704 | deterministic | 1704 / 1704 | deterministic |
+   | 99 | 1720 / 1720 | deterministic | 1721 / **1720** | **NONDETERMINISTIC** |
+   | 123 | 1691 / 1691 | deterministic | 1690 / **1691** | **NONDETERMINISTIC** |
+   | 2718 | 1681 / 1681 | deterministic | 1681 / 1681 | deterministic |
+   | | **0 / 6 diverge** | | **4 / 6 diverge** | |
 
-`V2_GATE_BISECT` then localized it: **zero divergences at one workgroup.** The
-bug needed *concurrent workgroups* — which also rules out any single shot's
-arithmetic.
+   Note that `passed` was 5000/5000 in *every* cell — the shots all completed;
+   only the observable flipped. The divergence is one sample in ~1,700, which is
+   exactly the "one shot in five thousand" the symptom section describes, now
+   attributed to the right cause. No rounding model explains a binary disagreeing
+   with itself. This is a race.
+
+`V2_GATE_BISECT` then localized it. The instrumentation
+(`v2_kernel.cc:226-247`) re-runs each shot as its own dispatch —
+`run_one(..., i, i+1, ...)` — and in the coop tier one shot is exactly one
+workgroup. Scanning all 5,000 shots of the worst seed emitted **not a single
+`DIVERGES` line**: at one workgroup the two kernels agree on every shot. The bug
+needed *concurrent* workgroups, which also rules out any single shot's
+arithmetic — the same instruction stream, on the same inputs, is correct when
+run alone.
 
 The A/B on the fix itself was the last nail: `V2_SPEC_NOISE_INLINE=1`, which
-flips `V2_NOISE_ATTR` back to `always_inline`, made things **worse** (5/6 seeds
-diverging rather than 4/6) — consistent with perturbing a race's timing, and
-inconsistent with the attribute being the load-bearing fix.
+flips `V2_NOISE_ATTR` back to `always_inline`, made things **worse** — 5/6 seeds
+diverging rather than 4/6, and with *larger* deltas (seed 99 went from off-by-1
+to off-by-3, 1721 / 1718). That is consistent with perturbing a race's timing,
+and inconsistent with the attribute being the load-bearing fix. It also shows
+the trap in the original diagnosis: had the A/B not been run, the attribute
+would have looked like a partial fix rather than no fix at all, because both
+arms diverge on *some* seeds and the seed set is small.
 
 **What was kept and why.** `V2_NOISE_ATTR` stayed, but its justification was
 rewritten in the source to say what is actually true:
@@ -88,17 +109,35 @@ scheduler is free to sink or hoist LDS accesses across it. A wave can retire the
 barrier with a `ds_write` still in flight while a peer wave reads the stale word.
 
 Measured on the pre-fix gfx950 ISA — barriers with a `ds_*` op in flight and no
-preceding `lgkm` wait:
+intervening `s_waitcnt lgkmcnt(0)`. Every number below was re-derived for this
+report by disassembling the archived binaries with `llvm-objdump` and by
+rebuilding the interpreter twice from the same source with only the barrier
+body swapped:
 
-| kernel | unfenced barriers |
-|---|---|
-| interpreter | 52 / 81 (64.2 %) |
-| **specialized** | **1439 / 1509 (95.4 %)** |
+| kernel | barriers | unfenced | how measured |
+|---|---|---|---|
+| interpreter (`clifft_v2_coop`) | 80 | **50 (62.5 %)** | A/B rebuild, `s_barrier` vs release/acquire, `-O2` asm |
+| **specialized** (`coop_r10_n1720`) | 1,509 | **1,400 (92.8 %)** | `llvm-objdump -d` on the archived pre-fix `.hsaco` |
 
-**Both kernels were wrong.** The specializer is ~27× more exposed because it
-straight-lines every op, which is precisely why only it failed the correctness
-gate — the interpreter was equally incorrect in principle and simply lost the
-race far less often.
+**Both kernels were wrong.** The specializer has **~28× more** exposed barriers
+because it straight-lines every op, which is precisely why only it failed the
+correctness gate — the interpreter was equally incorrect in principle and simply
+lost the race far less often.
+
+> **Correction.** Commit `150d09f`'s message, and the header comment in
+> `V2_performance/scratch/d5_fence.sh`, both record the specialized figure as
+> **1439 / 1509 (95.4 %)**. That number does not reproduce. Disassembling the
+> archived pre-fix `coop_r10_n1720_977e1e830813621d.hsaco` gives **1,400** under
+> every reasonable definition of "in flight" — scanning back 24, 32, 48, 64 or
+> unbounded instructions to the previous barrier all converge on 1,400, and
+> loosening `lgkmcnt(0)` to any `lgkmcnt` does not move it either. The only
+> definitions that yield anything else are degenerate: counting barriers not
+> *immediately* preceded by a wait gives 1,509, and a 3-instruction window gives
+> 1,460. The interpreter figure is likewise 50 / 80, not 52 / 81 — the archived
+> count was taken on a `.hsaco` linked against `ocml`/`ockl`, which contributes
+> one extra barrier and one extra unfenced site from device-library code that is
+> not V2's. **None of this changes the conclusion**; the corrected ratio (28×) is
+> marginally *larger* than the one originally claimed.
 
 This also explains why the SVM and Hybrid backends never saw it: HIP's
 `__syncthreads()` already expands to the fenced sequence. **V2 hand-rolled the
@@ -129,16 +168,36 @@ reduction total and flips `sample_branch`. **That is the causal path by which a
 missing fence became a wrong measurement outcome**, and it is why the symptom
 looked numerical: the corrupted value really was a probability.
 
-Post-fix the interpreter goes 0 % → 91.2 % fenced (the residual 7 are barriers
-with no LDS write pending, where the wait is correctly elided). Cost: **+3.88 %
-static instructions** — the entire price of correctness here.
+The cost was measured directly, by compiling `coop_interpreter.c` twice — once
+with the bare `s_barrier`, once with the fence pair, same source, same flags
+(`-O2 -ffp-contract=off -mcpu=gfx950`), disassembling both:
 
-Verified independently on the artifacts for this report:
+| build | instructions | barriers | fenced | `ds_*` in flight, unfenced |
+|---|---|---|---|---|
+| pre-fix interpreter | 5,629 | 80 | 1 (1.2 %) | **50 (62.5 %)** |
+| post-fix interpreter | 5,848 | 80 | 74 (92.5 %) | **0 (0.0 %)** |
+| pre/post register tier | 4,457 | 0 | — | — |
 
-| `.hsaco` | barriers | fenced |
-|---|---|---|
-| pre-fix `coop_r10_n1720` | 1,509 | **0 (0.0 %)** |
-| post-fix `coop_r10_n1720` | 1,509 | **1,400 (92.8 %)** |
+Two things fall out. **The fix is complete**: the unfenced-with-`ds`-in-flight
+count goes to exactly zero — the 6 barriers that remain unfenced have no LDS
+write pending, so the wait is correctly elided rather than missing. And the
+price is **+3.89 % static instructions** (5,629 → 5,848), matching the +3.88 %
+recorded at the time. The register tier is unaffected in both directions: with
+`-DV2_REGISTER` there are no barriers at all, so the two builds are
+byte-identical at 4,457 instructions — **the fix costs the register tier
+nothing**, which is why §9's register-tier numbers need no restatement.
+
+The same audit on the archived specialized binaries:
+
+| `.hsaco` | barriers | fenced (`lgkmcnt(0)` within 3) | `ds_*` in flight, unfenced |
+|---|---|---|---|
+| pre-fix `coop_r10_n1720` | 1,509 | **49 (3.2 %)** | **1,400 (92.8 %)** |
+| post-fix `coop_r10_n1720` | 1,509 | **1,404 (93.0 %)** | **0 (0.0 %)** |
+
+Note the two columns measure different things and both are worth reporting: the
+pre-fix kernel has 49 barriers that *happen* to sit behind a wait emitted for an
+unrelated reason — accidentally correct, not correct by construction. Post-fix,
+the in-flight column is zero, which is the property that actually matters.
 
 With the fence in place the gate **passes** on `coop_r10_n1720`, and the
 specializer is selected for all six circuits. Kernel time, median of 5, 10,000
@@ -203,12 +262,20 @@ binaries with `llvm-objdump`, on two independent markers:
 
 | marker | build cache (what the run used) | fresh cache |
 |---|---|---|
-| `s_barrier` preceded by `lgkmcnt(0)` (the `150d09f` fence) | **0 / 1509 (0.0 %)** | 1400 / 1509 (92.8 %) |
-| `V2_DUST_EPS` constant baked into the binary | **`1e-18`** (pre-`2a015fd`) | `1e-11` (fixed) |
+| barriers with `ds_*` in flight and no `lgkmcnt(0)` (the `150d09f` fence) | **1400 / 1509 (92.8 %)** | **0 / 1509 (0.0 %)** |
+| `s_barrier` preceded by `lgkmcnt(0)` within 3 instructions | **49 / 1509 (3.2 %)** | 1404 / 1509 (93.0 %) |
+| `V2_DUST_EPS` constant baked into the binary | **`0x3c32725d…` = `1e-18`** (pre-`2a015fd`) | `0x3da5fd7f…` = `1e-11` (fixed) |
 
-Both markers agree with the timestamps: all 36 cached kernels are dated
-2026-07-25, while the barrier fix landed 07-26 06:33 and the dust fix 07-26
-13:34.
+The dust marker is the cleaner of the two because it is a bit pattern, not a
+heuristic: the IEEE-754 double `1e-18` has high word `0x3c32725d` and `1e-11`
+has `0x3da5fd7f`, and each appears exactly twice in its respective binary and
+zero times in the other. There is no interpretation involved — the stale kernel
+provably contains the pre-fix constant.
+
+Both markers agree with the timestamps: 32 of the 36 cached kernels are dated
+2026-07-25 and the remaining 4 are from 07-26 00:00–01:48 — all of them before
+the barrier fix at 07-26 06:33, and well before the dust fix at 07-26 13:31.
+Every kernel the run dispatched predates both fixes.
 
 **The consequence for the in-tree conclusions.** The stale run recorded the
 `coop_r10_n1720` gate as *failing*, which is a verdict on the **pre-fence**
@@ -253,7 +320,7 @@ this section.
 | # | plausible story | what it actually was | what settled it |
 |---|---|---|---|
 | 11.1 | `-O2` reassociates FP across inlined noise ops | a data race between workgroups | kernel disagreed **with itself** (`V2_GATE_SELFTEST`) |
-| 11.2 | (see above) | `s_barrier` orders execution, not memory | ISA audit: 95.4 % of barriers unfenced |
+| 11.2 | (see above) | `s_barrier` orders execution, not memory | ISA audit: 92.8 % of barriers unfenced |
 | 11.3 | f32 is less precise than f64 | a threshold constant calibrated for f64, compared against f32 | two-arm A/B on the constant |
 | 11.4 | the benchmark measures current code | the cache served day-old binaries | `llvm-objdump` on the dispatched `.hsaco` |
 
@@ -262,5 +329,16 @@ Three of the four were settled by an experiment whose outcome the wrong theory
 were settled by reasoning harder about the plausible story. And the fourth was
 caught only because this report's ground rule (*trust data, not text*) required
 re-deriving an in-tree claim from the artifact instead of quoting it.
+
+**A fifth, smaller instance belongs here, because it happened while writing this
+chapter.** The 95.4 % figure above was quoted from `150d09f`'s commit message
+and from a comment in the script that produced it. Re-running the measurement on
+the archived binary gave 92.8 %, under every definition tried. The original
+number is not recoverable and the script no longer carries the exact counting
+code that produced it — the audit trail ends at prose. This is precisely the
+failure mode the ground rule exists for, and it is worth noting that it caught a
+number in a *correct* section, written by someone who had the artifact in hand at
+the time. The conclusion did not change; a number that had been repeated three
+times did.
 
 ---
