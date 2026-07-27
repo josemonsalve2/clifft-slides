@@ -174,30 +174,74 @@ where V2's advantage thins out:
 
 The break is sharp and it is at rank 22. Below it, zero spilling and V2 wins
 0.72–0.84. At and above it, the three worst-spilling kernels in the entire
-89-kernel corpus — SGPR spill 762 / 662 / 594 — and the advantage collapses to
-0.98–0.99.
+89-kernel corpus — SGPR spill 762 / 662 / 594, the top three by that metric and
+by VGPR spill — and the advantage collapses to 0.98–0.99.
 
-**Why spilling appears exactly there.** The specializer emits one call per
-instruction with constants baked in. Those constants are *scalar* values, and
-each live one occupies an SGPR. At rank 22 the amplitude addressing arithmetic
-needs 64-bit index math (`1ull << 22` is past what fits comfortably in the
-32-bit paths), the loop bounds and displacement constants get wider, and the
-straight-line body's live scalar set exceeds the 102-SGPR budget. The compiler
-then spills — to scratch, which is HBM-backed and therefore exactly the memory
-the kernel is already bandwidth-bound on.
+> **Provenance.** The timings above predate the cache fix of §11.4, so they are
+> reproduced by an independent run (`20260726T014859Z_all-tier5plus`) which
+> agrees to within 0.4 %: ratios 0.844 / 0.729 / 0.733 / 0.980 / 0.992 / 0.881,
+> with identical scratch sizes. The resource columns are stronger still — the
+> pre-fence and post-fence `.hsaco` for `global_r22/r23/r24` differ in 84 % of
+> their bytes and by +1,152 bytes of added fence instructions, yet report
+> **byte-identical** `vgpr_spill`, `sgpr_spill`, `sgpr_count` and
+> `private_segment_fixed_size`. Register pressure is a property of what the
+> specializer emits, not of the memory fences around it, so this table is not
+> affected by the invalidation.
 
-**qv24 is the interesting anomaly**: rank 24, spilling heavily (152/594), yet
-0.880 rather than 0.99. It has the fewest layers (`L4`) and the fewest
-instructions (320), so its straight-line body is short enough that the spill
-traffic is amortized over more amplitude work per instruction. That supports the
-diagnosis: the limiter is *scalar register pressure per instruction emitted*,
-not rank as such.
+**Why spilling appears exactly there — and what the data rules out.** The
+tempting explanation is that the specializer emits one call per instruction with
+constants baked in, so longer circuits carry more live scalars until the SGPR
+budget breaks. **The corpus refutes this.** Sorting every `global_*` kernel by
+emitted instruction count:
 
-This is the clearest scaling limit in the corpus and it is an honest one to
-state: **V2's specialization advantage decays above rank 21 and is essentially
-gone by rank 23.** §16 lists the obvious remedies — spilling the constants into
-a small read-only table indexed by a scalar counter, or emitting the high-rank
-tail as a loop over a constant array rather than as straight-line code — neither
-of which has been tried.
+| rank | instrs | VGPR | AGPR | SGPR | VGPR spill | SGPR spill |
+|---|---|---|---|---|---|---|
+| 11 | 16,415 | 128 | 64 | 106 | 0 | 4 |
+| 14 | 16,521 | 128 | 64 | 106 | 0 | 4 |
+| 13 | 9,359 | 128 | 64 | 106 | 0 | 4 |
+| 12 | 4,296 | 128 | 64 | 106 | 0 | 0–4 |
+| 20 | 418 | 104 | 40 | 106 | 0 | 0 |
+| 21 | 393 | 104 | 40 | 106 | 0 | 0 |
+| **22** | **359** | 128 | 64 | 108 | **136** | **762** |
+| **23** | **335** | 128 | 64 | 108 | **199** | **662** |
+| **24** | **320** | 128 | 64 | 108 | **152** | **594** |
+
+The three spilling kernels are the three **shortest** in the tier. A rank-14
+kernel emits 16,521 instructions — 46× more than rank 22's 359 — and spills 4
+SGPRs. Instruction count is not the mechanism; if anything the correlation runs
+backwards. That also disposes of the "qv24 is an anomaly because it has the
+fewest instructions" story: fewest instructions is the norm among the spillers,
+not an exception.
+
+What actually changes at the boundary is narrower than expected. Diffing the
+emitted C for rank 21 against rank 22 with all numeric literals normalized shows
+**no structural difference** — same preprocessor preamble, same `spec_body`
+shape, near-identical opcode mix (169/80/42 `array_u2`/`array_u4`/`array_rot` vs
+142/66/44). The tier wrapper is rank-independent by construction
+(`v2_specializer.cc:196-224`). The one thing that differs is a single baked
+constant:
+
+```c
+const u64 amp_capacity = 2097152ull;   // rank 21
+const u64 amp_capacity = 4194304ull;   // rank 22
+```
+
+Crossing 2²² also moves the allocator's chosen register split: the non-spilling
+rank 20/21 kernels sit at VGPR 104–106 / AGPR 40–42, while every spilling kernel
+jumps to the VGPR 128 / AGPR 64 cap. On CDNA the AGPR file is repurposed as
+overflow storage when MFMA is unused (and `SQ_INSTS_MFMA = 0` throughout here),
+so the pattern is consistent with the allocator exhausting AGPR overflow at the
+cap and falling through to scratch. **That is an inference from resource
+metadata, not a verified mechanism** — the emitted C is essentially unchanged, so
+the cause lies inside LLVM's allocation for the wider constant, which has not
+been isolated. Stated as an open question rather than an answer.
+
+What *is* solid: the correlation is exact. Every global kernel at rank ≤ 21
+spills ≤ 4 SGPRs and wins 0.72–0.84; every one at rank ≥ 22 spills 594–762 SGPRs
+to HBM-backed scratch — the same memory the kernel is already bandwidth-bound on
+— and the win collapses to 0.98–0.99. So the honest conclusion holds:
+**V2's specialization advantage decays above rank 21 and is essentially gone by
+rank 23.** §16 lists it as the top open item; the first step is an LLVM
+allocation study at the rank-21/22 boundary, not a code change.
 
 ---
