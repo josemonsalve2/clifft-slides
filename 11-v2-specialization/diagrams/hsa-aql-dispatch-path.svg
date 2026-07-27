@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">What Actually Happens on an AQL Dispatch</title>
+  <desc id="desc">One shared HSA AQL queue showing how naive dispatch recreates kernarg and completion resources on every hot-path invocation, while persistent dispatch creates them once and reuses them. A batched16 capability and exact per-dispatch timing results appear below.</desc>
+
+  <defs>
+    <linearGradient id="queueFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="packetFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.10"/>
+    </linearGradient>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowAccent" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 58 H1100 M0 157 H1100 M0 390 H1100 M0 444 H1100 M0 504 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M20 0 V620 M1080 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">What Actually Happens on an AQL Dispatch</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">The 31× is not the doorbell — it is what the naive path re-creates before reaching it</text>
+
+  <!-- Setup band -->
+  <rect x="20" y="68" width="1060" height="79" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66" stroke-opacity="0.35"/>
+  <text x="34" y="84" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1">SETUP · ONCE</text>
+  <text x="1058" y="84" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" text-anchor="end">persistent resources · done once</text>
+
+  <!-- Persistent resource creation -->
+  <rect x="34" y="94" width="280" height="32" rx="6" fill="#00cc66" fill-opacity="0.09" stroke="#00cc66" stroke-opacity="0.70"/>
+  <text x="174" y="108" fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">hsa_amd_memory_pool_allocate</text>
+  <text x="174" y="120" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">kernarg · done once</text>
+
+  <rect x="326" y="94" width="264" height="32" rx="6" fill="#00cc66" fill-opacity="0.09" stroke="#00cc66" stroke-opacity="0.70"/>
+  <text x="458" y="108" fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">hsa_amd_agents_allow_access</text>
+  <text x="458" y="120" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">GPU access · done once</text>
+
+  <rect x="602" y="94" width="184" height="32" rx="6" fill="#00cc66" fill-opacity="0.09" stroke="#00cc66" stroke-opacity="0.70"/>
+  <text x="694" y="108" fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">hsa_signal_create</text>
+  <text x="694" y="120" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">completion · done once</text>
+
+  <!-- Placement bracket -->
+  <path d="M34 134 V140 H786 V134" fill="none" stroke="#53d8fb" stroke-width="1.5"/>
+  <rect x="844" y="91" width="210" height="39" rx="7" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.60"/>
+  <text x="949" y="107" fill="#83e5ff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">the only difference</text>
+  <text x="949" y="121" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">where resource creation sits</text>
+
+  <!-- Persistent reuse paths -->
+  <path d="M174 126 V151 H1026 V239" fill="none" stroke="#00cc66" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+  <path d="M458 126 V143 H1014 V239" fill="none" stroke="#00cc66" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+  <path d="M694 126 V135 H1002 V303" fill="none" stroke="#00cc66" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#arrowGreen)"/>
+
+  <!-- Per-dispatch band -->
+  <rect x="20" y="167" width="1060" height="213" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="34" y="184" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1">PER DISPATCH · HOT PATH</text>
+
+  <!-- Naive resource creation -->
+  <rect x="34" y="194" width="316" height="44" rx="7" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="48" y="211" fill="#ff7777" font-family="monospace" font-size="9.5">hsa_amd_memory_pool_allocate</text>
+  <text x="48" y="226" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">new 40 bytes kernarg segment</text>
+  <path d="M350 216 H355 M403 216 H408" fill="none" stroke="#cc2222" stroke-width="1.7" marker-end="url(#arrowRed)"/>
+  <rect x="355" y="195" width="48" height="31" rx="4" fill="#0d0d1a"/>
+  <text x="379" y="208" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">runtime</text>
+  <text x="379" y="219" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">round-trip</text>
+
+  <rect x="34" y="246" width="316" height="42" rx="7" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="48" y="263" fill="#ff7777" font-family="monospace" font-size="9.5">hsa_amd_agents_allow_access</text>
+  <text x="48" y="278" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">authorize GPU access</text>
+  <path d="M350 267 H355 M403 267 H408" fill="none" stroke="#cc2222" stroke-width="1.7" marker-end="url(#arrowRed)"/>
+  <rect x="355" y="246" width="48" height="31" rx="4" fill="#0d0d1a"/>
+  <text x="379" y="259" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">runtime</text>
+  <text x="379" y="270" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">round-trip</text>
+
+  <rect x="34" y="296" width="316" height="42" rx="7" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="48" y="313" fill="#ff7777" font-family="monospace" font-size="9.5">hsa_signal_create</text>
+  <text x="48" y="328" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">new completion signal</text>
+  <path d="M350 317 H355 M403 317 H408" fill="none" stroke="#cc2222" stroke-width="1.7" marker-end="url(#arrowRed)"/>
+  <rect x="355" y="296" width="48" height="31" rx="4" fill="#0d0d1a"/>
+  <text x="379" y="309" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">runtime</text>
+  <text x="379" y="320" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">round-trip</text>
+
+  <text x="34" y="356" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">3 allocations + 1 access grant, every dispatch</text>
+  <text x="34" y="370" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">two KFD ioctls and a page-table update per dispatch</text>
+
+  <!-- Shared AQL queue -->
+  <text x="430" y="184" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">ONE SHARED AQL QUEUE</text>
+  <text x="430" y="202" fill="#dfe3ed" font-family="monospace" font-size="9">hsa_queue_load_write_index_relaxed()</text>
+  <path d="M638 199 H674" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+  <!-- Queue ring buffer -->
+  <rect x="682" y="188" width="55" height="25" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <rect x="741" y="188" width="55" height="25" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <rect x="800" y="188" width="55" height="25" rx="4" fill="#e94560" fill-opacity="0.28" stroke="#e94560" stroke-width="2" filter="url(#glowAccent)"/>
+  <rect x="859" y="188" width="55" height="25" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <rect x="918" y="188" width="55" height="25" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <rect x="977" y="188" width="55" height="25" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <text x="827.5" y="230" fill="#ff7890" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">slot = write index mod size</text>
+
+  <!-- AQL packet -->
+  <rect x="420" y="239" width="404" height="99" rx="8" fill="url(#packetFill)" stroke="#53d8fb" stroke-opacity="0.80"/>
+  <text x="434" y="256" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700">AQL packet</text>
+  <line x1="420" y1="264" x2="824" y2="264" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="434" y="280" fill="#dfe3ed" font-family="monospace" font-size="9">setup / grid_size / workgroup_size</text>
+  <text x="434" y="295" fill="#dfe3ed" font-family="monospace" font-size="9">kernel_object</text>
+  <text x="434" y="310" fill="#83e5ff" font-family="monospace" font-size="9.5" font-weight="700">kernarg_address</text>
+  <text x="434" y="325" fill="#83e5ff" font-family="monospace" font-size="9.5" font-weight="700">completion_signal</text>
+  <rect x="650" y="272" width="160" height="54" rx="5" fill="#e94560" fill-opacity="0.10" stroke="#e94560" stroke-opacity="0.55"/>
+  <text x="730" y="289" fill="#ff7890" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">header · written last</text>
+  <text x="730" y="304" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">release-store makes</text>
+  <text x="730" y="317" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">the packet live</text>
+
+  <!-- Shared resources -->
+  <path d="M550 307 C630 307 760 252 850 252" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <path d="M555 322 C680 344 760 318 850 318" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <rect x="858" y="238" width="194" height="45" rx="7" fill="#0d0d1a" stroke="#53d8fb" stroke-opacity="0.85"/>
+  <text x="955" y="257" fill="#83e5ff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">kernarg segment</text>
+  <text x="955" y="273" fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">40 bytes</text>
+  <rect x="858" y="296" width="194" height="45" rx="7" fill="#0d0d1a" stroke="#53d8fb" stroke-opacity="0.85"/>
+  <text x="955" y="315" fill="#83e5ff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">completion signal</text>
+  <text x="955" y="331" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">same completion semantics</text>
+
+  <!-- Persistent hot path -->
+  <rect x="418" y="346" width="636" height="25" rx="6" fill="#00cc66" fill-opacity="0.08" stroke="#00cc66" stroke-opacity="0.65"/>
+  <text x="432" y="363" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">persistent:</text>
+  <text x="495" y="363" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5">write packet</text>
+  <path d="M564 359 H601" fill="none" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <text x="613" y="363" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5">ring doorbell</text>
+  <path d="M688 359 H725" fill="none" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <text x="737" y="363" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5">wait signal</text>
+  <text x="811" y="363" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">· resources reused</text>
+
+  <!-- GPU band -->
+  <rect x="20" y="398" width="1060" height="38" rx="8" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.35"/>
+  <text x="34" y="414" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="1">GPU</text>
+  <text x="100" y="414" fill="#dfe3ed" font-family="monospace" font-size="9">hsa_signal_store_relaxed(doorbell, index)</text>
+  <path d="M350 411 H402" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <text x="416" y="414" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">ring</text>
+  <path d="M449 411 H499" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <text x="513" y="414" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">queue consumer reads live packet · kernel runs · completion signaled</text>
+  <text x="795" y="430" fill="#dfe3ed" font-family="monospace" font-size="9">hsa_signal_wait_scacquire(completion)</text>
+  <path d="M1015 427 H1034" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <text x="1046" y="430" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">wait</text>
+
+  <!-- Batched variant -->
+  <rect x="20" y="452" width="1060" height="44" rx="8" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.35"/>
+  <text x="34" y="469" fill="#83e5ff" font-family="monospace" font-size="9.5" font-weight="700">batched16</text>
+  <text x="34" y="486" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700">capability, not current usage</text>
+  <g fill="#53d8fb" fill-opacity="0.22" stroke="#53d8fb" stroke-width="1">
+    <rect x="186" y="463" width="15" height="21" rx="2"/><rect x="204" y="463" width="15" height="21" rx="2"/>
+    <rect x="222" y="463" width="15" height="21" rx="2"/><rect x="240" y="463" width="15" height="21" rx="2"/>
+    <rect x="258" y="463" width="15" height="21" rx="2"/><rect x="276" y="463" width="15" height="21" rx="2"/>
+    <rect x="294" y="463" width="15" height="21" rx="2"/><rect x="312" y="463" width="15" height="21" rx="2"/>
+    <rect x="330" y="463" width="15" height="21" rx="2"/><rect x="348" y="463" width="15" height="21" rx="2"/>
+    <rect x="366" y="463" width="15" height="21" rx="2"/><rect x="384" y="463" width="15" height="21" rx="2"/>
+    <rect x="402" y="463" width="15" height="21" rx="2"/><rect x="420" y="463" width="15" height="21" rx="2"/>
+    <rect x="438" y="463" width="15" height="21" rx="2"/><rect x="456" y="463" width="15" height="21" rx="2"/>
+  </g>
+  <text x="329" y="477" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">16 packets written</text>
+  <path d="M478 474 H524" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <rect x="536" y="461" width="94" height="25" rx="6" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb"/>
+  <text x="583" y="477" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">one ring</text>
+  <path d="M630 474 H665" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <rect x="677" y="461" width="94" height="25" rx="6" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb"/>
+  <text x="724" y="477" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">one wait</text>
+  <text x="791" y="471" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">amortizes the doorbell and the signal wait</text>
+  <text x="791" y="486" fill="#83e5ff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">across 16 dispatches — 2,320 ns</text>
+
+  <!-- Result strip -->
+  <rect x="20" y="512" width="1060" height="60" rx="9" fill="#0d0d1a" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.10"/>
+
+  <!-- Naive result -->
+  <rect x="28" y="519" width="250" height="46" rx="7" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-opacity="0.75"/>
+  <text x="40" y="535" fill="#ff7777" font-family="monospace" font-size="9.5" font-weight="700">HSA naive</text>
+  <text x="265" y="536" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="end">197,935 ns/dispatch</text>
+  <text x="40" y="554" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">alloc + grant + signal create · per dispatch</text>
+
+  <!-- HIP result -->
+  <rect x="286" y="519" width="250" height="46" rx="7" fill="#ff8800" fill-opacity="0.10" stroke="#ff8800" stroke-opacity="0.65"/>
+  <text x="298" y="535" fill="#ffb35c" font-family="monospace" font-size="9.5" font-weight="700">HIP stream_sync</text>
+  <text x="523" y="536" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="end">10,997 ns/dispatch</text>
+  <text x="298" y="554" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">HIP bookkeeping · same AQL queue</text>
+
+  <!-- Persistent result -->
+  <rect x="544" y="517" width="250" height="50" rx="7" fill="#e94560" fill-opacity="0.14" stroke="#e94560" stroke-width="2" filter="url(#glowAccent)"/>
+  <text x="556" y="535" fill="#ff7890" font-family="monospace" font-size="9.5" font-weight="700">HSA persistent</text>
+  <text x="781" y="536" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="end">6,326 ns/dispatch</text>
+  <text x="556" y="554" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">packet write · doorbell · wait · V2 hot path</text>
+
+  <!-- Batched result -->
+  <rect x="802" y="519" width="270" height="46" rx="7" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <text x="814" y="535" fill="#83e5ff" font-family="monospace" font-size="9.5" font-weight="700">HSA batched16</text>
+  <text x="1059" y="536" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700" text-anchor="end">2,320 ns/dispatch</text>
+  <text x="814" y="554" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">doorbell + wait amortized across the batch</text>
+
+  <!-- Punchline -->
+  <rect x="20" y="580" width="518" height="30" rx="8" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222"/>
+  <text x="279" y="599" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700" text-anchor="middle">naive → persistent is 31× · same queue, same packet, same kernel</text>
+  <rect x="546" y="580" width="534" height="30" rx="8" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="813" y="599" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700" text-anchor="middle">persistent is 1.74× faster than HIP stream_sync · −4,671 ns</text>
+</svg>

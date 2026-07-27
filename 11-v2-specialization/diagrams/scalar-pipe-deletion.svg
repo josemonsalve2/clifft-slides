@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="600" viewBox="0 0 1040 600" role="img" aria-labelledby="title desc">
+  <title id="title">Specialization Deletes a Dependency Chain, Not Just Instructions</title>
+  <desc id="desc">Two aligned instruction lanes compare the interpreter's serial operand-fetch dependency chain with a specialized path that embeds the operand as a literal and reaches useful arithmetic immediately. A count table and callout show that both scalar and vector instruction counts fall.</desc>
+
+  <defs>
+    <linearGradient id="interpreterFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="specializedFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="workFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.07"/>
+    </linearGradient>
+    <pattern id="stallHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#cc2222" fill-opacity="0.10"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#ff7777" stroke-width="2" stroke-opacity="0.28"/>
+    </pattern>
+    <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+  </defs>
+
+  <rect width="1040" height="600" fill="#1a1a2e"/>
+  <path d="M0 64 H1040 M0 408 H1040 M0 548 H1040" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M24 0 V600 M1016 0 V600" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="520" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Specialization Deletes a Dependency Chain, Not Just Instructions</text>
+  <text x="520" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">The interpreter's operand fetch is two dependent loads and a cross-pipe transfer — all of it before the first useful FLOP</text>
+
+  <!-- Main lanes -->
+  <rect x="24" y="76" width="708" height="320" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <line x1="38" y1="250" x2="718" y2="250" stroke="#ffffff" stroke-opacity="0.08"/>
+
+  <!-- Interpreter lane -->
+  <rect x="38" y="88" width="112" height="22" rx="11" fill="#cc2222" fill-opacity="0.22" stroke="#cc2222"/>
+  <circle cx="51" cy="99" r="4" fill="#cc2222" filter="url(#glowRed)"/>
+  <text x="62" y="103" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="11" font-weight="700">INTERPRETER</text>
+  <text x="718" y="103" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" text-anchor="end">serial prerequisites</text>
+
+  <!-- Address generation -->
+  <rect x="38" y="125" width="68" height="66" rx="12" fill="url(#interpreterFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="72" y="146" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_mul_i32</text>
+  <text x="72" y="160" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">pc, 40</text>
+  <text x="72" y="180" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">SALU · addr.</text>
+
+  <!-- First memory load -->
+  <line x1="108" y1="158" x2="114" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="116" y="125" width="78" height="66" rx="12" fill="url(#interpreterFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="155" y="153" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_load_dwordx4</text>
+  <text x="155" y="180" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">memory</text>
+
+  <!-- First stall -->
+  <line x1="196" y1="158" x2="198" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="200" y="119" width="82" height="78" rx="13" fill="url(#stallHatch)" stroke="#ff5555" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="241" y="143" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_waitcnt</text>
+  <text x="241" y="157" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">lgkmcnt(0)</text>
+  <rect x="217" y="168" width="48" height="17" rx="8.5" fill="#cc2222" fill-opacity="0.45"/>
+  <text x="241" y="180" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">STALL</text>
+
+  <!-- Cross-pipe transfer -->
+  <line x1="284" y1="158" x2="290" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="292" y="125" width="106" height="66" rx="12" fill="url(#interpreterFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="345" y="150" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">v_readfirstlane_b32</text>
+  <text x="345" y="174" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">VGPR → SGPR</text>
+  <text x="345" y="187" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">cross-pipe</text>
+
+  <!-- Dependent memory load -->
+  <line x1="400" y1="158" x2="406" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="408" y="125" width="78" height="66" rx="12" fill="url(#interpreterFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="447" y="153" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_load_dword</text>
+  <text x="447" y="177" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">dependent</text>
+  <text x="447" y="188" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">memory</text>
+
+  <!-- Second stall -->
+  <line x1="488" y1="158" x2="494" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="496" y="119" width="82" height="78" rx="13" fill="url(#stallHatch)" stroke="#ff5555" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="537" y="143" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_waitcnt</text>
+  <text x="537" y="157" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">lgkmcnt(0)</text>
+  <rect x="513" y="168" width="48" height="17" rx="8.5" fill="#cc2222" fill-opacity="0.45"/>
+  <text x="537" y="180" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">STALL</text>
+
+  <!-- Switch dispatch -->
+  <line x1="580" y1="158" x2="586" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="588" y="125" width="76" height="66" rx="12" fill="url(#interpreterFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <text x="626" y="146" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_cmp /</text>
+  <text x="626" y="160" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">s_cbranch</text>
+  <text x="626" y="180" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">SALU · switch</text>
+
+  <!-- First useful arithmetic -->
+  <line x1="666" y1="158" x2="672" y2="158" stroke="#cc2222" stroke-width="2" marker-end="url(#arrowRed)"/>
+  <rect x="674" y="125" width="56" height="66" rx="12" fill="url(#workFill)" stroke="#53d8fb" stroke-width="2"/>
+  <text x="702" y="148" fill="#ffffff" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">v_fma_f32</text>
+  <text x="702" y="167" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">VALU</text>
+  <text x="702" y="181" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">useful work</text>
+
+  <!-- Operand-fetch brace -->
+  <path d="M38 211 V217 Q38 223 44 223 H343 Q351 223 351 231 Q351 223 359 223 H658 Q664 223 664 217 V211" fill="none" stroke="#cc2222" stroke-width="1.5"/>
+  <rect x="260" y="228" width="182" height="20" rx="10" fill="#cc2222" fill-opacity="0.18"/>
+  <text x="351" y="242" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">operand fetch — no useful FLOPs</text>
+
+  <!-- Specialized lane -->
+  <rect x="38" y="264" width="112" height="22" rx="11" fill="#00cc66" fill-opacity="0.19" stroke="#00cc66"/>
+  <circle cx="51" cy="275" r="4" fill="#00cc66" filter="url(#glowGreen)"/>
+  <text x="62" y="279" fill="#67f0a9" font-family="Arial, sans-serif" font-size="11" font-weight="700">SPECIALIZED</text>
+  <text x="718" y="279" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" text-anchor="end">same horizontal scale</text>
+
+  <!-- Literal operand -->
+  <rect x="38" y="300" width="168" height="66" rx="12" fill="url(#specializedFill)" stroke="#00cc66" stroke-width="2"/>
+  <text x="122" y="322" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700" text-anchor="middle">s_mov_b32 s4, 0x2A</text>
+  <text x="122" y="341" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">literal in instruction stream</text>
+  <text x="122" y="356" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">no load · no wait</text>
+
+  <!-- Immediate useful arithmetic -->
+  <line x1="208" y1="333" x2="236" y2="333" stroke="#00cc66" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <rect x="244" y="300" width="100" height="66" rx="12" fill="url(#workFill)" stroke="#53d8fb" stroke-width="2"/>
+  <text x="294" y="326" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700" text-anchor="middle">v_fma_f32</text>
+  <text x="294" y="344" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">same useful</text>
+  <text x="294" y="357" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">arithmetic</text>
+
+  <!-- Deleted span -->
+  <line x1="358" y1="333" x2="718" y2="333" stroke="#00cc66" stroke-width="1.5" stroke-opacity="0.30" stroke-dasharray="5 6"/>
+  <path d="M358 350 V356 Q358 362 364 362 H530 Q538 362 538 370 Q538 362 546 362 H712 Q718 362 718 356 V350" fill="none" stroke="#00cc66" stroke-width="1.5"/>
+  <rect x="500" y="368" width="76" height="19" rx="9.5" fill="#00cc66" fill-opacity="0.16"/>
+  <text x="538" y="381.5" fill="#67f0a9" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">deleted</text>
+
+  <!-- S1 count table -->
+  <rect x="748" y="76" width="268" height="320" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="764" y="99" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">S1 · frame operand folding</text>
+  <text x="764" y="115" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">REGISTER TIER · MEASURED COUNTS</text>
+
+  <rect x="760" y="128" width="244" height="28" rx="5" fill="#ffffff" fill-opacity="0.06"/>
+  <text x="768" y="146" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9" font-weight="700">METRIC</text>
+  <text x="916" y="146" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">INTERPRETER</text>
+  <text x="980" y="146" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">SPECIALIZED</text>
+
+  <g font-family="Arial, sans-serif" font-size="10">
+    <rect x="760" y="156" width="244" height="27" fill="#cc2222" fill-opacity="0.05"/>
+    <text x="768" y="174" fill="#dfe3ed">total instructions</text>
+    <text x="916" y="174" fill="#ff8e8e" font-weight="700" text-anchor="middle">136</text>
+    <text x="980" y="174" fill="#67f0a9" font-weight="700" text-anchor="middle">47</text>
+
+    <rect x="760" y="183" width="244" height="27" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="768" y="201" fill="#dfe3ed">VALU</text>
+    <text x="916" y="201" fill="#ff8e8e" font-weight="700" text-anchor="middle">44</text>
+    <text x="980" y="201" fill="#67f0a9" font-weight="700" text-anchor="middle">8</text>
+
+    <rect x="760" y="210" width="244" height="27" fill="#cc2222" fill-opacity="0.05"/>
+    <text x="768" y="228" fill="#dfe3ed">SALU</text>
+    <text x="916" y="228" fill="#ff8e8e" font-weight="700" text-anchor="middle">more</text>
+    <text x="980" y="228" fill="#67f0a9" font-weight="700" text-anchor="middle">less</text>
+
+    <rect x="760" y="237" width="244" height="27" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="768" y="255" fill="#dfe3ed">VGPRs</text>
+    <text x="916" y="255" fill="#ff8e8e" font-weight="700" text-anchor="middle">8</text>
+    <text x="980" y="255" fill="#67f0a9" font-weight="700" text-anchor="middle">3</text>
+
+    <rect x="760" y="264" width="244" height="27" fill="#cc2222" fill-opacity="0.05"/>
+    <text x="768" y="282" fill="#dfe3ed">SGPRs</text>
+    <text x="916" y="282" fill="#ff8e8e" font-weight="700" text-anchor="middle">14</text>
+    <text x="980" y="282" fill="#67f0a9" font-weight="700" text-anchor="middle">12</text>
+
+    <rect x="760" y="291" width="244" height="27" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="768" y="309" fill="#dfe3ed">branches</text>
+    <text x="916" y="309" fill="#ff8e8e" font-weight="700" text-anchor="middle">6</text>
+    <text x="980" y="309" fill="#67f0a9" font-weight="700" text-anchor="middle">4</text>
+  </g>
+
+  <line x1="760" y1="326" x2="1004" y2="326" stroke="#ffffff" stroke-opacity="0.10"/>
+  <rect x="760" y="338" width="116" height="39" rx="7" fill="#e94560" fill-opacity="0.13" stroke="#e94560"/>
+  <text x="818" y="354" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">2.89× fewer</text>
+  <text x="818" y="369" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">instructions</text>
+  <rect x="888" y="338" width="116" height="39" rx="7" fill="#53d8fb" fill-opacity="0.11" stroke="#53d8fb"/>
+  <text x="946" y="354" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">5.50× fewer</text>
+  <text x="946" y="369" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">VALU</text>
+
+  <!-- Counter-intuitive point -->
+  <rect x="24" y="420" width="992" height="116" rx="10" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-width="1.5"/>
+  <line x1="548" y1="436" x2="548" y2="520" stroke="#53d8fb" stroke-opacity="0.28"/>
+
+  <rect x="40" y="436" width="138" height="20" rx="10" fill="#53d8fb" fill-opacity="0.18"/>
+  <text x="109" y="450" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">BOTH PIPES FALL</text>
+  <text x="40" y="477" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">SALU falls and VALU drops 44 → 8.</text>
+  <text x="40" y="498" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11.5">Nothing migrates from one pipe to the other — there is simply less of both.</text>
+  <text x="40" y="518" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10">The work disappears; it does not move from VALU to SALU.</text>
+
+  <rect x="570" y="436" width="164" height="20" rx="10" fill="#53d8fb" fill-opacity="0.18"/>
+  <text x="652" y="450" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">ACROSS THE CORPUS</text>
+  <text x="570" y="477" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">26 of 26 circuits: SALU ratio below VALU ratio.</text>
+  <text x="570" y="498" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11.5">SALU ratio range 0.110 – 0.361.</text>
+  <text x="570" y="518" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10">Fewer scalar instructions throughout the corpus.</text>
+
+  <!-- Punchline -->
+  <rect x="24" y="552" width="992" height="34" rx="8" fill="#e94560" fill-opacity="0.13" stroke="#e94560"/>
+  <text x="520" y="574" fill="#ffffff" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">Specialization removes the serial prerequisites before useful arithmetic begins.</text>
+</svg>

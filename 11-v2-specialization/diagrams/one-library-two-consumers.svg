@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="620" viewBox="0 0 1080 620" role="img" aria-labelledby="title desc">
+  <title id="title">One Operand Library, Compiled Two Ways</title>
+  <desc id="desc">The interpreter and specializer call the same V2 opcode bodies with runtime values or literals, while tier macros parameterize cooperation rather than arithmetic.</desc>
+
+  <defs>
+    <linearGradient id="cyanPanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="accentPanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="sharedPanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="greenPanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.06"/>
+    </linearGradient>
+    <filter id="glowAccent" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowAccent" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#e94560"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#ff8800"/>
+    </marker>
+  </defs>
+
+  <rect width="1080" height="620" fill="#1a1a2e"/>
+  <path d="M0 61 H1080 M0 518 H1080 M40 0 V620 M1040 0 V620" fill="none" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Title -->
+  <text x="540" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">One Operand Library, Compiled Two Ways</text>
+  <text x="540" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">Same semantics, different knowledge — the specializer changes the arguments, never the body</text>
+
+  <!-- Interpreter consumer -->
+  <g>
+    <rect x="40" y="70" width="455" height="118" rx="10" fill="url(#cyanPanel)" stroke="#53d8fb" stroke-width="1.5"/>
+    <rect x="40" y="70" width="455" height="29" rx="9" fill="#53d8fb" fill-opacity="0.16"/>
+    <text x="58" y="90" fill="#8ce8ff" font-family="monospace" font-size="13" font-weight="700">coop_interpreter.c</text>
+    <text x="477" y="90" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end">RUNTIME VALUES</text>
+    <rect x="54" y="106" width="427" height="24" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.55"/>
+    <text x="64" y="122" fill="#ffffff" font-family="monospace" font-size="9.5">v2_op_array_cnot(st, v, st-&gt;active_k, in.axis_1, in.axis_2)</text>
+    <text x="58" y="146" fill="#dfe3ed" font-family="monospace" font-size="9.5">st-&gt;active_k ← a load</text>
+    <text x="58" y="162" fill="#dfe3ed" font-family="monospace" font-size="9.5">in.axis_1 / in.axis_2 ← fields of a 32-byte bytecode instruction</text>
+    <text x="58" y="178" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">loaded every shot, every instruction</text>
+  </g>
+
+  <!-- Specializer consumer -->
+  <g>
+    <rect x="585" y="70" width="455" height="118" rx="10" fill="url(#accentPanel)" stroke="#e94560" stroke-width="1.5"/>
+    <rect x="585" y="70" width="455" height="29" rx="9" fill="#e94560" fill-opacity="0.18"/>
+    <text x="603" y="90" fill="#ff8295" font-family="monospace" font-size="13" font-weight="700">v2_specializer.cc</text>
+    <text x="1022" y="90" fill="#e94560" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end">LITERALS</text>
+    <text x="603" y="113" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">INPUT: bytecode + statically tracked rank</text>
+    <rect x="599" y="121" width="427" height="24" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-opacity="0.65"/>
+    <text x="609" y="137" fill="#ffffff" font-family="monospace" font-size="10.5">v2_op_array_cnot(st, v, 8u, 2u, 5u)</text>
+    <text x="603" y="163" fill="#ff9bad" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">no load, no bytecode fetch — the values are in the instruction stream.</text>
+    <text x="603" y="179" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">The specializer knows active_k at emit time.</text>
+  </g>
+
+  <!-- Convergence -->
+  <g>
+    <path d="M267 188 C267 204 314 207 344 220" fill="none" stroke="#53d8fb" stroke-width="2" marker-end="url(#arrowCyan)"/>
+    <path d="M813 188 C813 204 766 207 736 220" fill="none" stroke="#e94560" stroke-width="2" marker-end="url(#arrowAccent)"/>
+    <rect x="379" y="197" width="322" height="20" rx="10" fill="#0d0d1a" stroke="#ffffff" stroke-opacity="0.18"/>
+    <text x="540" y="211" fill="#ffffff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">same body — byte-exact by construction</text>
+  </g>
+
+  <!-- Shared operand library -->
+  <g>
+    <rect x="70" y="220" width="940" height="172" rx="12" fill="url(#sharedPanel)" stroke="#e94560" stroke-width="2"/>
+    <rect x="70" y="220" width="940" height="32" rx="11" fill="#e94560" fill-opacity="0.18"/>
+    <text x="92" y="242" fill="#ffffff" font-family="monospace" font-size="15" font-weight="700">v2_ops.h + v2_ops_body.inc</text>
+    <rect x="815" y="227" width="174" height="18" rx="9" fill="#e94560" fill-opacity="0.20" stroke="#e94560" stroke-opacity="0.75"/>
+    <text x="902" y="240" fill="#ff9bad" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">ONE SHARED BODY</text>
+
+    <rect x="95" y="260" width="890" height="101" rx="7" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+
+    <text x="115" y="280" fill="#ffffff" font-family="monospace" font-size="11">static inline void v2_op_array_cnot(V2State* st, CV2Complex* v,</text>
+    <rect x="343" y="284" width="88" height="17" rx="4" fill="#e94560" fill-opacity="0.20" stroke="#e94560" stroke-opacity="0.75"/>
+    <text x="348" y="297" fill="#ff8295" font-family="monospace" font-size="11" font-weight="700">u32 active_k</text>
+    <text x="429" y="297" fill="#ffffff" font-family="monospace" font-size="11">, u32 a1, u32 a2);</text>
+
+    <text x="115" y="329" fill="#ffffff" font-family="monospace" font-size="11">static inline void v2_op_meas_dormant_static(V2State* st, u32 axis,</text>
+    <text x="390" y="347" fill="#ffffff" font-family="monospace" font-size="11">u32 slot, u32 flags);</text>
+
+    <path d="M387 301 V312 H612" fill="none" stroke="#e94560" stroke-width="1.5" marker-end="url(#arrowAccent)"/>
+    <rect x="620" y="266" width="340" height="54" rx="7" fill="#e94560" fill-opacity="0.10" stroke="#e94560" stroke-opacity="0.75"/>
+    <text x="638" y="286" fill="#ff9bad" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">the pre-op rank, passed by value —</text>
+    <text x="638" y="304" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">this is what makes the loop bounds foldable</text>
+
+    <text x="540" y="380" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">The bodies are the same bodies; only the call-site knowledge changes.</text>
+  </g>
+
+  <!-- Cooperation split -->
+  <g>
+    <path d="M235 392 C235 411 265 414 285 430" fill="none" stroke="#00cc66" stroke-width="2" marker-end="url(#arrowGreen)"/>
+    <path d="M845 392 C845 411 815 414 795 430" fill="none" stroke="#ff8800" stroke-width="2" marker-end="url(#arrowOrange)"/>
+    <rect x="305" y="398" width="470" height="22" rx="11" fill="#0d0d1a" stroke="#53d8fb" stroke-opacity="0.60"/>
+    <text x="540" y="413" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">parameterizes cooperation, not arithmetic (v2_ops.h:128-152)</text>
+  </g>
+
+  <!-- Register compilation -->
+  <g>
+    <rect x="45" y="430" width="480" height="86" rx="10" fill="url(#greenPanel)" stroke="#00cc66" stroke-width="1.5"/>
+    <rect x="45" y="430" width="480" height="29" rx="9" fill="#00cc66" fill-opacity="0.16"/>
+    <text x="65" y="450" fill="#67f0a9" font-family="monospace" font-size="13" font-weight="700">-DV2_REGISTER</text>
+    <text x="507" y="450" fill="#00cc66" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end">SAME SOURCE</text>
+    <text x="65" y="478" fill="#ffffff" font-family="monospace" font-size="10.5">V2_STRIDE 1u</text>
+    <text x="215" y="478" fill="#ffffff" font-family="monospace" font-size="10.5">v2_tid() == 0</text>
+    <text x="382" y="478" fill="#ffffff" font-family="monospace" font-size="10.5">IS_OWNER 1</text>
+    <text x="65" y="501" fill="#dfe3ed" font-family="monospace" font-size="10.5">barrier → nothing</text>
+    <text x="270" y="501" fill="#dfe3ed" font-family="monospace" font-size="10.5">V2_REDUCE2 → identity</text>
+  </g>
+
+  <!-- Cooperative compilation -->
+  <g>
+    <rect x="555" y="430" width="480" height="86" rx="10" fill="#ff8800" fill-opacity="0.07" stroke="#ff8800" stroke-width="1.5"/>
+    <rect x="555" y="430" width="480" height="29" rx="9" fill="#ff8800" fill-opacity="0.16"/>
+    <text x="575" y="450" fill="#ffb35c" font-family="monospace" font-size="13" font-weight="700">default (coop / global)</text>
+    <text x="1017" y="450" fill="#ff8800" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end">SAME SOURCE</text>
+    <text x="575" y="478" fill="#ffffff" font-family="monospace" font-size="10">V2_STRIDE 256u</text>
+    <text x="722" y="478" fill="#ffffff" font-family="monospace" font-size="10">v2_tid() == workitem_id_x()</text>
+    <text x="910" y="478" fill="#ffffff" font-family="monospace" font-size="10">IS_OWNER (t == 0)</text>
+    <text x="575" y="501" fill="#dfe3ed" font-family="monospace" font-size="10.5">fenced s_barrier</text>
+    <text x="795" y="501" fill="#dfe3ed" font-family="monospace" font-size="10.5">coop_reduce2 butterfly</text>
+  </g>
+
+  <!-- Byte-exactness callout -->
+  <g>
+    <rect x="40" y="525" width="1000" height="48" rx="9" fill="#00cc66" fill-opacity="0.12" stroke="#00cc66" stroke-width="1"/>
+    <circle cx="58" cy="546" r="5" fill="#00ff80" filter="url(#glowAccent)"/>
+    <text x="72" y="548" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="13" font-weight="700">Byte-exactness is by construction, not by testing.</text>
+    <text x="58" y="566" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">V1 reimplemented each opcode inside its emitter, so the emitter's version and the interpreter's version could drift. V2 has one implementation and two call sites.</text>
+  </g>
+
+  <!-- Exact data strip -->
+  <g>
+    <rect x="40" y="581" width="1000" height="31" rx="6" fill="#0d0d1a" fill-opacity="0.88" stroke="#ffffff" stroke-opacity="0.12"/>
+    <line x1="275" y1="587" x2="275" y2="606" stroke="#ffffff" stroke-opacity="0.12"/>
+    <line x1="705" y1="587" x2="705" y2="606" stroke="#ffffff" stroke-opacity="0.12"/>
+
+    <text x="55" y="596" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">35 of the 41 opcodes specialized</text>
+    <text x="55" y="608" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">unsupported opcodes → interpreter fallback</text>
+
+    <text x="292" y="596" fill="#ffffff" font-family="monospace" font-size="9">reg_circuit_d3: 344 bytecode instructions → exactly 344 v2_op_* calls</text>
+    <text x="292" y="608" fill="#9ba3b8" font-family="monospace" font-size="9">in 383 C lines</text>
+
+    <text x="722" y="596" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">Density: 1.11, 1.27, 1.02, 1.00, 1.01</text>
+    <text x="722" y="608" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">lines/instr. on the five nontrivial examples</text>
+  </g>
+</svg>
