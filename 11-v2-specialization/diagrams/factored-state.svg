@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+  <title id="title">The Factored State — why rank, not qubit count, sets the cost</title>
+  <desc id="desc">The five factors of a factored quantum state and a rank timeline showing growth under non-Clifford operations and collapse under measurement.</desc>
+
+  <defs>
+    <linearGradient id="activeFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="pauliFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.24"/>
+    </linearGradient>
+    <filter id="glowAccent" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#ff8800"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="560" fill="#1a1a2e"/>
+  <path d="M0 66 H1000 M0 478 H1000" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M667 78 V465" stroke="#ffffff" stroke-opacity="0.08" stroke-dasharray="4 5"/>
+
+  <text x="500" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">The Factored State — why rank, not qubit count, sets the cost</text>
+  <text x="500" y="50" fill="#aeb4c7" font-family="monospace" font-size="11" text-anchor="middle">|psi&gt; = gamma · U_C · P · ( |phi&gt;_A ⊗ |0&gt;_D ) — src/clifft/svm/svm.h:92-103</text>
+
+  <!-- Stored state factors -->
+  <g>
+    <rect x="30" y="78" width="625" height="387" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="48" y="101" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="1">STORED STATE FACTORS</text>
+  </g>
+
+  <!-- Global scalar -->
+  <g>
+    <rect x="80" y="113" width="48" height="34" rx="6" fill="#ffffff" fill-opacity="0.07" stroke="#aeb4c7"/>
+    <text x="104" y="135" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">gamma</text>
+    <text x="104" y="164" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">global scalar:</text>
+    <text x="104" y="178" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">phase + deferred</text>
+    <text x="104" y="192" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">normalization</text>
+    <text x="104" y="207" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">one complex scalar</text>
+  </g>
+
+  <!-- Clifford part -->
+  <g>
+    <rect x="180" y="113" width="120" height="34" rx="6" fill="none" stroke="#aeb4c7" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="240" y="135" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">U_C</text>
+    <text x="240" y="171" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">the Clifford part,</text>
+    <text x="240" y="185" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">tracked symbolically</text>
+    <text x="240" y="207" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">implicit in the frame</text>
+  </g>
+
+  <!-- Pauli frame -->
+  <g>
+    <rect x="332" y="113" width="294" height="34" rx="6" fill="url(#pauliFill)" stroke="#53d8fb" stroke-width="1.5"/>
+    <path d="M356 113 V147 M380 113 V147 M404 113 V147 M428 113 V147 M452 113 V147 M476 113 V147 M500 113 V147 M524 113 V147 M548 113 V147 M572 113 V147 M596 113 V147" stroke="#53d8fb" stroke-opacity="0.28"/>
+    <text x="479" y="135" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" text-anchor="middle">P</text>
+    <text x="479" y="171" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">a Pauli frame — one X bit and one Z bit per qubit</text>
+    <text x="479" y="198" fill="#53d8fb" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">2 × ceil(N/64) words</text>
+  </g>
+
+  <!-- Active subspace -->
+  <g>
+    <rect x="48" y="219" width="589" height="177" rx="10" fill="url(#activeFill)" stroke="#e94560" stroke-width="2"/>
+    <rect x="48" y="219" width="589" height="38" rx="9" fill="#e94560" fill-opacity="0.20"/>
+    <text x="70" y="245" fill="#ffffff" font-family="monospace" font-size="19" font-weight="700">|phi&gt;_A</text>
+    <text x="183" y="244" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">the active subspace</text>
+    <text x="70" y="282" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11">dense statevector over k qubits</text>
+    <text x="70" y="310" fill="#ffffff" font-family="monospace" font-size="21" font-weight="700" filter="url(#glowAccent)">2^k complex amplitudes</text>
+    <rect x="70" y="326" width="545" height="49" rx="6" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-opacity="0.55"/>
+    <path d="M115 326 V375 M160 326 V375 M205 326 V375 M250 326 V375 M295 326 V375 M340 326 V375 M385 326 V375 M430 326 V375 M475 326 V375 M520 326 V375 M565 326 V375" stroke="#e94560" stroke-opacity="0.25"/>
+    <path d="M70 350.5 H615" stroke="#e94560" stroke-opacity="0.25"/>
+    <g fill="#e94560">
+      <circle cx="92" cy="338" r="3" fill-opacity="0.84"/>
+      <circle cx="137" cy="363" r="3" fill-opacity="0.38"/>
+      <circle cx="182" cy="338" r="3" fill-opacity="0.62"/>
+      <circle cx="227" cy="363" r="3" fill-opacity="0.91"/>
+      <circle cx="272" cy="338" r="3" fill-opacity="0.46"/>
+      <circle cx="317" cy="363" r="3" fill-opacity="0.72"/>
+      <circle cx="362" cy="338" r="3" fill-opacity="0.35"/>
+      <circle cx="407" cy="363" r="3" fill-opacity="0.83"/>
+      <circle cx="452" cy="338" r="3" fill-opacity="0.55"/>
+      <circle cx="497" cy="363" r="3" fill-opacity="0.69"/>
+      <circle cx="542" cy="338" r="3" fill-opacity="0.96"/>
+      <circle cx="587" cy="363" r="3" fill-opacity="0.43"/>
+    </g>
+  </g>
+
+  <!-- Dormant qubits -->
+  <g>
+    <rect x="48" y="408" width="160" height="46" rx="8" fill="#ffffff" fill-opacity="0.025" stroke="#aeb4c7" stroke-opacity="0.55" stroke-dasharray="5 4"/>
+    <text x="78" y="435" fill="#aeb4c7" font-family="monospace" font-size="13" font-weight="700">|0&gt;_D</text>
+    <line x1="136" y1="417" x2="136" y2="445" stroke="#aeb4c7" stroke-opacity="0.35"/>
+    <text x="172" y="435" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">0 bytes</text>
+    <text x="225" y="427" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">the dormant qubits, provably in the</text>
+    <text x="225" y="442" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">computational basis</text>
+  </g>
+
+  <!-- Rank timeline -->
+  <g>
+    <rect x="680" y="78" width="290" height="387" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="695" y="101" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="1">RANK TIMELINE</text>
+
+    <rect x="695" y="116" width="260" height="70" rx="7" fill="#53d8fb" fill-opacity="0.07" stroke="#53d8fb" stroke-opacity="0.55"/>
+    <text x="825" y="137" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">A pure-Clifford circuit never grows k:</text>
+    <text x="825" y="153" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">every gate is a frame update,</text>
+    <text x="825" y="169" fill="#53d8fb" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">2^k = 1, simulation is polynomial.</text>
+
+    <text x="947" y="218" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="end">peak_rank fixes both the footprint</text>
+    <text x="947" y="232" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="end">(2^peak_rank amplitudes) and the tier</text>
+    <line x1="705" y1="249" x2="947" y2="249" stroke="#e94560" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <line x1="708" y1="330" x2="850" y2="330" stroke="#aeb4c7" stroke-width="2"/>
+    <line x1="850" y1="330" x2="850" y2="249" stroke="#ff8800" stroke-width="2.5" marker-end="url(#arrowOrange)"/>
+    <line x1="850" y1="249" x2="902" y2="249" stroke="#e94560" stroke-width="2.5"/>
+    <line x1="902" y1="249" x2="902" y2="330" stroke="#00cc66" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+    <line x1="902" y1="330" x2="947" y2="330" stroke="#aeb4c7" stroke-width="2"/>
+
+    <text x="700" y="281" fill="#ffb35c" font-family="monospace" font-size="9.5" font-weight="700">T / ROT / EXPAND</text>
+    <text x="700" y="297" fill="#ffb35c" font-family="monospace" font-size="9.5" font-weight="700">→ k+1 (array doubles)</text>
+    <line x1="829" y1="294" x2="846" y2="309" stroke="#ff8800" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+    <text x="792" y="355" fill="#00cc66" font-family="monospace" font-size="9.5" font-weight="700">measure → k−1</text>
+    <line x1="883" y1="351" x2="899" y2="333" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+    <line x1="708" y1="383" x2="947" y2="383" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+    <text x="827" y="405" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">program order</text>
+  </g>
+
+  <!-- Punchline -->
+  <g>
+    <rect x="30" y="493" width="940" height="50" rx="10" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+    <text x="500" y="524" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">A 100-qubit Clifford circuit has k = 0. Cost is set by peak rank, not by N.</text>
+  </g>
+</svg>

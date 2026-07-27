@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">The Three Loops — and the One Rule for Each</title>
+  <desc id="desc">Nested runtime and specialized loops, with a comparison of interpreter dispatch, V1 block unrolling, and V2 shared-body call sites.</desc>
+
+  <defs>
+    <linearGradient id="runtimeFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="foldedFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff8800" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ff8800" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="answerFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="badFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.07"/>
+    </linearGradient>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowAccent" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#e94560"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 60 H1100 M0 327 H1100 M0 550 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M16 0 V620 M1084 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">The Three Loops — and the One Rule for Each</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">docs/v2/V2.md:104-132 §3.1 · unrolling the wrong loop is what killed V1</text>
+
+  <!-- Nested loop rules -->
+  <g>
+    <!-- Over shots -->
+    <rect x="20" y="70" width="650" height="250" rx="12" fill="url(#runtimeFill)" stroke="#00cc66" stroke-width="2"/>
+    <text x="36" y="92" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">over shots</text>
+    <rect x="482" y="78" width="172" height="25" rx="12.5" fill="#00cc66" fill-opacity="0.18" stroke="#00cc66"/>
+    <text x="568" y="95" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">ALWAYS a runtime loop</text>
+    <text x="36" y="113" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">shots are data; a persistent kernel with work-stealing pulls them</text>
+
+    <!-- Over the bytecode -->
+    <rect x="46" y="125" width="598" height="181" rx="10" fill="url(#runtimeFill)" stroke="#00cc66" stroke-width="2"/>
+    <text x="62" y="147" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">over the bytecode</text>
+    <rect x="445" y="133" width="183" height="25" rx="12.5" fill="#00cc66" fill-opacity="0.18" stroke="#00cc66"/>
+    <text x="536.5" y="150" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">ALWAYS a runtime loop*</text>
+    <text x="62" y="168" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">the operand sequence is data; unrolling it is the disease</text>
+
+    <!-- Over amplitude groups -->
+    <rect x="72" y="179" width="546" height="115" rx="9" fill="url(#foldedFill)" stroke="#ff8800" stroke-width="2"/>
+    <text x="88" y="201" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">over amplitude groups</text>
+    <rect x="286" y="187" width="316" height="25" rx="12.5" fill="#ff8800" fill-opacity="0.18" stroke="#ff8800"/>
+    <text x="444" y="204" fill="#ffcf99" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">stays a loop, but bounds/constants may specialize</text>
+    <text x="88" y="222" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">at rank 10 that is 256–512 groups; flattening reinstates the bloat</text>
+
+    <!-- Butterfly -->
+    <rect x="98" y="232" width="494" height="50" rx="8" fill="url(#answerFill)" stroke="#e94560" stroke-width="2"/>
+    <text x="114" y="254" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">the 2×2 / 4×4 butterfly</text>
+    <rect x="458" y="240" width="118" height="24" rx="12" fill="#e94560" fill-opacity="0.22" stroke="#e94560"/>
+    <text x="517" y="256.5" fill="#ff9aac" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">fully unrolled</text>
+    <text x="114" y="274" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">a constant 4–16 multiply-adds; no size risk</text>
+  </g>
+
+  <!-- The bytecode asterisk -->
+  <g>
+    <rect x="690" y="70" width="390" height="250" rx="12" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="885" y="91" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="1.2" text-anchor="middle">THE BYTECODE ASTERISK</text>
+
+    <!-- V1 treatment -->
+    <rect x="706" y="102" width="358" height="65" rx="8" fill="url(#badFill)" stroke="#cc2222" stroke-width="1.5"/>
+    <text x="722" y="123" fill="#ff7777" font-family="Arial, sans-serif" font-size="12" font-weight="700">V1 · ONE BLOCK PER INSTRUCTION</text>
+    <text x="722" y="143" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Flattens the bytecode loop into code.</text>
+    <text x="722" y="158" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Each block duplicates the body.</text>
+
+    <!-- V2 treatment -->
+    <rect x="706" y="178" width="358" height="70" rx="8" fill="url(#answerFill)" stroke="#e94560" stroke-width="1.5"/>
+    <text x="722" y="199" fill="#ff9aac" font-family="Arial, sans-serif" font-size="12" font-weight="700">V2 · ONE CALL PER INSTRUCTION</text>
+    <text x="722" y="219" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Removes the loop by emitting a call sequence.</text>
+    <text x="722" y="235" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Operands are constants; callee bodies are shared.</text>
+
+    <line x1="885" y1="168" x2="885" y2="176" stroke="#e94560" stroke-width="2" marker-end="url(#arrowAccent)"/>
+
+    <!-- Key sentence -->
+    <rect x="706" y="260" width="358" height="43" rx="8" fill="#53d8fb" fill-opacity="0.12" stroke="#53d8fb"/>
+    <text x="885" y="286" fill="#9beaff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" filter="url(#glowCyan)">a call site is O(1) IR regardless of what the callee does.</text>
+  </g>
+
+  <!-- Three-way bytecode comparison -->
+  <text x="20" y="337" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.9">ONE OPERAND SEQUENCE, THREE TREATMENTS</text>
+
+  <!-- Interpreter -->
+  <g>
+    <rect x="20" y="343" width="340" height="199" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66" stroke-opacity="0.75"/>
+    <rect x="20" y="343" width="340" height="29" rx="9" fill="#00cc66" fill-opacity="0.15"/>
+    <text x="190" y="363" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Interpreter</text>
+    <rect x="34" y="381" width="312" height="101" rx="6" fill="#080812" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="48" y="407" fill="#ffffff" font-family="monospace" font-size="9.5" xml:space="preserve">for (pc = 0; pc &lt; n; ++pc)</text>
+    <text x="48" y="430" fill="#dfe3ed" font-family="monospace" font-size="9.5" xml:space="preserve">&#160;&#160;&#160;&#160;switch (instr[pc].opcode) { ... 41 arms ... }</text>
+    <text x="190" y="519" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">O(1) code, runtime dispatch</text>
+  </g>
+
+  <!-- V1 -->
+  <g>
+    <rect x="380" y="343" width="330" height="199" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#cc2222" stroke-width="1.5"/>
+    <rect x="380" y="343" width="330" height="29" rx="9" fill="#cc2222" fill-opacity="0.18"/>
+    <text x="545" y="363" fill="#ff7777" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">V1 · unrolled blocks</text>
+    <rect x="394" y="381" width="302" height="88" rx="6" fill="#080812" stroke="#cc2222" stroke-opacity="0.55"/>
+
+    <!-- Blocks overflow the code inset -->
+    <rect x="405" y="389" width="280" height="20" rx="3" fill="#cc2222" fill-opacity="0.15" stroke="#cc2222" stroke-opacity="0.5"/>
+    <text x="417" y="403" fill="#ffffff" font-family="monospace" font-size="9.5" xml:space="preserve">/* instruction 0 */  ...block...</text>
+    <rect x="405" y="413" width="280" height="20" rx="3" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222" stroke-opacity="0.55"/>
+    <text x="417" y="427" fill="#ffffff" font-family="monospace" font-size="9.5" xml:space="preserve">/* instruction 1 */  ...block...</text>
+    <rect x="405" y="437" width="280" height="20" rx="3" fill="#cc2222" fill-opacity="0.21" stroke="#cc2222" stroke-opacity="0.6"/>
+    <text x="417" y="451" fill="#ffb0b0" font-family="monospace" font-size="9.5" xml:space="preserve">/* × 336,988 lines */</text>
+    <rect x="411" y="461" width="268" height="10" rx="2" fill="#cc2222" fill-opacity="0.28"/>
+    <rect x="417" y="474" width="256" height="10" rx="2" fill="#cc2222" fill-opacity="0.34"/>
+    <rect x="423" y="487" width="244" height="10" rx="2" fill="#cc2222" fill-opacity="0.40"/>
+    <rect x="429" y="500" width="232" height="10" rx="2" fill="#cc2222" fill-opacity="0.46"/>
+    <text x="545" y="529" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">O(n × body) code — the disease</text>
+  </g>
+
+  <!-- V2 -->
+  <g>
+    <rect x="730" y="343" width="350" height="199" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-width="1.5"/>
+    <rect x="730" y="343" width="350" height="29" rx="9" fill="#e94560" fill-opacity="0.20"/>
+    <text x="905" y="363" fill="#ff9aac" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">V2 · call sequence</text>
+    <rect x="744" y="381" width="322" height="101" rx="6" fill="#080812" stroke="#e94560" stroke-opacity="0.55"/>
+    <text x="758" y="405" fill="#ffffff" font-family="monospace" font-size="9.5">v2_op_frame_h(st, 3u);</text>
+    <text x="758" y="428" fill="#ffffff" font-family="monospace" font-size="9.5">v2_op_array_cnot(st, v, 1u, 2u, 4u);</text>
+    <text x="758" y="451" fill="#ffffff" font-family="monospace" font-size="9.5">v2_op_meas_active(st, v, 0u, 5u);</text>
+    <text x="905" y="519" fill="#ff9aac" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">O(n) code · one call site per instruction · bodies shared</text>
+  </g>
+
+  <!-- Punchline -->
+  <rect x="20" y="558" width="1060" height="48" rx="10" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="588" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">The bodies still contain their own loops. Only the operands became constants.</text>
+</svg>

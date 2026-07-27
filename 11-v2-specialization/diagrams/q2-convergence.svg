@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="620" viewBox="0 0 1060 620" role="img" aria-labelledby="title desc">
+  <title id="title">Two Independent Streams, One Distribution</title>
+  <desc id="desc">Q2 convergence compares relative gaps and z-scores for two circuits across increasing shot counts. Every absolute z-score remains below 1.7, supporting sampling noise rather than a numerical defect.</desc>
+
+  <defs>
+    <linearGradient id="panelFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d0d1a" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#0d0d1a" stop-opacity="0.62"/>
+    </linearGradient>
+    <linearGradient id="q1Fill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.08"/>
+      <stop offset="0.5" stop-color="#00cc66" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1060" height="620" fill="#1a1a2e"/>
+  <path d="M0 58 H1060 M0 544 H1060" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M38 0 V620 M1022 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="530" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Two Independent Streams, One Distribution</text>
+  <text x="530" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">Q1: 36/36 shots byte-exact · Q2: every |z| &lt; 1.7</text>
+
+  <!-- Q1 logical claim -->
+  <rect x="38" y="66" width="984" height="72" rx="10" fill="url(#q1Fill)" stroke="#00cc66" stroke-width="1.5"/>
+  <circle cx="64" cy="89" r="8" fill="#00cc66" filter="url(#glowGreen)"/>
+  <path d="M60 89 l3 3 l6 -7" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="82" y="94" fill="#ffffff" font-family="Arial, sans-serif" font-size="15" font-weight="700">Q1: 36 / 36 shots exact.</text>
+  <text x="310" y="94" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="12">Shot-for-shot byte agreement. This is the logical claim and it is binary.</text>
+  <text x="530" y="122" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="11.5" font-weight="700" text-anchor="middle">because Q1 is exact, the aggregate difference in Q2 can only be the difference between two valid samples of the same distribution.</text>
+
+  <!-- Top panel -->
+  <rect x="38" y="151" width="714" height="188" rx="10" fill="url(#panelFill)" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="56" y="172" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">RELATIVE GAP (%, LOG)</text>
+  <text x="226" y="172" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10">smaller is better</text>
+
+  <!-- Top-panel legend -->
+  <line x1="424" y1="168" x2="449" y2="168" stroke="#53d8fb" stroke-width="2.5"/>
+  <circle cx="436.5" cy="168" r="3.5" fill="#53d8fb"/>
+  <text x="457" y="172" fill="#dfe3ed" font-family="monospace" font-size="10">circuit_d5_p0.001</text>
+  <line x1="577" y1="168" x2="602" y2="168" stroke="#e94560" stroke-width="2.5"/>
+  <circle cx="589.5" cy="168" r="3.5" fill="#e94560"/>
+  <text x="610" y="172" fill="#dfe3ed" font-family="monospace" font-size="10">circuit_d3_p0.001</text>
+
+  <!-- Top-panel grid and axes -->
+  <g stroke="#ffffff" stroke-opacity="0.08">
+    <line x1="112" y1="186" x2="712" y2="186"/>
+    <line x1="112" y1="208.4" x2="712" y2="208.4"/>
+    <line x1="112" y1="260.3" x2="712" y2="260.3"/>
+    <line x1="112" y1="314" x2="712" y2="314"/>
+    <line x1="112" y1="186" x2="112" y2="314"/>
+    <line x1="322" y1="186" x2="322" y2="314"/>
+    <line x1="531" y1="186" x2="531" y2="314"/>
+    <line x1="712" y1="186" x2="712" y2="314"/>
+  </g>
+  <line x1="112" y1="186" x2="112" y2="314" stroke="#aeb4c7"/>
+  <line x1="112" y1="314" x2="712" y2="314" stroke="#aeb4c7"/>
+  <g fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" text-anchor="end">
+    <text x="101" y="189.5">21.15 %</text>
+    <text x="101" y="211.9">8.00 %</text>
+    <text x="101" y="263.8">0.841 %</text>
+    <text x="101" y="317.5">0.082 %</text>
+  </g>
+
+  <!-- Shot-noise reference -->
+  <path d="M112 196 C217 207 267 213 322 218 C427 228 477 234 531 239 C622 246 667 249 712 252" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.58" stroke-dasharray="6 5"/>
+  <rect x="565" y="218" width="84" height="18" rx="9" fill="#0d0d1a" stroke="#ffffff" stroke-opacity="0.16"/>
+  <text x="607" y="230.5" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">1/√shots</text>
+
+  <!-- Relative-gap series -->
+  <path d="M112 212.2 L322 258.5 L531 260.3 L712 267.9" fill="none" stroke="#53d8fb" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M112 186 L322 208.4 L531 314 L712 237" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linejoin="round"/>
+  <g fill="#53d8fb" stroke="#1a1a2e" stroke-width="2">
+    <circle cx="112" cy="212.2" r="5"/>
+    <circle cx="322" cy="258.5" r="5"/>
+    <circle cx="531" cy="260.3" r="5"/>
+    <circle cx="712" cy="267.9" r="5"/>
+  </g>
+  <g fill="#e94560" stroke="#1a1a2e" stroke-width="2">
+    <circle cx="112" cy="186" r="5"/>
+    <circle cx="322" cy="208.4" r="5"/>
+    <circle cx="531" cy="314" r="5"/>
+    <circle cx="712" cy="237" r="5"/>
+  </g>
+
+  <!-- Bottom panel -->
+  <rect x="38" y="351" width="714" height="162" rx="10" fill="url(#panelFill)" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="56" y="372" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">Z-SCORE</text>
+  <text x="126" y="372" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="10">centred on 0</text>
+
+  <!-- Z-score bands -->
+  <rect x="112" y="380" width="600" height="108" fill="#ff8800" fill-opacity="0.055"/>
+  <rect x="112" y="407" width="600" height="54" fill="#00cc66" fill-opacity="0.10"/>
+  <line x1="112" y1="380" x2="712" y2="380" stroke="#ff8800" stroke-opacity="0.52" stroke-dasharray="4 4"/>
+  <line x1="112" y1="407" x2="712" y2="407" stroke="#00cc66" stroke-opacity="0.60" stroke-dasharray="4 4"/>
+  <line x1="112" y1="434" x2="712" y2="434" stroke="#ffffff" stroke-opacity="0.42" stroke-width="1.5"/>
+  <line x1="112" y1="461" x2="712" y2="461" stroke="#00cc66" stroke-opacity="0.60" stroke-dasharray="4 4"/>
+  <line x1="112" y1="488" x2="712" y2="488" stroke="#ff8800" stroke-opacity="0.52" stroke-dasharray="4 4"/>
+  <g stroke="#ffffff" stroke-opacity="0.08">
+    <line x1="112" y1="380" x2="112" y2="488"/>
+    <line x1="322" y1="380" x2="322" y2="488"/>
+    <line x1="531" y1="380" x2="531" y2="488"/>
+    <line x1="712" y1="380" x2="712" y2="488"/>
+  </g>
+  <line x1="112" y1="380" x2="112" y2="488" stroke="#aeb4c7"/>
+  <g fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5" text-anchor="end">
+    <text x="101" y="383.5">2</text>
+    <text x="101" y="410.5">1</text>
+    <text x="101" y="437.5">0</text>
+    <text x="101" y="464.5">−1</text>
+    <text x="101" y="491.5">−2</text>
+  </g>
+  <!-- Z-score series -->
+  <path d="M112 477.2 L322 446.4 L531 459.9 L712 471" fill="none" stroke="#53d8fb" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M112 405.9 L322 410 L531 434.5 L712 403.2" fill="none" stroke="#e94560" stroke-width="2.5" stroke-linejoin="round"/>
+  <g fill="#53d8fb" stroke="#1a1a2e" stroke-width="2">
+    <circle cx="112" cy="477.2" r="5"/>
+    <circle cx="322" cy="446.4" r="5"/>
+    <circle cx="531" cy="459.9" r="5"/>
+    <circle cx="712" cy="471" r="5"/>
+  </g>
+  <g fill="#e94560" stroke="#1a1a2e" stroke-width="2">
+    <circle cx="112" cy="405.9" r="5"/>
+    <circle cx="322" cy="410" r="5"/>
+    <circle cx="531" cy="434.5" r="5"/>
+    <circle cx="712" cy="403.2" r="5"/>
+  </g>
+
+  <!-- Shared log x-axis -->
+  <g fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">
+    <text x="112" y="505">2,000</text>
+    <text x="322" y="505">10,000</text>
+    <text x="531" y="505">50,000</text>
+    <text x="712" y="505">200,000</text>
+  </g>
+  <text x="412" y="530" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">SHOTS (LOG SCALE)</text>
+
+  <!-- Required trap annotation -->
+  <circle cx="712" cy="237" r="11" fill="none" stroke="#53d8fb" stroke-width="2.5" filter="url(#glowCyan)"/>
+  <circle cx="712" cy="403.2" r="11" fill="none" stroke="#53d8fb" stroke-width="2.5" filter="url(#glowCyan)"/>
+  <path d="M724 237 H770" fill="none" stroke="#53d8fb" stroke-width="1.7" marker-end="url(#arrowCyan)"/>
+  <path d="M724 403.2 H770" fill="none" stroke="#53d8fb" stroke-width="1.7" marker-end="url(#arrowCyan)"/>
+  <rect x="774" y="174" width="248" height="322" rx="10" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-width="1.5"/>
+  <rect x="786" y="187" width="74" height="22" rx="11" fill="#53d8fb" fill-opacity="0.20" stroke="#53d8fb"/>
+  <text x="823" y="202" fill="#9eeaff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">THE TRAP</text>
+  <text x="790" y="230" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">The relative gap goes up</text>
+  <text x="790" y="248" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">(0.082 % → 2.31 %) while |z|</text>
+  <text x="790" y="266" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">stays near 1.</text>
+  <line x1="790" y1="280" x2="1006" y2="280" stroke="#53d8fb" stroke-opacity="0.30"/>
+  <text x="790" y="302" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Reading the percentage alone</text>
+  <text x="790" y="318" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">would suggest a regression at scale.</text>
+  <text x="790" y="346" fill="#9eeaff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">The z-score is the right statistic —</text>
+  <text x="790" y="362" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">the raw counts are small</text>
+  <text x="790" y="378" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">(≈4,800 of 200,000), so the</text>
+  <text x="790" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">relative gap is dominated by</text>
+  <text x="790" y="410" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Poisson noise.</text>
+
+  <!-- Punchline -->
+  <rect x="38" y="557" width="984" height="47" rx="10" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="530" y="586" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Every |z| &lt; 1.7. The residual gap is sampling noise between two independent streams, not a numerical defect.</text>
+</svg>

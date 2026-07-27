@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Where V1's 4,347 f64 Instructions Come From</title>
+  <desc id="desc">An A/B decomposition of V1 f64 instruction volume, including the unchanged f32 control, the complete experiment table, the scratch tradeoff, and the differing log linkage mechanism.</desc>
+
+  <defs>
+    <linearGradient id="logFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="baseFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#aeb4c7" stop-opacity="0.64"/>
+      <stop offset="1" stop-color="#9ba3b8" stop-opacity="0.28"/>
+    </linearGradient>
+    <linearGradient id="controlFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.12"/>
+    </linearGradient>
+    <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 62 H1100 M0 357 H1100 M0 559 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M22 0 V620 M1078 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Where V1's 4,347 f64 Instructions Come From</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">A/B on V1's own stage-3 IR through V1's own pipeline (opt -O2 | llc -O2) · one variable changed</text>
+
+  <!-- Attribution panel -->
+  <g>
+    <rect x="30" y="72" width="390" height="278" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="50" y="96" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">Variant A attribution</text>
+    <line x1="50" y1="104" x2="400" y2="104" stroke="#ffffff" stroke-opacity="0.08"/>
+
+    <!-- f64 stacked bar -->
+    <text x="120" y="120" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">v_f64 total · 4,347</text>
+    <rect x="60" y="132" width="120" height="117" rx="7" fill="url(#logFill)" stroke="#cc2222" stroke-width="1.5"/>
+    <rect x="60" y="249" width="120" height="55" rx="7" fill="url(#baseFill)" stroke="#aeb4c7" stroke-opacity="0.78"/>
+    <line x1="60" y1="249" x2="180" y2="249" stroke="#ffffff" stroke-opacity="0.38"/>
+
+    <text x="120" y="174" fill="#ffffff" font-family="Arial, sans-serif" font-size="22" font-weight="700" text-anchor="middle" filter="url(#glowRed)">2,967</text>
+    <text x="120" y="195" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">inlined log polynomial</text>
+    <text x="120" y="214" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">54 copies</text>
+
+    <text x="120" y="272" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">1,380</text>
+    <text x="120" y="290" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">PRNG / cnorm / cscale</text>
+
+    <!-- 68 percent callout -->
+    <path d="M213 243 V200 H186" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+    <rect x="181" y="243" width="65" height="28" rx="14" fill="#53d8fb" fill-opacity="0.14" stroke="#53d8fb"/>
+    <text x="213.5" y="262" fill="#53d8fb" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle" filter="url(#glowCyan)">68 %</text>
+
+    <!-- Unchanged f32 control -->
+    <text x="315" y="120" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">v_*_f32 control</text>
+    <text x="275" y="147" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">A</text>
+    <text x="355" y="147" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">B</text>
+    <rect x="246" y="157" width="58" height="80" rx="7" fill="url(#controlFill)" stroke="#53d8fb"/>
+    <rect x="326" y="157" width="58" height="80" rx="7" fill="url(#controlFill)" stroke="#53d8fb"/>
+    <text x="275" y="202" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">1,586</text>
+    <text x="355" y="202" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">1,586</text>
+    <line x1="235" y1="247" x2="395" y2="247" stroke="#53d8fb" stroke-opacity="0.55" stroke-dasharray="3 4"/>
+    <text x="315" y="272" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">the amplitude arithmetic</text>
+    <text x="315" y="289" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">never moved</text>
+
+    <rect x="50" y="318" width="350" height="20" rx="10" fill="#aeb4c7" fill-opacity="0.07" stroke="#aeb4c7" stroke-opacity="0.25"/>
+    <text x="225" y="332" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">The irreducible 1,380 are the same sites V2 also has.</text>
+  </g>
+
+  <!-- Experiment table panel -->
+  <g>
+    <rect x="435" y="72" width="635" height="278" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="455" y="96" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">Full A/B experiment table</text>
+    <line x1="455" y1="104" x2="1050" y2="104" stroke="#ffffff" stroke-opacity="0.08"/>
+
+    <!-- Complete table -->
+    <rect x="448" y="108" width="609" height="77" rx="5" fill="#1a1a2e" stroke="#ffffff" stroke-opacity="0.11"/>
+    <rect x="448" y="108" width="609" height="25" rx="5" fill="#ffffff" fill-opacity="0.05"/>
+    <rect x="448" y="133" width="609" height="26" fill="#cc2222" fill-opacity="0.08"/>
+    <rect x="448" y="159" width="609" height="26" fill="#e94560" fill-opacity="0.07"/>
+
+    <g fill="#aeb4c7" font-family="monospace" font-size="9" font-weight="700" text-anchor="middle">
+      <text x="469" y="124">variant</text>
+      <text x="520" y="124">isa_lines</text>
+      <text x="600" y="124">isa_total_instrs</text>
+      <text x="669" y="124">v_f64</text>
+      <text x="716" y="124">v_f32</text>
+      <text x="773" y="124">v_pk_f32</text>
+      <text x="843" y="124">scratch_ops</text>
+      <text x="921" y="124">scratch_bytes</text>
+      <text x="1011" y="124">log_expansions</text>
+    </g>
+    <g fill="#ffffff" font-family="monospace" font-size="10" text-anchor="middle">
+      <text x="469" y="151" font-weight="700">A</text>
+      <text x="520" y="151">17802</text>
+      <text x="600" y="151">16675</text>
+      <text x="669" y="151">4347</text>
+      <text x="716" y="151">1586</text>
+      <text x="773" y="151">0</text>
+      <text x="843" y="151">56</text>
+      <text x="921" y="151">156</text>
+      <text x="1011" y="151">54</text>
+
+      <text x="469" y="177" font-weight="700">B</text>
+      <text x="520" y="177">12038</text>
+      <text x="600" y="177">11148</text>
+      <text x="669" y="177">1380</text>
+      <text x="716" y="177">1586</text>
+      <text x="773" y="177">0</text>
+      <text x="843" y="177">477</text>
+      <text x="921" y="177">224</text>
+      <text x="1011" y="177">1</text>
+    </g>
+    <g stroke="#ffffff" stroke-opacity="0.08">
+      <line x1="490" y1="108" x2="490" y2="185"/>
+      <line x1="550" y1="108" x2="550" y2="185"/>
+      <line x1="650" y1="108" x2="650" y2="185"/>
+      <line x1="691" y1="108" x2="691" y2="185"/>
+      <line x1="741" y1="108" x2="741" y2="185"/>
+      <line x1="807" y1="108" x2="807" y2="185"/>
+      <line x1="879" y1="108" x2="879" y2="185"/>
+      <line x1="963" y1="108" x2="963" y2="185"/>
+      <line x1="448" y1="133" x2="1057" y2="133"/>
+      <line x1="448" y1="159" x2="1057" y2="159"/>
+    </g>
+
+    <!-- Variant definitions -->
+    <text x="455" y="207" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5"><tspan fill="#ff7777" font-weight="700">A</tspan><tspan> — as-is · asserted to reproduce </tspan><tspan font-family="monospace">v1/circuit_d3.5_isa.s</tspan><tspan> byte-for-byte</tspan></text>
+    <text x="455" y="224" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5"><tspan fill="#e94560" font-weight="700">B</tspan><tspan> — </tspan><tspan font-family="monospace">clifft_log</tspan><tspan> + </tspan><tspan font-family="monospace">clifft_draw_next_noise</tspan><tspan> noinline · same amplitude arithmetic, same PRNG</tspan></text>
+
+    <!-- Movement callouts -->
+    <rect x="455" y="238" width="281" height="30" rx="15" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.65"/>
+    <text x="595.5" y="258" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">total instructions moved · 5,527</text>
+    <rect x="748" y="238" width="309" height="30" rx="15" fill="#cc2222" fill-opacity="0.13" stroke="#cc2222" stroke-opacity="0.75"/>
+    <text x="902.5" y="258" fill="#ff8e8e" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">log_expansions · 54 → 1</text>
+
+    <!-- Spill tradeoff -->
+    <rect x="455" y="278" width="602" height="57" rx="7" fill="#ff8800" fill-opacity="0.08" stroke="#ff8800" stroke-opacity="0.75"/>
+    <text x="470" y="296" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10" font-weight="700">B keeps log as a call — cost moves into spill traffic</text>
+    <text x="470" y="320" fill="#ffffff" font-family="monospace" font-size="12" font-weight="700">scratch_ops 56 → 477</text>
+    <line x1="680" y1="302" x2="680" y2="326" stroke="#ff8800" stroke-opacity="0.45"/>
+    <text x="705" y="320" fill="#ffffff" font-family="monospace" font-size="12" font-weight="700">scratch_bytes 156 → 224</text>
+  </g>
+
+  <!-- Mechanism panel -->
+  <g>
+    <rect x="30" y="365" width="1040" height="190" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="50" y="389" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700">The mechanism: same precision rule, different log linkage</text>
+
+    <!-- V2 quote -->
+    <rect x="45" y="399" width="475" height="92" rx="7" fill="#00cc66" fill-opacity="0.06" stroke="#00cc66" stroke-opacity="0.68"/>
+    <text x="60" y="418" fill="#67f0a9" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">V2 (<tspan font-family="monospace">v2_ops.h</tspan>)</text>
+    <g fill="#dfe3ed" font-family="monospace" font-size="9.3">
+      <text x="60" y="439">static inline double cnorm(CV2Complex v) {</text>
+      <text x="60" y="456">&#160;&#160;&#160;&#160;double re = (double)v.re, im = (double)v.im; return re * re + im * im;</text>
+      <text x="60" y="473">}</text>
+    </g>
+
+    <!-- V1 quote -->
+    <rect x="535" y="399" width="520" height="92" rx="7" fill="#cc2222" fill-opacity="0.06" stroke="#cc2222" stroke-opacity="0.70"/>
+    <text x="550" y="418" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">V1 (<tspan font-family="monospace">mlir_emit.cc:826</tspan>, inside <tspan font-family="monospace">emit_cnorm</tspan>)</text>
+    <g fill="#dfe3ed" font-family="monospace" font-size="9">
+      <text x="550" y="437">// Match gold cnorm (hip_sampler.hip): extend each f32 component to f64,</text>
+      <text x="550" y="449">// then square and sum in f64. Squaring in f32 first (then extending) loses</text>
+      <text x="550" y="461">// precision and flips borderline stabilizer measurement branches on</text>
+      <text x="550" y="473">// RNG-path-dependent shots.</text>
+    </g>
+
+    <!-- Linkage asymmetry -->
+    <rect x="45" y="500" width="1010" height="44" rx="7" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.58"/>
+    <text x="235.9" y="519" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">V2 links ROCm device bitcode and calls</text><text x="458.8" y="519" fill="#53d8fb" font-family="monospace" font-size="11.5" font-weight="700">__ocml_log_f64</text><text x="556.8" y="519" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">; V1 had no such link and had to write the polynomial in MLIR.</text>
+    <text x="353.7" y="537" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">Exact attribution:</text><text x="434.6" y="537" fill="#53d8fb" font-family="monospace" font-size="10.5">0x3FD5555555555555</text><text x="553.4" y="537" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">is unique to that polynomial and occurs 54 times.</text>
+  </g>
+
+  <!-- Punchline -->
+  <g>
+    <rect x="30" y="570" width="1040" height="36" rx="9" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+    <text x="550" y="593" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">V1's 23× f64 volume was not a precision policy. It was a missing link line.</text>
+  </g>
+</svg>

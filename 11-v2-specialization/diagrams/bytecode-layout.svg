@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">The 32-Byte Instruction — everything a specializer can see</title>
+  <desc id="desc">A byte ruler, the fully foldable fixed header, alternative payload union layouts, and the ConstantPool indirection visible to an ahead-of-time specializer.</desc>
+
+  <defs>
+    <linearGradient id="headerFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="poolFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.07"/>
+    </linearGradient>
+    <pattern id="paddingHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#ffffff" fill-opacity="0.025"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#ffffff" stroke-opacity="0.10" stroke-width="2"/>
+    </pattern>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 66 H1100 M0 536 H1100" stroke="#ffffff" stroke-opacity="0.07"/>
+  <path d="M20 0 V620 M1080 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">The 32-Byte Instruction — everything a specializer can see</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">src/clifft/backend/backend.h · 41 opcodes · static_assert(sizeof(Instruction) == 32)</text>
+
+  <!-- Byte ruler -->
+  <text x="40" y="76" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">BYTE OFFSET</text>
+  <line x1="40" y1="96" x2="808" y2="96" stroke="#aeb4c7" stroke-width="1.5"/>
+  <g fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">
+    <text x="52" y="91">0</text>
+    <text x="76" y="91">1</text>
+    <text x="100" y="91">2</text>
+    <text x="124" y="91">3</text>
+    <text x="148" y="91">4</text>
+    <text x="172" y="91">5</text>
+    <text x="196" y="91">6</text>
+    <text x="220" y="91">7</text>
+    <text x="244" y="91">8</text>
+    <text x="268" y="91">9</text>
+    <text x="292" y="91">10</text>
+    <text x="316" y="91">11</text>
+    <text x="340" y="91">12</text>
+    <text x="364" y="91">13</text>
+    <text x="388" y="91">14</text>
+    <text x="412" y="91">15</text>
+    <text x="436" y="91">16</text>
+    <text x="460" y="91">17</text>
+    <text x="484" y="91">18</text>
+    <text x="508" y="91">19</text>
+    <text x="532" y="91">20</text>
+    <text x="556" y="91">21</text>
+    <text x="580" y="91">22</text>
+    <text x="604" y="91">23</text>
+    <text x="628" y="91">24</text>
+    <text x="652" y="91">25</text>
+    <text x="676" y="91">26</text>
+    <text x="700" y="91">27</text>
+    <text x="724" y="91">28</text>
+    <text x="748" y="91">29</text>
+    <text x="772" y="91">30</text>
+    <text x="796" y="91">31</text>
+  </g>
+  <g stroke="#dfe3ed" stroke-opacity="0.55">
+    <path d="M40 92 V100 M64 92 V100 M88 92 V100 M112 92 V100 M136 92 V100 M160 92 V100 M184 92 V100 M208 92 V100 M232 92 V100"/>
+    <path d="M256 92 V100 M280 92 V100 M304 92 V100 M328 92 V100 M352 92 V100 M376 92 V100 M400 92 V100 M424 92 V100"/>
+    <path d="M448 92 V100 M472 92 V100 M496 92 V100 M520 92 V100 M544 92 V100 M568 92 V100 M592 92 V100 M616 92 V100"/>
+    <path d="M640 92 V100 M664 92 V100 M688 92 V100 M712 92 V100 M736 92 V100 M760 92 V100 M784 92 V100 M808 92 V100"/>
+  </g>
+
+  <!-- Fixed header -->
+  <text x="40" y="111" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.7">FIXED HEADER · FULLY FOLDABLE</text>
+  <rect x="40" y="118" width="192" height="88" rx="7" fill="url(#headerFill)" stroke="#00cc66" stroke-width="2"/>
+  <g stroke="#00cc66" stroke-opacity="0.55">
+    <line x1="64" y1="118" x2="64" y2="206"/>
+    <line x1="88" y1="118" x2="88" y2="206"/>
+    <line x1="112" y1="118" x2="112" y2="206"/>
+    <line x1="136" y1="118" x2="136" y2="206"/>
+    <line x1="184" y1="118" x2="184" y2="206"/>
+  </g>
+  <g fill="#ffffff" font-family="monospace" font-size="9">
+    <text transform="translate(49 197) rotate(-90)">opcode</text>
+    <text transform="translate(61 197) rotate(-90)" fill="#aef7cd">uint8_t</text>
+    <text transform="translate(79 184) rotate(-90)">flags</text>
+    <text transform="translate(97 197) rotate(-90)">(field at</text>
+    <text transform="translate(109 197) rotate(-90)">offset 2)</text>
+    <text transform="translate(127 184) rotate(-90)">_pad</text>
+  </g>
+  <g font-family="monospace" font-size="9" text-anchor="middle">
+    <text x="160" y="134" fill="#ffffff" font-weight="700">axis_1</text>
+    <text x="160" y="146" fill="#aef7cd">uint16_t</text>
+    <text x="160" y="158" fill="#dfe3ed">virtual</text>
+    <text x="160" y="170" fill="#dfe3ed">axis</text>
+    <text x="160" y="182" fill="#dfe3ed">(target/</text>
+    <text x="160" y="194" fill="#dfe3ed">control)</text>
+    <text x="208" y="140" fill="#ffffff" font-weight="700">axis_2</text>
+    <text x="208" y="154" fill="#aef7cd">uint16_t</text>
+    <text x="208" y="168" fill="#dfe3ed">virtual</text>
+    <text x="208" y="182" fill="#dfe3ed">axis 2</text>
+  </g>
+  <line x1="232" y1="105" x2="232" y2="499" stroke="#00cc66" stroke-width="1.5" stroke-dasharray="4 4" stroke-opacity="0.65"/>
+  <text x="242" y="111" fill="#ff8b9d" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="0.7">PAYLOAD · UNION ALTERNATIVES ACROSS BYTES 8..31</text>
+
+  <!-- Payload byte columns -->
+  <g stroke="#ffffff" stroke-opacity="0.055">
+    <path d="M256 229 V489 M280 229 V489 M304 229 V489 M328 229 V489 M352 229 V489 M376 229 V489 M400 229 V489 M424 229 V489"/>
+    <path d="M448 229 V489 M472 229 V489 M496 229 V489 M520 229 V489 M544 229 V489 M568 229 V489 M592 229 V489 M616 229 V489"/>
+    <path d="M640 229 V489 M664 229 V489 M688 229 V489 M712 229 V489 M736 229 V489 M760 229 V489 M784 229 V489"/>
+  </g>
+
+  <!-- Variant A -->
+  <g>
+    <rect x="40" y="237" width="22" height="22" rx="11" fill="#e94560" fill-opacity="0.20" stroke="#e94560"/>
+    <text x="51" y="252" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">A</text>
+    <text x="72" y="252" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">math</text>
+    <rect x="232" y="237" width="384" height="28" rx="4" fill="#e94560" fill-opacity="0.13" stroke="#e94560" stroke-opacity="0.70"/>
+    <text x="424" y="255" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">double weight_re, weight_im</text>
+    <rect x="616" y="237" width="192" height="28" rx="4" fill="url(#paddingHatch)" stroke="#ffffff" stroke-opacity="0.12"/>
+  </g>
+
+  <!-- Variant B -->
+  <g>
+    <rect x="40" y="269" width="22" height="22" rx="11" fill="#e94560" fill-opacity="0.20" stroke="#e94560"/>
+    <text x="51" y="284" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">B</text>
+    <text x="72" y="284" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">classical</text>
+    <rect x="232" y="269" width="192" height="28" rx="4" fill="#e94560" fill-opacity="0.13" stroke="#e94560" stroke-opacity="0.70"/>
+    <text x="328" y="281" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint32_t classical_idx,</text>
+    <text x="328" y="292" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">expected_val</text>
+    <rect x="424" y="269" width="384" height="28" rx="4" fill="url(#paddingHatch)" stroke="#ffffff" stroke-opacity="0.12"/>
+  </g>
+
+  <!-- Variant C -->
+  <g>
+    <rect x="40" y="301" width="22" height="22" rx="11" fill="#e94560" fill-opacity="0.20" stroke="#e94560"/>
+    <text x="51" y="316" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">C</text>
+    <text x="72" y="316" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">pauli</text>
+    <rect x="232" y="301" width="192" height="28" rx="4" fill="#e94560" fill-opacity="0.13" stroke="#e94560" stroke-opacity="0.70"/>
+    <text x="328" y="313" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint32_t cp_mask_idx,</text>
+    <text x="328" y="324" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">condition_idx</text>
+    <rect x="424" y="301" width="384" height="28" rx="4" fill="url(#paddingHatch)" stroke="#ffffff" stroke-opacity="0.12"/>
+  </g>
+
+  <!-- Variant D -->
+  <g>
+    <rect x="40" y="333" width="22" height="22" rx="11" fill="#e94560" fill-opacity="0.20" stroke="#e94560"/>
+    <text x="51" y="348" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">D</text>
+    <text x="72" y="348" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">multi_gate</text>
+    <rect x="232" y="333" width="192" height="28" rx="4" fill="#e94560" fill-opacity="0.13" stroke="#e94560" stroke-opacity="0.70"/>
+    <text x="328" y="351" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint64_t mask</text>
+    <rect x="424" y="333" width="384" height="28" rx="4" fill="url(#paddingHatch)" stroke="#ffffff" stroke-opacity="0.12"/>
+  </g>
+
+  <!-- Variant E -->
+  <g>
+    <rect x="40" y="365" width="22" height="22" rx="11" fill="#cc2222" fill-opacity="0.28" stroke="#cc2222"/>
+    <text x="51" y="380" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">E</text>
+    <text x="72" y="380" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">u2</text>
+    <rect x="232" y="365" width="96" height="28" rx="4" fill="#cc2222" fill-opacity="0.20" stroke="#cc2222"/>
+    <text x="280" y="383" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint32_t cp_idx</text>
+    <rect x="328" y="365" width="480" height="28" rx="4" fill="url(#paddingHatch)" stroke="#cc2222" stroke-opacity="0.35"/>
+    <text x="344" y="383" fill="#53d8fb" font-family="monospace" font-size="9">→ fused_u2_nodes</text>
+  </g>
+
+  <!-- Variant F -->
+  <g>
+    <rect x="40" y="397" width="22" height="22" rx="11" fill="#cc2222" fill-opacity="0.28" stroke="#cc2222"/>
+    <text x="51" y="412" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">F</text>
+    <text x="72" y="412" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">u4</text>
+    <rect x="232" y="397" width="96" height="28" rx="4" fill="#cc2222" fill-opacity="0.20" stroke="#cc2222"/>
+    <text x="280" y="415" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint32_t cp_idx</text>
+    <rect x="328" y="397" width="480" height="28" rx="4" fill="url(#paddingHatch)" stroke="#cc2222" stroke-opacity="0.35"/>
+    <text x="344" y="415" fill="#53d8fb" font-family="monospace" font-size="9">→ fused_u4_nodes</text>
+  </g>
+
+  <!-- Variant G -->
+  <g>
+    <rect x="40" y="429" width="22" height="22" rx="11" fill="#cc2222" fill-opacity="0.28" stroke="#cc2222"/>
+    <text x="51" y="444" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">G</text>
+    <text x="72" y="444" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">exp_val</text>
+    <rect x="232" y="429" width="192" height="28" rx="4" fill="#cc2222" fill-opacity="0.20" stroke="#cc2222"/>
+    <text x="328" y="441" fill="#ffffff" font-family="monospace" font-size="9" text-anchor="middle">uint32_t cp_exp_val_idx,</text>
+    <text x="328" y="452" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">exp_val_idx</text>
+    <rect x="424" y="429" width="384" height="28" rx="4" fill="url(#paddingHatch)" stroke="#cc2222" stroke-opacity="0.35"/>
+  </g>
+
+  <!-- Raw payload access -->
+  <g>
+    <rect x="40" y="461" width="22" height="22" rx="11" fill="#53d8fb" fill-opacity="0.16" stroke="#53d8fb"/>
+    <text x="51" y="476" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">—</text>
+    <text x="72" y="476" fill="#ffffff" font-family="monospace" font-size="10" font-weight="700">raw[24]</text>
+    <rect x="232" y="461" width="576" height="28" rx="4" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.75"/>
+    <text x="520" y="479" fill="#dfe3ed" font-family="monospace" font-size="9" text-anchor="middle">full payload access</text>
+  </g>
+
+  <!-- ConstantPool indirection -->
+  <path d="M808 379 H820 M808 411 H820 M808 443 H820 M820 379 V443" fill="none" stroke="#cc2222" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="820" y1="411" x2="840" y2="411" stroke="#cc2222" stroke-width="2.5" marker-end="url(#arrowRed)"/>
+  <rect x="840" y="331" width="240" height="124" rx="10" fill="url(#poolFill)" stroke="#e94560" stroke-width="2"/>
+  <rect x="840" y="331" width="240" height="31" rx="9" fill="#e94560" fill-opacity="0.20"/>
+  <text x="960" y="352" fill="#ffffff" font-family="monospace" font-size="14" font-weight="700" text-anchor="middle">ConstantPool</text>
+  <text x="960" y="378" fill="#ff9aaa" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">device buffer</text>
+  <text x="960" y="400" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">fused 2×2 / 4×4 unitaries,</text>
+  <text x="960" y="418" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">N-bit Pauli masks,</text>
+  <text x="960" y="436" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">noise-channel tables</text>
+
+  <!-- Specialization limit -->
+  <rect x="831" y="470" width="258" height="55" rx="8" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <text x="868.3" y="492" filter="url(#glowCyan)" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11">the</text><text x="886.3" y="492" filter="url(#glowCyan)" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11" font-weight="700">index</text><text x="917.8" y="492" filter="url(#glowCyan)" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11">folds to an immediate;</text>
+  <text x="863.8" y="511" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11">the</text><text x="881.8" y="511" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11" font-weight="700">contents</text><text x="930.6" y="511" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11">stay in a device buffer</text>
+
+  <!-- Punchline -->
+  <rect x="20" y="550" width="1060" height="54" rx="10" fill="#e94560" fill-opacity="0.13" stroke="#e94560"/>
+  <text x="550" y="583" fill="#ffffff" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">Everything left of byte 8 is a compile-time constant. §7's S6 and S8 measure exactly what the right-hand side costs.</text>
+</svg>

@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Per-Dispatch Latency — HSA vs HIP, Six Modes</title>
+  <desc id="desc">Horizontal log-scale comparison of steady-state dispatch latency for six HSA and HIP modes on gfx950, with annotations for the persistent dispatcher, completion semantics, reproducibility, and the HIP asynchronous enqueue floor.</desc>
+
+  <defs>
+    <linearGradient id="hsaFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="hipFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff8800" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#ff8800" stop-opacity="0.92"/>
+    </linearGradient>
+    <filter id="glowAccent" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 58 H1100 M0 462 H1100 M0 562 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M20 0 V620 M1080 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Per-Dispatch Latency — HSA vs HIP, Six Modes</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">gfx950 · one node · one job (50507) · 2,000 iterations × 5 reps · log scale, ns/dispatch</text>
+
+  <!-- Chart panel -->
+  <rect x="20" y="68" width="710" height="390" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+
+  <!-- Legend -->
+  <rect x="36" y="78" width="19" height="9" rx="4.5" fill="#53d8fb"/>
+  <text x="62" y="87" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">HSA</text>
+  <rect x="103" y="78" width="19" height="9" rx="4.5" fill="#ff8800"/>
+  <text x="129" y="87" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">HIP</text>
+  <rect x="169" y="76" width="26" height="13" rx="5" fill="none" stroke="#e94560" stroke-width="2"/>
+  <text x="203" y="87" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">V2 hot path</text>
+  <text x="704" y="87" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end" letter-spacing="0.7">LOG SCALE · NS/DISPATCH</text>
+
+  <!-- PersistentDispatcher bracket -->
+  <path d="M331 115 V108 M331 115 H675 M675 115 V108" fill="none" stroke="#e94560" stroke-width="1.8"/>
+  <text x="503" y="103" fill="#ff7890" font-family="Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle" filter="url(#glowAccent)">31×</text>
+  <text x="503" y="126" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">PersistentDispatcher hoists kernarg allocation and signal creation</text>
+  <text x="503" y="138" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">and agents_allow_access out of the loop</text>
+
+  <!-- HIP asynchronous enqueue floor -->
+  <line x1="221" y1="135" x2="221" y2="376" stroke="#53d8fb" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.9"/>
+
+  <!-- Row guides -->
+  <g stroke="#ffffff" stroke-opacity="0.06">
+    <line x1="34" y1="174" x2="708" y2="174"/>
+    <line x1="34" y1="214" x2="708" y2="214"/>
+    <line x1="34" y1="254" x2="708" y2="254"/>
+    <line x1="34" y1="294" x2="708" y2="294"/>
+    <line x1="34" y1="334" x2="708" y2="334"/>
+  </g>
+
+  <!-- HIP launch_only -->
+  <rect x="36" y="145" width="34" height="20" rx="10" fill="#ff8800" fill-opacity="0.18" stroke="#ff8800"/>
+  <text x="53" y="159" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HIP</text>
+  <text x="80" y="160" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">launch_only</text>
+  <rect x="205" y="145" width="16" height="20" rx="4" fill="url(#hipFill)"/>
+  <text x="230" y="160" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">2,093</text>
+
+  <!-- HSA batched16 -->
+  <rect x="36" y="185" width="34" height="20" rx="10" fill="#53d8fb" fill-opacity="0.18" stroke="#53d8fb"/>
+  <text x="53" y="199" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HSA</text>
+  <text x="80" y="200" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">batched16</text>
+  <rect x="205" y="185" width="26" height="20" rx="4" fill="url(#hsaFill)"/>
+  <text x="240" y="200" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">2,320</text>
+
+  <!-- HSA persistent -->
+  <rect x="36" y="225" width="34" height="20" rx="10" fill="#53d8fb" fill-opacity="0.18" stroke="#53d8fb"/>
+  <text x="53" y="239" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HSA</text>
+  <text x="80" y="240" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">persistent</text>
+  <rect x="203" y="223" width="130" height="24" rx="6" fill="none" stroke="#e94560" stroke-width="2.5" filter="url(#glowAccent)"/>
+  <rect x="205" y="225" width="126" height="20" rx="4" fill="url(#hsaFill)"/>
+  <text x="340" y="240" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">6,326</text>
+
+  <!-- HIP sync -->
+  <rect x="36" y="265" width="34" height="20" rx="10" fill="#ff8800" fill-opacity="0.18" stroke="#ff8800"/>
+  <text x="53" y="279" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HIP</text>
+  <text x="80" y="280" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">sync</text>
+  <rect x="205" y="265" width="179" height="20" rx="4" fill="url(#hipFill)"/>
+  <text x="393" y="280" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">10,737</text>
+
+  <!-- HIP stream_sync -->
+  <rect x="36" y="305" width="34" height="20" rx="10" fill="#ff8800" fill-opacity="0.18" stroke="#ff8800"/>
+  <text x="53" y="319" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HIP</text>
+  <text x="80" y="320" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">stream_sync</text>
+  <rect x="205" y="305" width="182" height="20" rx="4" fill="url(#hipFill)"/>
+  <text x="396" y="320" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">10,997</text>
+
+  <!-- HSA naive -->
+  <rect x="36" y="345" width="34" height="20" rx="10" fill="#53d8fb" fill-opacity="0.18" stroke="#53d8fb"/>
+  <text x="53" y="359" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">HSA</text>
+  <text x="80" y="360" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">naive</text>
+  <rect x="205" y="345" width="470" height="20" rx="4" fill="url(#hsaFill)"/>
+  <text x="684" y="360" fill="#ffffff" font-family="monospace" font-size="11" font-weight="700">197,935</text>
+
+  <!-- Runtime abstraction comparison -->
+  <path d="M331 235 H444" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <path d="M387 315 C420 315 420 285 444 285" fill="none" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <rect x="452" y="211" width="250" height="92" rx="8" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.85"/>
+  <text x="466" y="232" fill="#83e5ff" font-family="Arial, sans-serif" font-size="13" font-weight="700">1.74× / −4,671 ns</text>
+  <text x="466" y="250" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">identical kernel · identical hardware queue</text>
+  <text x="466" y="266" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">identical completion semantics</text>
+  <text x="466" y="282" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">only difference: who builds the AQL packet</text>
+  <text x="466" y="296" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">pure runtime abstraction</text>
+
+  <!-- Log axis -->
+  <line x1="205" y1="382" x2="692" y2="382" stroke="#aeb4c7" stroke-width="1.2"/>
+  <g fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">
+    <line x1="221" y1="377" x2="221" y2="388" stroke="#dfe3ed"/>
+    <text x="221" y="399">2,093</text>
+    <line x1="331" y1="377" x2="331" y2="388" stroke="#dfe3ed"/>
+    <text x="331" y="399">6,326</text>
+    <line x1="387" y1="377" x2="387" y2="388" stroke="#dfe3ed"/>
+    <text x="387" y="399">10,997</text>
+    <line x1="675" y1="377" x2="675" y2="388" stroke="#dfe3ed"/>
+    <text x="675" y="399">197,935</text>
+  </g>
+
+  <!-- Floor and first-touch notes -->
+  <rect x="34" y="406" width="445" height="44" rx="7" fill="#53d8fb" fill-opacity="0.08" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <text x="47" y="419" fill="#83e5ff" font-family="Arial, sans-serif" font-size="9" font-weight="700">HIP's asynchronous enqueue floor — no completion wait at all</text>
+  <text x="47" y="433" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">HSA batched16 (not yet used) includes a completion wait · within 11 %</text>
+  <text x="47" y="447" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">vs HIP stream_sync (1.00×): 4.74× faster · −8,677 ns</text>
+  <rect x="490" y="408" width="220" height="40" rx="7" fill="#ff8800" fill-opacity="0.08" stroke="#ff8800" stroke-opacity="0.65"/>
+  <text x="503" y="425" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">HIP sync rep 0 first-touch cost</text>
+  <text x="503" y="440" fill="#dfe3ed" font-family="monospace" font-size="9.5">13,668 → 10,739 · excluded</text>
+
+  <!-- Mode semantics panel -->
+  <rect x="748" y="68" width="332" height="390" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="764" y="88" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">MODE SEMANTICS</text>
+
+  <!-- launch_only semantics -->
+  <rect x="760" y="98" width="308" height="46" rx="6" fill="#ff8800" fill-opacity="0.06" stroke="#ff8800" stroke-opacity="0.28"/>
+  <text x="772" y="115" fill="#ffb35c" font-family="monospace" font-size="10" font-weight="700">HIP launch_only</text>
+  <text x="772" y="130" fill="#dfe3ed" font-family="monospace" font-size="9">&lt;&lt;&lt;&gt;&gt;&gt; only, no sync</text>
+  <text x="925" y="130" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">asynchronous enqueue floor</text>
+
+  <!-- batched16 semantics -->
+  <rect x="760" y="150" width="308" height="50" rx="6" fill="#53d8fb" fill-opacity="0.06" stroke="#53d8fb" stroke-opacity="0.28"/>
+  <text x="772" y="167" fill="#83e5ff" font-family="monospace" font-size="10" font-weight="700">HSA batched16</text>
+  <text x="772" y="182" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">16 packets published back-to-back</text>
+  <text x="772" y="195" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">doorbell once; wait once on the last</text>
+
+  <!-- persistent semantics -->
+  <rect x="758" y="206" width="312" height="66" rx="7" fill="#53d8fb" fill-opacity="0.07" stroke="#e94560" stroke-width="2"/>
+  <text x="772" y="223" fill="#ff7890" font-family="monospace" font-size="10" font-weight="700">HSA persistent · V2's hot path</text>
+  <text x="772" y="238" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">kernarg + signal allocated once</text>
+  <text x="772" y="251" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">packet written per dispatch</text>
+  <text x="772" y="264" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">signal reset with store_relaxed</text>
+
+  <!-- sync semantics -->
+  <rect x="760" y="278" width="308" height="38" rx="6" fill="#ff8800" fill-opacity="0.06" stroke="#ff8800" stroke-opacity="0.28"/>
+  <text x="772" y="294" fill="#ffb35c" font-family="monospace" font-size="10" font-weight="700">HIP sync</text>
+  <text x="772" y="308" fill="#dfe3ed" font-family="monospace" font-size="9">&lt;&lt;&lt;&gt;&gt;&gt; + hipDeviceSynchronize</text>
+
+  <!-- stream_sync semantics -->
+  <rect x="760" y="322" width="308" height="38" rx="6" fill="#ff8800" fill-opacity="0.06" stroke="#ff8800" stroke-opacity="0.28"/>
+  <text x="772" y="338" fill="#ffb35c" font-family="monospace" font-size="10" font-weight="700">HIP stream_sync</text>
+  <text x="772" y="352" fill="#dfe3ed" font-family="monospace" font-size="9">&lt;&lt;&lt;&gt;&gt;&gt; + hipStreamSynchronize</text>
+
+  <!-- naive semantics -->
+  <rect x="760" y="366" width="308" height="80" rx="6" fill="#53d8fb" fill-opacity="0.06" stroke="#53d8fb" stroke-opacity="0.28"/>
+  <text x="772" y="383" fill="#83e5ff" font-family="monospace" font-size="10" font-weight="700">HSA naive</text>
+  <text x="772" y="398" fill="#dfe3ed" font-family="monospace" font-size="9">alloc kernarg + agents_allow_access</text>
+  <text x="772" y="411" fill="#dfe3ed" font-family="monospace" font-size="9">+ signal_create per dispatch</text>
+  <text x="772" y="424" fill="#dfe3ed" font-family="monospace" font-size="9">destroy + free after</text>
+  <text x="772" y="437" fill="#9ba3b8" font-family="monospace" font-size="9">pre-PersistentDispatcher hsa_dispatch_and_wait</text>
+
+  <!-- Reproducibility band -->
+  <rect x="20" y="470" width="1060" height="88" rx="9" fill="#0d0d1a" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="38" y="489" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">REPRODUCIBILITY</text>
+  <text x="151" y="489" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">peak-to-peak spread across reps 1–4: 0.15 % persistent · 0.02 % batched16 · 0.13 % HIP sync · 0.09 % stream_sync.</text>
+  <text x="38" y="512" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">Noisier: launch_only 0.44 %, naive 6 % (191.6–203.6 µs) — two KFD ioctls and a page-table update per dispatch;</text>
+  <text x="38" y="531" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">the naive path inherits kernel-side scheduling jitter. It does not matter here, because the effect being measured is 31×.</text>
+  <text x="38" y="549" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">same kernel · same node · steady-state columns</text>
+
+  <!-- Punchline -->
+  <rect x="20" y="568" width="1060" height="40" rx="9" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="593" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">4,671 ns per dispatch is the price of asking someone else to fill in 64 bytes.</text>
+</svg>

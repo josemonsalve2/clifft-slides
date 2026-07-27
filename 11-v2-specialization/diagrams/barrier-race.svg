@@ -1,0 +1,268 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">An Execution-Only Barrier Is Not a Memory Barrier</title>
+  <desc id="desc">Broken and fixed two-wave timelines show how an unfenced LDS write can pass an execution-only barrier, corrupt a reduction, and desynchronize pseudorandom draws. An ISA audit, instruction cost, and paired performance bars quantify the fix.</desc>
+
+  <defs>
+    <linearGradient id="brokenFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.07"/>
+    </linearGradient>
+    <linearGradient id="fixedFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00cc66" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#00cc66" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="auditFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#00cc66"/>
+    </marker>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 58 H1100 M0 372 H1100 M0 445 H1100 M0 566 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M20 0 V620 M1080 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">An Execution-Only Barrier Is Not a Memory Barrier</text>
+  <text x="354" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11"><tspan font-family="monospace">s_barrier</tspan> on AMDGCN is <tspan font-family="monospace">IntrNoMem</tspan> — it orders waves, not memory</text>
+
+  <!-- Broken timeline -->
+  <rect x="25" y="68" width="700" height="143" rx="10" fill="url(#brokenFill)" stroke="#cc2222" stroke-width="1.5"/>
+  <rect x="25" y="68" width="700" height="27" rx="9" fill="#cc2222" fill-opacity="0.24"/>
+  <text x="42" y="87" fill="#ff7777" font-family="Arial, sans-serif" font-size="13" font-weight="700">BROKEN · execution rendezvous only</text>
+  <text x="43" y="119" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">WAVE 0</text>
+  <text x="43" y="164" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">WAVE 1</text>
+  <line x1="101" y1="115" x2="707" y2="115" stroke="#ffffff" stroke-opacity="0.16"/>
+  <line x1="101" y1="160" x2="707" y2="160" stroke="#ffffff" stroke-opacity="0.16"/>
+
+  <rect x="104" y="101" width="101" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#aeb4c7" stroke-opacity="0.55"/>
+  <text x="154.5" y="112" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">v_add</text>
+  <text x="154.5" y="124" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">partial sum</text>
+  <line x1="205" y1="115" x2="218" y2="115" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="224" y="101" width="140" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#cc2222"/>
+  <text x="294" y="112" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">ds_write lds_red0</text>
+  <text x="294" y="124" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">in flight</text>
+  <line x1="364" y1="115" x2="377" y2="115" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="383" y="101" width="86" height="28" rx="5" fill="#cc2222" fill-opacity="0.27" stroke="#ff6666"/>
+  <text x="426" y="112" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">s_barrier</text>
+  <text x="426" y="124" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">retires</text>
+  <line x1="469" y1="115" x2="548" y2="115" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="554" y="101" width="88" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#aeb4c7" stroke-opacity="0.45"/>
+  <text x="598" y="119" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">continues</text>
+
+  <text x="116" y="164" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="14">…</text>
+  <line x1="126" y1="160" x2="377" y2="160" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="383" y="146" width="86" height="28" rx="5" fill="#cc2222" fill-opacity="0.27" stroke="#ff6666"/>
+  <text x="426" y="164" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">s_barrier</text>
+  <line x1="469" y1="160" x2="482" y2="160" stroke="#cc2222" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="488" y="146" width="132" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#cc2222"/>
+  <text x="554" y="158" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">ds_read lds_red0</text>
+  <text x="554" y="170" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">reads the STALE word</text>
+  <circle cx="643" cy="160" r="11" fill="#cc2222" fill-opacity="0.32" stroke="#ff6666"/>
+  <text x="643" y="165" fill="#ff7777" font-family="DejaVu Sans" font-size="17" font-weight="700" text-anchor="middle" filter="url(#glowRed)">✗</text>
+
+  <line x1="426" y1="95" x2="426" y2="181" stroke="#ff7777" stroke-width="1.5" stroke-dasharray="3 4"/>
+  <path d="M348 98 C430 83 630 83 669 137 L669 151" fill="none" stroke="#ff7777" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowRed)"/>
+  <text x="505" y="97" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">write completes after the read</text>
+  <text x="42" y="199" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="9.5"><tspan font-family="monospace">s_barrier</tspan> alone is execution-only — LLVM models it <tspan font-family="monospace">IntrNoMem</tspan>.</text>
+
+  <!-- Fixed timeline -->
+  <rect x="25" y="221" width="700" height="143" rx="10" fill="url(#fixedFill)" stroke="#00cc66" stroke-width="1.5"/>
+  <rect x="25" y="221" width="700" height="27" rx="9" fill="#00cc66" fill-opacity="0.20"/>
+  <text x="42" y="240" fill="#67f0a9" font-family="Arial, sans-serif" font-size="13" font-weight="700">FIXED · release + barrier + acquire</text>
+  <text x="43" y="274" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">WAVE 0</text>
+  <text x="43" y="319" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">WAVE 1</text>
+  <line x1="101" y1="270" x2="707" y2="270" stroke="#ffffff" stroke-opacity="0.16"/>
+  <line x1="101" y1="315" x2="707" y2="315" stroke="#ffffff" stroke-opacity="0.16"/>
+
+  <rect x="104" y="256" width="133" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66"/>
+  <text x="170.5" y="274" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">ds_write lds_red0</text>
+  <line x1="237" y1="270" x2="248" y2="270" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="254" y="256" width="95" height="28" rx="5" fill="#00cc66" fill-opacity="0.13" stroke="#00cc66"/>
+  <text x="301.5" y="274" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">release fence</text>
+  <line x1="349" y1="270" x2="360" y2="270" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="366" y="256" width="86" height="28" rx="5" fill="#00cc66" fill-opacity="0.20" stroke="#00cc66"/>
+  <text x="409" y="274" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">s_barrier</text>
+  <line x1="452" y1="270" x2="463" y2="270" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="469" y="256" width="95" height="28" rx="5" fill="#00cc66" fill-opacity="0.13" stroke="#00cc66"/>
+  <text x="516.5" y="274" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">acquire fence</text>
+  <line x1="564" y1="270" x2="586" y2="270" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="592" y="256" width="88" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#aeb4c7" stroke-opacity="0.45"/>
+  <text x="636" y="274" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">continues</text>
+
+  <text x="116" y="319" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="14">…</text>
+  <line x1="126" y1="315" x2="248" y2="315" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="254" y="301" width="95" height="28" rx="5" fill="#00cc66" fill-opacity="0.13" stroke="#00cc66"/>
+  <text x="301.5" y="319" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">release fence</text>
+  <line x1="349" y1="315" x2="360" y2="315" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="366" y="301" width="86" height="28" rx="5" fill="#00cc66" fill-opacity="0.20" stroke="#00cc66"/>
+  <text x="409" y="319" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">s_barrier</text>
+  <line x1="452" y1="315" x2="463" y2="315" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="469" y="301" width="95" height="28" rx="5" fill="#00cc66" fill-opacity="0.13" stroke="#00cc66"/>
+  <text x="516.5" y="319" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">acquire fence</text>
+  <line x1="564" y1="315" x2="575" y2="315" stroke="#00cc66" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="581" y="301" width="105" height="28" rx="5" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66"/>
+  <text x="633.5" y="313" fill="#ffffff" font-family="monospace" font-size="9.5" font-weight="700" text-anchor="middle">ds_read lds_red0</text>
+  <text x="633.5" y="325" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">correct word</text>
+  <circle cx="704" cy="315" r="11" fill="#00cc66" fill-opacity="0.25" stroke="#00cc66"/>
+  <text x="704" y="320" fill="#00ff80" font-family="DejaVu Sans" font-size="16" font-weight="700" text-anchor="middle" filter="url(#glowGreen)">✓</text>
+
+  <line x1="409" y1="248" x2="409" y2="337" stroke="#67f0a9" stroke-width="1.5" stroke-dasharray="3 4"/>
+  <rect x="274" y="335" width="271" height="20" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#00cc66" stroke-opacity="0.75"/>
+  <text x="315" y="349" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="9.5"><tspan font-family="monospace">s_barrier</tspan> preceded by <tspan font-family="monospace">lgkmcnt(0)</tspan></text>
+
+  <!-- ISA audit -->
+  <rect x="745" y="68" width="330" height="296" rx="10" fill="url(#auditFill)" stroke="#53d8fb" stroke-width="1.5"/>
+  <rect x="745" y="68" width="330" height="27" rx="9" fill="#53d8fb" fill-opacity="0.15"/>
+  <text x="760" y="87" fill="#53d8fb" font-family="Arial, sans-serif" font-size="13" font-weight="700">ISA AUDIT · coop_r10_n1720</text>
+
+  <text x="755" y="111" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700">.hsaco</text>
+  <text x="894" y="106" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">barriers</text>
+  <text x="958" y="106" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">fenced</text>
+  <text x="958" y="117" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">lgkmcnt(0) within 3</text>
+  <text x="1032" y="106" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">ds_* in flight</text>
+  <text x="1032" y="117" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" text-anchor="middle">unfenced</text>
+  <line x1="755" y1="123" x2="1065" y2="123" stroke="#ffffff" stroke-opacity="0.12"/>
+
+  <rect x="753" y="128" width="314" height="41" rx="5" fill="#cc2222" fill-opacity="0.12"/>
+  <text x="758" y="144" fill="#ffaaaa" font-family="monospace" font-size="9">pre-fix</text>
+  <text x="758" y="158" fill="#ffffff" font-family="monospace" font-size="9">coop_r10_n1720</text>
+  <text x="894" y="152" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">1,509</text>
+  <text x="958" y="152" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">49 (3.2 %)</text>
+  <text x="1032" y="152" fill="#ff7777" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">1,400 (92.8 %)</text>
+
+  <rect x="753" y="174" width="314" height="41" rx="5" fill="#00cc66" fill-opacity="0.10"/>
+  <text x="758" y="190" fill="#8ff7bf" font-family="monospace" font-size="9">post-fix</text>
+  <text x="758" y="204" fill="#ffffff" font-family="monospace" font-size="9">coop_r10_n1720</text>
+  <text x="894" y="198" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">1,509</text>
+  <text x="958" y="198" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">1,404 (93.0 %)</text>
+  <text x="1032" y="198" fill="#00ff80" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">0 (0.0 %)</text>
+
+  <text x="758" y="232" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">The pre-fix kernel has 49 barriers behind waits</text>
+  <text x="758" y="245" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">emitted for unrelated reasons: accidentally correct,</text>
+  <text x="758" y="258" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">not correct by construction. Post-fix, in flight is</text>
+  <text x="758" y="271" fill="#00ff80" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">zero — the property that actually matters.</text>
+
+  <line x1="755" y1="282" x2="1065" y2="282" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="758" y="299" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700">STATIC INSTRUCTION COST</text>
+  <text x="758" y="315" fill="#ffffff" font-family="Arial, sans-serif" font-size="10">Interpreter: 5,629 → 5,848 static instructions,</text>
+  <text x="758" y="329" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10" font-weight="700">+3.89 %</text>
+  <text x="806" y="329" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">· -DV2_REGISTER: no barriers at all</text>
+  <text x="758" y="344" fill="#00ff80" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">Both builds: byte-identical at 4,457 instructions</text>
+  <text x="758" y="357" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">the fix costs the register tier nothing.</text>
+
+  <!-- Consequence cascade -->
+  <text x="25" y="386" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">THE CONSEQUENCE CHAIN</text>
+  <g font-family="Arial, sans-serif" font-size="9" text-anchor="middle">
+    <rect x="25" y="395" width="119" height="40" rx="7" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222"/>
+    <text x="84.5" y="419" fill="#ffaaaa">stale partial sum</text>
+    <line x1="144" y1="415" x2="160" y2="415" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+    <rect x="166" y="395" width="139" height="40" rx="7" fill="#cc2222" fill-opacity="0.16" stroke="#cc2222"/>
+    <text x="235.5" y="419" fill="#ffaaaa">wrong reduction total</text>
+    <line x1="305" y1="415" x2="321" y2="415" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+    <rect x="327" y="390" width="190" height="50" rx="7" fill="#cc2222" fill-opacity="0.14" stroke="#cc2222"/>
+    <text x="422" y="410" fill="#ffaaaa" font-family="monospace">sample_branch</text>
+    <text x="422" y="422" fill="#ffaaaa">compares against a</text>
+    <text x="422" y="434" fill="#ffaaaa">corrupted probability</text>
+    <line x1="517" y1="415" x2="533" y2="415" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+    <rect x="539" y="395" width="139" height="40" rx="7" fill="#cc2222" fill-opacity="0.12" stroke="#cc2222"/>
+    <text x="608.5" y="419" fill="#ffaaaa">takes the other branch</text>
+    <line x1="678" y1="415" x2="694" y2="415" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+    <rect x="700" y="390" width="166" height="50" rx="7" fill="#cc2222" fill-opacity="0.10" stroke="#cc2222"/>
+    <text x="783" y="412" fill="#ffaaaa">consumes a different</text>
+    <text x="783" y="426" fill="#ffaaaa">number of PRNG draws</text>
+    <line x1="866" y1="415" x2="882" y2="415" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+
+    <rect x="888" y="390" width="187" height="50" rx="7" fill="#e94560" fill-opacity="0.16" stroke="#e94560"/>
+    <text x="981.5" y="410" fill="#ffffff" font-weight="700">the two backends never</text>
+    <text x="981.5" y="424" fill="#ffffff" font-weight="700">resynchronize for that shot</text>
+  </g>
+
+  <!-- Payoff bars -->
+  <rect x="25" y="452" width="690" height="106" rx="9" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-opacity="0.75"/>
+  <text x="38" y="469" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700">PAYOFF · job 50389 · median of 5 · 10,000 shots</text>
+  <text x="333" y="469" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">one node · both arms back-to-back</text>
+  <rect x="505" y="460" width="8" height="5" rx="2" fill="#cc2222"/>
+  <text x="518" y="466" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">interpreter</text>
+  <rect x="586" y="460" width="8" height="5" rx="2" fill="#e94560"/>
+  <text x="599" y="466" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9">specialized</text>
+
+  <g font-family="monospace" font-size="9">
+    <text x="38" y="483" fill="#dfe3ed">circuit_d5_p0.0005</text>
+    <rect x="153" y="476" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="482" width="104" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="481" fill="#ffaaaa">14.76 ms</text>
+    <text x="264" y="489" fill="#dfe3ed">8.56 ms</text>
+    <text x="652" y="485" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.72×</text>
+
+    <text x="38" y="496" fill="#dfe3ed">circuit_d5_p0.001</text>
+    <rect x="153" y="489" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="495" width="103" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="494" fill="#ffaaaa">14.89 ms</text>
+    <text x="263" y="502" fill="#dfe3ed">8.56 ms</text>
+    <text x="652" y="498" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.74×</text>
+
+    <text x="38" y="509" fill="#dfe3ed">circuit_d5_p0.002</text>
+    <rect x="153" y="502" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="508" width="103" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="507" fill="#ffaaaa">15.09 ms</text>
+    <text x="263" y="515" fill="#dfe3ed">8.63 ms</text>
+    <text x="652" y="511" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.75×</text>
+
+    <text x="38" y="522" fill="#dfe3ed">circuit_d5_p0.003</text>
+    <rect x="153" y="515" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="521" width="102" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="520" fill="#ffaaaa">15.30 ms</text>
+    <text x="262" y="528" fill="#dfe3ed">8.68 ms</text>
+    <text x="652" y="524" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.76×</text>
+
+    <text x="38" y="535" fill="#dfe3ed">circuit_d5_p0.005</text>
+    <rect x="153" y="528" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="534" width="102" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="533" fill="#ffaaaa">15.62 ms</text>
+    <text x="262" y="541" fill="#dfe3ed">8.87 ms</text>
+    <text x="652" y="537" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.76×</text>
+
+    <text x="38" y="548" fill="#dfe3ed">circuit_d3_p0.001</text>
+    <rect x="153" y="541" width="180" height="4" rx="2" fill="#cc2222"/>
+    <rect x="153" y="547" width="109" height="4" rx="2" fill="#e94560"/>
+    <text x="341" y="546" fill="#ffaaaa">0.624 ms</text>
+    <text x="269" y="554" fill="#dfe3ed">0.379 ms</text>
+    <text x="652" y="550" fill="#00ff80" font-family="Arial, sans-serif" font-size="10" font-weight="700">1.65×</text>
+  </g>
+
+  <!-- Gate result -->
+  <rect x="725" y="452" width="350" height="106" rx="9" fill="#00cc66" fill-opacity="0.08" stroke="#00cc66"/>
+  <text x="742" y="472" fill="#67f0a9" font-family="Arial, sans-serif" font-size="11" font-weight="700">WITH THE FENCE IN PLACE</text>
+  <circle cx="753" cy="495" r="12" fill="#00cc66" fill-opacity="0.25" stroke="#00cc66"/>
+  <text x="753" y="500" fill="#00ff80" font-family="DejaVu Sans" font-size="16" font-weight="700" text-anchor="middle">✓</text>
+  <text x="774" y="492" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700">the gate passes on coop_r10_n1720</text>
+  <text x="774" y="508" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">the specializer is selected for all six circuits</text>
+  <line x1="742" y1="520" x2="1058" y2="520" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="742" y="538" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">The fence restores the reduction before selection, so</text>
+  <text x="742" y="551" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">both backends consume the same PRNG stream for the shot.</text>
+
+  <!-- Punchline -->
+  <rect x="25" y="574" width="1050" height="34" rx="9" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="596" fill="#ffffff" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">The gate caught it. It was diagnosed for months as an FP-rounding problem in the noise ops — it was a missing fence.</text>
+</svg>

@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">One Skipped Draw Desynchronizes Two Backends Forever</title>
+  <desc id="desc">CPU and GPU xoshiro256++ streams diverge permanently when one backend clamps a deterministic measurement without consuming a random draw while the other backend consumes one, even though both produce the same measurement outcome.</desc>
+
+  <defs>
+    <linearGradient id="bugFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#cc2222" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#cc2222" stop-opacity="0.22"/>
+    </linearGradient>
+    <linearGradient id="hingeFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.05"/>
+    </linearGradient>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#cc2222"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 62 H1100 M0 456 H1100 M0 562 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M24 0 V620 M1076 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">One Skipped Draw Desynchronizes Two Backends Forever</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">xoshiro256++ · a shifted stream is not approximately right, it is a different sequence</text>
+
+  <!-- Exact code hinge -->
+  <rect x="24" y="70" width="622" height="220" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.48"/>
+  <rect x="24" y="70" width="622" height="29" rx="10" fill="#53d8fb" fill-opacity="0.10"/>
+  <text x="40" y="90" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.7">THE HINGE — EXACT CODE</text>
+  <rect x="36" y="103" width="598" height="174" rx="6" fill="#0d0d1a" stroke="#ffffff" stroke-opacity="0.08"/>
+  <rect x="42" y="202" width="574" height="18" rx="3" fill="#e94560" fill-opacity="0.16"/>
+  <rect x="42" y="220" width="574" height="18" rx="3" fill="#e94560" fill-opacity="0.16"/>
+  <g font-family="monospace" font-size="9.5">
+    <text x="48" y="119" fill="#9ba3b8">// The clamp decision must match the SVM's on every call: a branch clamped on</text>
+    <text x="48" y="137" fill="#9ba3b8">// one side and rolled on the other consumes a PRNG draw the other never did,</text>
+    <text x="48" y="155" fill="#9ba3b8">// and the two streams never resynchronize. See V2_DUST_EPS.</text>
+    <text x="48" y="180" fill="#ffffff">static inline u8 sample_branch(u64* rng, double p0, double p1, double total) {</text>
+    <text x="48" y="198" fill="#dfe3ed">&#160;&#160;&#160;&#160;double eps = V2_DUST_EPS * total;</text>
+    <text x="48" y="216" fill="#e94560" font-weight="700">&#160;&#160;&#160;&#160;if (p1 &lt;= eps) return 0;          // &lt;-- returns WITHOUT drawing</text>
+    <text x="48" y="234" fill="#e94560" font-weight="700">&#160;&#160;&#160;&#160;if (p0 &lt;= eps) return 1;          // &lt;-- returns WITHOUT drawing</text>
+    <text x="48" y="252" fill="#dfe3ed">&#160;&#160;&#160;&#160;return (rng_uniform(rng) * total &lt; p0) ? 0u : 1u;</text>
+    <text x="48" y="270" fill="#ffffff">}</text>
+  </g>
+
+  <!-- Concrete reference case -->
+  <rect x="660" y="70" width="416" height="220" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#e94560" stroke-opacity="0.62"/>
+  <rect x="660" y="70" width="416" height="29" rx="10" fill="#e94560" fill-opacity="0.12"/>
+  <text x="676" y="90" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700">REFERENCE CASE — H; T^4; H; M</text>
+  <text x="1060" y="90" fill="#9ba3b8" font-family="monospace" font-size="9" text-anchor="end">tests/test_svm.cc:1995</text>
+
+  <g font-family="Arial, sans-serif">
+    <text x="676" y="119" fill="#9ba3b8" font-size="9" font-weight="700">PRECISION</text>
+    <text x="758" y="119" fill="#9ba3b8" font-size="9" font-weight="700">P0</text>
+    <text x="864" y="119" fill="#9ba3b8" font-size="9" font-weight="700">VS 1e-18</text>
+    <text x="930" y="119" fill="#9ba3b8" font-size="9" font-weight="700">BEHAVIOUR</text>
+    <line x1="674" y1="126" x2="1062" y2="126" stroke="#ffffff" stroke-opacity="0.12"/>
+
+    <rect x="672" y="132" width="392" height="28" rx="4" fill="#00cc66" fill-opacity="0.09"/>
+    <text x="676" y="151" fill="#dfe3ed" font-size="10.5">fp64</text>
+    <text x="758" y="151" fill="#ffffff" font-family="monospace" font-size="10.5" font-weight="700">2.465e-32</text>
+    <text x="864" y="151" fill="#00ff80" font-size="10.5">≤ eps</text>
+    <text x="930" y="151" fill="#00ff80" font-size="10.5" font-weight="700">clamp, no draw</text>
+
+    <rect x="672" y="164" width="392" height="28" rx="4" fill="#cc2222" fill-opacity="0.13"/>
+    <text x="676" y="183" fill="#dfe3ed" font-size="10.5">fp32</text>
+    <text x="758" y="183" fill="#ffffff" font-family="monospace" font-size="10.5" font-weight="700">8.882e-16</text>
+    <text x="864" y="183" fill="#ff7777" font-size="10.5">&gt; eps</text>
+    <text x="930" y="183" fill="#ff7777" font-size="9.5" font-weight="700">no clamp, draw consumed</text>
+  </g>
+
+  <rect x="672" y="201" width="392" height="76" rx="6" fill="#53d8fb" fill-opacity="0.07" stroke="#53d8fb" stroke-opacity="0.36"/>
+  <text x="684" y="220" fill="#ffffff" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">both sides still pick the same outcome —</text>
+  <text x="684" y="238" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">p0/total is 1 − 1e-15, so any uniform draw lands the same way —</text>
+  <text x="684" y="256" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">but the GPU has consumed a draw the CPU has not.</text>
+
+  <!-- Parallel PRNG streams -->
+  <rect x="24" y="302" width="1052" height="150" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="40" y="322" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.6">STREAM ALIGNMENT AT MEASUREMENT #3</text>
+  <text x="450" y="322" fill="#53d8fb" font-family="Arial, sans-serif" font-size="11" font-weight="700">same outcome, different bookkeeping</text>
+
+  <rect x="286" y="331" width="318" height="94" rx="8" fill="url(#hingeFill)" stroke="#53d8fb" stroke-opacity="0.55"/>
+  <line x1="620" y1="331" x2="620" y2="425" stroke="#cc2222" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <rect x="620" y="331" width="438" height="94" rx="8" fill="url(#bugFill)" stroke="#cc2222" stroke-opacity="0.72"/>
+  <text x="839" y="348" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle">decorrelated for the rest of the shot</text>
+
+  <text x="42" y="367" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">CPU · fp64</text>
+  <text x="42" y="410" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">GPU · fp32</text>
+
+  <!-- Shared prefix -->
+  <g font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">
+    <rect x="112" y="349" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="133" y="367" fill="#ffffff">r0</text>
+    <rect x="164" y="349" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="185" y="367" fill="#ffffff">r1</text>
+    <rect x="216" y="349" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="237" y="367" fill="#ffffff">r2</text>
+
+    <rect x="112" y="392" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="133" y="410" fill="#ffffff">r0</text>
+    <rect x="164" y="392" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="185" y="410" fill="#ffffff">r1</text>
+    <rect x="216" y="392" width="42" height="26" rx="5" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.50"/>
+    <text x="237" y="410" fill="#ffffff">r2</text>
+  </g>
+  <g stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)">
+    <line x1="154" y1="362" x2="162" y2="362"/>
+    <line x1="206" y1="362" x2="214" y2="362"/>
+    <line x1="258" y1="362" x2="282" y2="362"/>
+    <line x1="154" y1="405" x2="162" y2="405"/>
+    <line x1="206" y1="405" x2="214" y2="405"/>
+    <line x1="258" y1="405" x2="282" y2="405"/>
+  </g>
+
+  <!-- Measurement hinge -->
+  <rect x="302" y="346" width="112" height="30" rx="6" fill="#00cc66" fill-opacity="0.12" stroke="#00cc66"/>
+  <text x="358" y="365" fill="#00ff80" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">CLAMP · no draw</text>
+  <rect x="302" y="389" width="112" height="30" rx="6" fill="#e94560" fill-opacity="0.16" stroke="#e94560"/>
+  <text x="358" y="408" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">DRAW r3</text>
+  <text x="438" y="365" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">outcome</text>
+  <text x="438" y="408" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">outcome</text>
+  <path d="M488 360 l5 5 l10 -12" fill="none" stroke="#00ff80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowGreen)"/>
+  <path d="M488 403 l5 5 l10 -12" fill="none" stroke="#00ff80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowGreen)"/>
+  <line x1="522" y1="362" x2="612" y2="362" stroke="#53d8fb" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <line x1="522" y1="405" x2="612" y2="405" stroke="#e94560" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+
+  <!-- Shifted suffix -->
+  <g font-family="monospace" font-size="11" font-weight="700" text-anchor="middle">
+    <rect x="642" y="354" width="42" height="26" rx="5" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222"/>
+    <text x="663" y="372" fill="#ffffff">r3</text>
+    <rect x="706" y="354" width="42" height="26" rx="5" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222"/>
+    <text x="727" y="372" fill="#ffffff">r4</text>
+    <rect x="770" y="354" width="42" height="26" rx="5" fill="#cc2222" fill-opacity="0.18" stroke="#cc2222"/>
+    <text x="791" y="372" fill="#ffffff">r5</text>
+    <text x="842" y="372" fill="#ff7777">…</text>
+
+    <rect x="642" y="397" width="42" height="26" rx="5" fill="#cc2222" fill-opacity="0.28" stroke="#e94560"/>
+    <text x="663" y="415" fill="#ffffff">r4</text>
+    <rect x="706" y="397" width="42" height="26" rx="5" fill="#cc2222" fill-opacity="0.28" stroke="#e94560"/>
+    <text x="727" y="415" fill="#ffffff">r5</text>
+    <text x="778" y="415" fill="#ff7777">…</text>
+  </g>
+  <path d="M727 382 C727 388 663 388 663 395" fill="none" stroke="#e94560" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrowRed)"/>
+  <path d="M791 382 C791 388 727 388 727 395" fill="none" stroke="#e94560" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrowRed)"/>
+  <text x="924" y="371" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5">CPU next uses r3</text>
+  <text x="924" y="414" fill="#ff7777" font-family="Arial, sans-serif" font-size="10.5">GPU next uses r4</text>
+
+  <rect x="40" y="430" width="1020" height="16" rx="8" fill="#53d8fb" fill-opacity="0.08"/>
+  <text x="550" y="442" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">in a surface-code circuit nearly every stabilizer measurement is deterministic, so this fires constantly.</text>
+
+  <!-- Two failure modes -->
+  <rect x="24" y="466" width="1052" height="88" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="40" y="484" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="0.8">TWO FAILURE MODES</text>
+  <line x1="540" y1="478" x2="540" y2="544" stroke="#ffffff" stroke-opacity="0.10"/>
+
+  <!-- Failure mode 1 -->
+  <text x="40" y="502" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">1. Branch-probability rounding.</text>
+  <text x="40" y="518" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">Probabilities are reduced in f64 but from f32 inputs, so p0/total is good to only</text>
+  <text x="40" y="533" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">~1e-6 relative after summing 2^k terms. Prediction: divergence scales with amplitudes summed —</text>
+  <text x="40" y="548" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9.5">invisible at register rank, visible at coop rank 10.</text>
+
+  <!-- Failure mode 2 -->
+  <rect x="554" y="490" width="506" height="54" rx="7" fill="#e94560" fill-opacity="0.10" stroke="#e94560" stroke-opacity="0.72"/>
+  <text x="568" y="509" fill="#ffffff" font-family="Arial, sans-serif" font-size="11.5" font-weight="700">2. A mis-calibrated clamp threshold.</text>
+  <text x="568" y="525" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">Independent of rounding, and — as it turned out —</text>
+  <text x="568" y="540" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10">the dominant effect.</text>
+  <rect x="944" y="497" width="102" height="22" rx="11" fill="#e94560" fill-opacity="0.24" stroke="#e94560"/>
+  <text x="995" y="512" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">DOMINANT</text>
+
+  <!-- Punchline -->
+  <rect x="24" y="570" width="1052" height="36" rx="9" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="594" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">A threshold that never fires is a correctness bug, not dead code.</text>
+</svg>

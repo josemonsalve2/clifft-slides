@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Each Tier's Win Arrives in Exactly One Step</title>
+  <desc id="desc">Log-scale line chart of V2 to SVM kernel-time ratios across optimization stages, with tier landing points, a measurement-artifact explanation, trace evidence, and a node-change caveat.</desc>
+
+  <defs>
+    <linearGradient id="artifactFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="punchlineFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.10"/>
+      <stop offset="0.5" stop-color="#e94560" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.10"/>
+    </linearGradient>
+    <filter id="glowGreen" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowOrange" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowRed" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 60 H1100 M0 414 H1100 M0 536 H1100 M0 576 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M20 0 V620 M1080 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Each Tier's Win Arrives in Exactly One Step</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">V2/SVM kernel-time ratio · log scale · lower is better · 1.0 = parity</text>
+
+  <!-- Plot frame and log axis -->
+  <rect x="80" y="75" width="960" height="195" rx="6" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <text x="18" y="180" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle" transform="rotate(-90 18 180)">V2/SVM RATIO · LOG SCALE</text>
+
+  <g font-family="Arial, sans-serif" font-size="10" fill="#dfe3ed" text-anchor="end">
+    <text x="68" y="79">30</text>
+    <text x="68" y="217">1.0</text>
+    <text x="68" y="274">0.25</text>
+  </g>
+  <line x1="80" y1="75" x2="1040" y2="75" stroke="#ffffff" stroke-opacity="0.10"/>
+  <line x1="80" y1="213.6" x2="1040" y2="213.6" stroke="#53d8fb" stroke-width="1.5" stroke-dasharray="6 5" stroke-opacity="0.85"/>
+  <line x1="80" y1="270" x2="1040" y2="270" stroke="#ffffff" stroke-opacity="0.10"/>
+  <rect x="88" y="202" width="70" height="18" rx="9" fill="#0d0d1a" stroke="#53d8fb" stroke-opacity="0.70"/>
+  <text x="123" y="215" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">1.0 parity</text>
+
+  <!-- Measurement-artifact column -->
+  <rect x="535" y="75" width="50" height="195" fill="#0d0d1a" fill-opacity="0.72" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <g stroke="#53d8fb" stroke-width="1" stroke-opacity="0.18">
+    <line x1="535" y1="105" x2="585" y2="75"/><line x1="535" y1="145" x2="585" y2="115"/>
+    <line x1="535" y1="185" x2="585" y2="155"/><line x1="535" y1="225" x2="585" y2="195"/>
+    <line x1="535" y1="265" x2="585" y2="235"/>
+  </g>
+  <text x="560" y="89" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">ARTIFACT</text>
+
+  <!-- Tier landing markers -->
+  <line x1="240" y1="75" x2="240" y2="303" stroke="#00cc66" stroke-width="1.5" stroke-dasharray="5 5" stroke-opacity="0.75"/>
+  <line x1="400" y1="75" x2="400" y2="350" stroke="#ff8800" stroke-width="1.5" stroke-dasharray="5 5" stroke-opacity="0.75"/>
+  <line x1="720" y1="75" x2="720" y2="303" stroke="#ff8800" stroke-width="1.5" stroke-dasharray="5 5" stroke-opacity="0.75"/>
+  <line x1="880" y1="75" x2="880" y2="350" stroke="#cc2222" stroke-width="1.5" stroke-dasharray="5 5" stroke-opacity="0.85"/>
+
+  <!-- Interpreter plateau -->
+  <rect x="80" y="206" width="640" height="20" fill="#53d8fb" fill-opacity="0.06" stroke="#53d8fb" stroke-opacity="0.32" stroke-dasharray="4 4"/>
+  <rect x="260" y="84" width="265" height="62" rx="7" fill="#0d0d1a" fill-opacity="0.94" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <text x="274" y="99" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">the kernel trace names</text>
+  <text x="377" y="99" fill="#dfe3ed" font-family="monospace" font-size="9">clifft_v2_global</text>
+  <text x="469" y="99" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">here —</text>
+  <text x="274" y="112" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">the specializer had not reached this tier.</text>
+  <text x="274" y="125" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9">Every movement in this chart is a change of</text>
+  <text x="274" y="138" fill="#ffffff" font-family="Arial, sans-serif" font-size="9" font-weight="700">which kernel ran, not a tuning effect.</text>
+  <path d="M392 146 V188 H500 V205" fill="none" stroke="#53d8fb" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrowCyan)"/>
+
+  <!-- Register-tier curves -->
+  <polyline points="80,77.4 240,205.6 400,233.5 560,170.7 720,233.4 880,231.4 1040,232.6" fill="none" stroke="#00cc66" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#00cc66" stroke="#1a1a2e" stroke-width="1.2">
+    <circle cx="80" cy="77.4" r="3.5"/><circle cx="240" cy="205.6" r="4.5" filter="url(#glowGreen)"/>
+    <circle cx="400" cy="233.5" r="3.5"/><circle cx="560" cy="170.7" r="3.5"/>
+    <circle cx="720" cy="233.4" r="3.5"/><circle cx="880" cy="231.4" r="3.5"/><circle cx="1040" cy="232.6" r="3.5"/>
+  </g>
+  <polyline points="80,102.7 240,210.4 400,209.1 560,183.0 720,239.9 880,241.4 1040,239.8" fill="none" stroke="#00cc66" stroke-width="2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.86"/>
+  <g fill="#1a1a2e" stroke="#00cc66" stroke-width="1.8">
+    <rect x="76.8" y="99.5" width="6.4" height="6.4"/><rect x="236.8" y="207.2" width="6.4" height="6.4"/>
+    <rect x="396.8" y="205.9" width="6.4" height="6.4"/><rect x="556.8" y="179.8" width="6.4" height="6.4"/>
+    <rect x="716.8" y="236.7" width="6.4" height="6.4"/><rect x="876.8" y="238.2" width="6.4" height="6.4"/><rect x="1036.8" y="236.6" width="6.4" height="6.4"/>
+  </g>
+
+  <!-- Coop-tier curves -->
+  <polyline points="80,202.4 240,204.9 400,269.7 560,229.5 720,261.5 880,261.2 1040,261.2" fill="none" stroke="#ff8800" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#ff8800" stroke="#1a1a2e" stroke-width="1.2">
+    <circle cx="80" cy="202.4" r="3.3"/><circle cx="240" cy="204.9" r="3.3"/><circle cx="400" cy="269.7" r="4.5" filter="url(#glowOrange)"/>
+    <circle cx="560" cy="229.5" r="3.3"/><circle cx="720" cy="261.5" r="3.3"/><circle cx="880" cy="261.2" r="3.3"/><circle cx="1040" cy="261.2" r="3.3"/>
+  </g>
+  <polyline points="80,193.1 240,197.9 400,189.9 560,199.1 720,241.5 880,241.2 1040,241.4" fill="none" stroke="#ff8800" stroke-width="2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.86"/>
+  <g fill="#1a1a2e" stroke="#ff8800" stroke-width="1.7">
+    <circle cx="80" cy="193.1" r="3.2"/><circle cx="240" cy="197.9" r="3.2"/><circle cx="400" cy="189.9" r="3.2"/>
+    <circle cx="560" cy="199.1" r="3.2"/><circle cx="720" cy="241.5" r="4.4" filter="url(#glowOrange)"/>
+    <circle cx="880" cy="241.2" r="3.2"/><circle cx="1040" cy="241.4" r="3.2"/>
+  </g>
+  <polyline points="80,193.3 240,197.8 400,189.7 560,199.8 720,243.1 880,243.3 1040,243.3" fill="none" stroke="#ffb35c" stroke-width="1.8" stroke-dasharray="2 5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#ffb35c" stroke="#1a1a2e" stroke-width="1">
+    <circle cx="80" cy="193.3" r="2.8"/><circle cx="240" cy="197.8" r="2.8"/><circle cx="400" cy="189.7" r="2.8"/>
+    <circle cx="560" cy="199.8" r="2.8"/><circle cx="720" cy="243.1" r="2.8"/><circle cx="880" cy="243.3" r="2.8"/><circle cx="1040" cy="243.3" r="2.8"/>
+  </g>
+
+  <!-- Global-tier curves -->
+  <polyline points="80,214.9 240,219.1 400,213.0 560,212.8 720,212.9 880,261.0 1040,262.8" fill="none" stroke="#cc2222" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#cc2222" stroke="#1a1a2e" stroke-width="1.2">
+    <circle cx="80" cy="214.9" r="3.3"/><circle cx="240" cy="219.1" r="3.3"/><circle cx="400" cy="213.0" r="3.3"/>
+    <circle cx="560" cy="212.8" r="3.3"/><circle cx="720" cy="212.9" r="3.3"/><circle cx="880" cy="261.0" r="3.3"/><circle cx="1040" cy="262.8" r="3.3"/>
+  </g>
+  <polyline points="80,217.6 240,221.8 400,214.6 560,214.7 720,214.7 880,268.1 1040,268.1" fill="none" stroke="#cc2222" stroke-width="2" stroke-dasharray="8 5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.88"/>
+  <g fill="#1a1a2e" stroke="#cc2222" stroke-width="1.8">
+    <rect x="76.8" y="214.4" width="6.4" height="6.4"/><rect x="236.8" y="218.6" width="6.4" height="6.4"/>
+    <rect x="396.8" y="211.4" width="6.4" height="6.4"/><rect x="556.8" y="211.5" width="6.4" height="6.4"/>
+    <rect x="716.8" y="211.5" width="6.4" height="6.4"/><rect x="875.5" y="263.6" width="9" height="9" filter="url(#glowRed)"/>
+    <rect x="1036.8" y="264.9" width="6.4" height="6.4"/>
+  </g>
+  <polyline points="80,216.1 240,220.0 400,213.3 560,213.3 720,213.3 880,268.6 1040,269.0" fill="none" stroke="#ff7777" stroke-width="1.8" stroke-dasharray="2 5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#ff7777" stroke="#1a1a2e" stroke-width="1">
+    <circle cx="80" cy="216.1" r="2.8"/><circle cx="240" cy="220.0" r="2.8"/><circle cx="400" cy="213.3" r="2.8"/>
+    <circle cx="560" cy="213.3" r="2.8"/><circle cx="720" cy="213.3" r="2.8"/><circle cx="880" cy="268.6" r="2.8"/><circle cx="1040" cy="269.0" r="2.8"/>
+  </g>
+
+  <!-- Circuit legend -->
+  <rect x="650" y="82" width="390" height="88" rx="7" fill="#0d0d1a" fill-opacity="0.94" stroke="#ffffff" stroke-opacity="0.14"/>
+  <text x="665" y="97" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="0.7">CIRCUITS BY TIER</text>
+  <g font-family="monospace" font-size="9.5" fill="#dfe3ed">
+    <line x1="665" y1="110" x2="691" y2="110" stroke="#00cc66" stroke-width="2.4"/><text x="699" y="113">frame_h</text>
+    <line x1="665" y1="127" x2="691" y2="127" stroke="#00cc66" stroke-width="2" stroke-dasharray="8 5"/><text x="699" y="130">circuit_d3_p0.001</text>
+    <line x1="665" y1="144" x2="691" y2="144" stroke="#ff8800" stroke-width="2.4"/><text x="699" y="147">qv10</text>
+    <line x1="665" y1="161" x2="691" y2="161" stroke="#ff8800" stroke-width="2" stroke-dasharray="8 5"/><text x="699" y="164">surface_d7_t15</text>
+    <line x1="855" y1="110" x2="881" y2="110" stroke="#ffb35c" stroke-width="1.8" stroke-dasharray="2 5"/><text x="889" y="113">surface_d9_t10</text>
+    <line x1="855" y1="127" x2="881" y2="127" stroke="#cc2222" stroke-width="2.4"/><text x="889" y="130">surface_d7_t19</text>
+    <line x1="855" y1="144" x2="881" y2="144" stroke="#cc2222" stroke-width="2" stroke-dasharray="8 5"/><text x="889" y="147">surface_d9_t19</text>
+    <line x1="855" y1="161" x2="881" y2="161" stroke="#ff7777" stroke-width="1.8" stroke-dasharray="2 5"/><text x="889" y="164">surface_d11_t15</text>
+  </g>
+
+  <!-- Optimization stages -->
+  <g fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">
+    <text x="80" y="291">baseline</text>
+    <text x="240" y="291">after P0+P1</text>
+    <text x="400" y="291">after specializer</text>
+    <text x="560" y="291">fenced+gated*</text>
+    <text x="720" y="291">noise-specialized</text>
+    <text x="880" y="291">global-specialized</text>
+    <text x="1040" y="291">final</text>
+  </g>
+  <g stroke="#dfe3ed" stroke-opacity="0.65">
+    <line x1="80" y1="270" x2="80" y2="277"/><line x1="240" y1="270" x2="240" y2="277"/>
+    <line x1="400" y1="270" x2="400" y2="277"/><line x1="560" y1="270" x2="560" y2="277"/>
+    <line x1="720" y1="270" x2="720" y2="277"/><line x1="880" y1="270" x2="880" y2="277"/>
+    <line x1="1040" y1="270" x2="1040" y2="277"/>
+  </g>
+
+  <!-- One-step callouts -->
+  <rect x="125" y="303" width="230" height="40" rx="7" fill="#00cc66" fill-opacity="0.12" stroke="#00cc66"/>
+  <text x="240" y="319" fill="#8ff7bf" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">register tier lands here —</text>
+  <text x="240" y="335" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">28.258 → 1.215</text>
+
+  <rect x="290" y="350" width="230" height="40" rx="7" fill="#ff8800" fill-opacity="0.12" stroke="#ff8800"/>
+  <text x="405" y="366" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">coop tier lands here — qv10</text>
+  <text x="405" y="382" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">1.237 → 0.252</text>
+
+  <rect x="585" y="303" width="270" height="40" rx="7" fill="#ff8800" fill-opacity="0.12" stroke="#ff8800"/>
+  <text x="720" y="319" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">noise-heavy coop lands here —</text>
+  <text x="720" y="335" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">surface_d7_t15 1.427 → 0.503</text>
+
+  <rect x="755" y="350" width="250" height="40" rx="7" fill="#cc2222" fill-opacity="0.14" stroke="#cc2222"/>
+  <text x="880" y="366" fill="#ff7777" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">global tier lands here —</text>
+  <text x="880" y="382" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">surface_d9_t19 0.972 → 0.262</text>
+
+  <!-- Artifact explanation -->
+  <rect x="20" y="420" width="650" height="112" rx="8" fill="#0d0d1a" fill-opacity="0.86" stroke="#53d8fb" stroke-opacity="0.65"/>
+  <text x="34" y="439" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">MEASUREMENT ARTIFACT, shown not dropped.</text>
+  <text x="34" y="455" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.3">At `9d9cc68` the gate's verdict was cached only in-process. `rocprofv3` spawns a fresh process per invocation,</text>
+  <text x="34" y="468" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.3">so the gate's own validation dispatches re-ran inside the profiled region and the digester summed them.</text>
+  <text x="34" y="481" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.3" font-weight="700">The kernel trace shows three dispatches where every other run has one.</text>
+  <text x="34" y="494" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.3">`bbb5e42` persisted the verdict to `&lt;hsaco&gt;.gate` and the numbers returned to trend.</text>
+  <text x="34" y="507" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.3">Nothing had slowed down.</text>
+
+  <!-- Trace evidence -->
+  <rect x="680" y="420" width="400" height="112" rx="8" fill="#0d0d1a" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.16"/>
+  <text x="694" y="438" fill="#9ba3b8" font-family="monospace" font-size="9" font-weight="700">TRACE EVIDENCE</text>
+  <g fill="#dfe3ed" font-family="monospace" font-size="9">
+    <text x="694" y="451">noise-fenced-gated  frame_h  clifft_v2_register x1 (19.1us)</text>
+    <text x="694" y="462">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;+ clifft_v2_spec x2 (28.8us)</text>
+    <text x="694" y="473">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;qv10     clifft_v2_coop x1 (1270.2us)</text>
+    <text x="694" y="484">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;+ clifft_v2_spec x2 (1667.2us)</text>
+    <text x="694" y="495">noise-specialized   frame_h  clifft_v2_spec x1 (10.5us)</text>
+    <text x="694" y="506">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;qv10     clifft_v2_spec x1 (1340.0us)</text>
+  </g>
+
+  <!-- Node caveat -->
+  <text x="20" y="551" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">Columns 1–8 of the archive ran on `smci350-rck-g03-d13-21`; columns 9–12, including final, ran on `smci350-rck-g03-f13-21`.</text>
+  <text x="20" y="566" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5">Every cell is a V2/SVM ratio with both halves in the same job, so the comparison survives — but the step between those two columns carries a node change as well as a code change.</text>
+
+  <!-- Punchline -->
+  <rect x="20" y="580" width="1060" height="28" rx="8" fill="url(#punchlineFill)" stroke="#e94560"/>
+  <text x="550" y="599" fill="#ffffff" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">Structural changes, not tuning: each tier is flat until the one commit that addresses it, then flat again.</text>
+</svg>

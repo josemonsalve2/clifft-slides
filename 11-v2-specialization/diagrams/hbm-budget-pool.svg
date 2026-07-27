@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">The HBM Budget — the pool shrinks as the rank grows</title>
+  <desc id="desc">Resident workgroups descend while bytes per workgroup rise on mirrored log scales; their product stays pinned to the 32 GB HBM budget.</desc>
+
+  <defs>
+    <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="codeFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="xcdFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff8800" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ff8800" stop-opacity="0.06"/>
+    </linearGradient>
+    <filter id="glowCyan" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowOrange" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowAccent" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowCyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#53d8fb"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#ff8800"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 64 H1100 M0 397 H1100 M0 554 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M24 0 V620 M1076 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">The HBM Budget — the pool shrinks as the rank grows</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">v2_kernel.cc:432-446 · 12 bytes per amplitude · 32 GB budget · cap 2048 · multiple of 8 XCDs</text>
+
+  <!-- Mirrored budget chart -->
+  <rect x="24" y="74" width="520" height="316" rx="10" fill="url(#chartFill)" stroke="#53d8fb" stroke-opacity="0.46"/>
+  <text x="40" y="95" fill="#53d8fb" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.6">RESIDENT WORKGROUPS · LOG</text>
+  <text x="528" y="95" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.6" text-anchor="end">BYTES / WORKGROUP · LOG</text>
+
+  <!-- Clamp annotation -->
+  <rect x="104" y="103" width="345" height="39" rx="6" fill="#0d0d1a" fill-opacity="0.88" stroke="#53d8fb" stroke-opacity="0.62"/>
+  <text x="117" y="119" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">2,048 cap — below rank ~19/20 the budget would allow more;</text>
+  <text x="117" y="133" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">the cap holds it</text>
+  <line x1="158" y1="142" x2="158" y2="153" stroke="#53d8fb" stroke-width="1.5"/>
+
+  <!-- Plot grid and mirrored axes -->
+  <g stroke="#ffffff" stroke-opacity="0.08" stroke-width="1">
+    <line x1="105" y1="155" x2="476" y2="155"/>
+    <line x1="105" y1="182" x2="476" y2="182"/>
+    <line x1="105" y1="218" x2="476" y2="218"/>
+    <line x1="105" y1="254" x2="476" y2="254"/>
+    <line x1="105" y1="290" x2="476" y2="290"/>
+  </g>
+  <line x1="105" y1="151" x2="105" y2="307" stroke="#53d8fb" stroke-width="1.5"/>
+  <line x1="476" y1="151" x2="476" y2="307" stroke="#ff8800" stroke-width="1.5"/>
+  <line x1="105" y1="307" x2="476" y2="307" stroke="#aeb4c7" stroke-width="1.2"/>
+
+  <!-- Resident-workgroup ticks -->
+  <g fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="end">
+    <line x1="99" y1="155" x2="105" y2="155" stroke="#53d8fb"/>
+    <text x="95" y="159">2048</text>
+    <line x1="99" y1="182" x2="105" y2="182" stroke="#53d8fb"/>
+    <text x="95" y="186">1360</text>
+    <line x1="99" y1="218" x2="105" y2="218" stroke="#53d8fb"/>
+    <text x="95" y="222">680</text>
+    <line x1="99" y1="254" x2="105" y2="254" stroke="#53d8fb"/>
+    <text x="95" y="258">336</text>
+    <line x1="99" y1="290" x2="105" y2="290" stroke="#53d8fb"/>
+    <text x="95" y="294">168</text>
+  </g>
+
+  <!-- Bytes-per-workgroup ticks -->
+  <g fill="#ffb35c" font-family="monospace" font-size="9.5">
+    <line x1="476" y1="155" x2="482" y2="155" stroke="#ff8800"/>
+    <text x="486" y="159">768 MB</text>
+    <line x1="476" y1="290" x2="482" y2="290" stroke="#ff8800"/>
+    <text x="486" y="294">6 MB</text>
+  </g>
+
+  <!-- Resident pool staircase -->
+  <path d="M105 155 H184 V182 H237 V218 H290 V254 H343 V290 H397" fill="none" stroke="#53d8fb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#glowCyan)"/>
+  <path d="M397 290 C425 294 447 299 466 304" fill="none" stroke="#53d8fb" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrowCyan)" opacity="0.74"/>
+  <g fill="#1a1a2e" stroke="#53d8fb" stroke-width="2">
+    <circle cx="158" cy="155" r="4"/>
+    <circle cx="211" cy="182" r="4"/>
+    <circle cx="264" cy="218" r="4"/>
+    <circle cx="317" cy="254" r="4"/>
+    <circle cx="370" cy="290" r="4"/>
+  </g>
+
+  <!-- Per-workgroup memory line -->
+  <line x1="105" y1="290" x2="470" y2="157" stroke="#ff8800" stroke-width="3" marker-end="url(#arrowOrange)" filter="url(#glowOrange)"/>
+  <circle cx="105" cy="290" r="4.5" fill="#1a1a2e" stroke="#ff8800" stroke-width="2"/>
+  <circle cx="476" cy="155" r="4.5" fill="#1a1a2e" stroke="#ff8800" stroke-width="2"/>
+
+  <!-- Rounding marks -->
+  <g stroke="#53d8fb" stroke-width="1.5">
+    <line x1="211" y1="188" x2="211" y2="196"/>
+    <line x1="264" y1="224" x2="264" y2="232"/>
+    <line x1="317" y1="260" x2="317" y2="268"/>
+    <line x1="370" y1="276" x2="370" y2="284"/>
+  </g>
+  <rect x="224" y="277" width="116" height="19" rx="9.5" fill="#0d0d1a" fill-opacity="0.90" stroke="#53d8fb" stroke-opacity="0.45"/>
+  <text x="282" y="290.5" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">× multiple of 8</text>
+
+  <!-- Rank axis -->
+  <g fill="#dfe3ed" font-family="monospace" font-size="9.5" text-anchor="middle">
+    <line x1="105" y1="307" x2="105" y2="313" stroke="#aeb4c7"/>
+    <text x="105" y="325">19</text>
+    <line x1="158" y1="307" x2="158" y2="313" stroke="#aeb4c7"/>
+    <text x="158" y="325">20</text>
+    <line x1="211" y1="307" x2="211" y2="313" stroke="#aeb4c7"/>
+    <text x="211" y="325">21</text>
+    <line x1="264" y1="307" x2="264" y2="313" stroke="#aeb4c7"/>
+    <text x="264" y="325">22</text>
+    <line x1="317" y1="307" x2="317" y2="313" stroke="#aeb4c7"/>
+    <text x="317" y="325">23</text>
+    <line x1="370" y1="307" x2="370" y2="313" stroke="#aeb4c7"/>
+    <text x="370" y="325">24</text>
+    <line x1="476" y1="307" x2="476" y2="313" stroke="#aeb4c7"/>
+    <text x="476" y="325">26</text>
+  </g>
+  <text x="290.5" y="342" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8" text-anchor="middle">PEAK RANK</text>
+
+  <!-- Constant product line -->
+  <line x1="105" y1="365" x2="476" y2="365" stroke="#e94560" stroke-width="2.5" filter="url(#glowAccent)"/>
+  <rect x="231" y="351" width="119" height="27" rx="13.5" fill="#e94560" fill-opacity="0.20" stroke="#e94560"/>
+  <text x="290.5" y="369" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">32 GB — constant</text>
+
+  <!-- Verbatim source formula -->
+  <rect x="558" y="74" width="518" height="316" rx="10" fill="url(#codeFill)" stroke="#e94560" stroke-opacity="0.55"/>
+  <text x="574" y="95" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="0.7">SOURCE FORMULA · VERBATIM</text>
+  <line x1="574" y1="102" x2="1060" y2="102" stroke="#ffffff" stroke-opacity="0.09"/>
+  <g xml:space="preserve" fill="#dfe3ed" font-family="monospace" font-size="9">
+    <text x="574" y="117">// Resident pool sized to a fixed HBM budget: each workgroup owns one</text>
+    <text x="574" y="132">// amplitude slice (1&lt;&lt;peak_rank) + a half-size scratch, i.e. 12 bytes</text>
+    <text x="574" y="147">// per amplitude. At rank 19 that is 6 MB/wg; at rank 26 it is 768 MB/wg.</text>
+    <text x="574" y="162">// The 32 GB budget keeps the pool sane at both ends on a 288 GB MI355X.</text>
+    <text x="574" y="177" fill="#ffffff">const uint64_t amp = 1ull &lt;&lt; flat.peak_rank;</text>
+    <text x="574" y="192" fill="#ffffff">const uint64_t bytes_per_wg = amp * sizeof(GpuComplex) + (amp / 2) * sizeof(GpuComplex);</text>
+    <text x="574" y="207" fill="#ffffff">const uint64_t budget = 32ull &lt;&lt; 30;  // 32 GB</text>
+    <text x="574" y="222" fill="#ffffff">uint64_t wgs = budget / bytes_per_wg;</text>
+    <text x="574" y="237" fill="#ffffff">if (wgs &lt; 1) wgs = 1;               // rank 26+: at least one resident wg</text>
+    <text x="574" y="252" fill="#ffffff">if (wgs &gt; 2048) wgs = 2048;</text>
+    <text x="574" y="267" fill="#ffffff">global_grid_wgs = static_cast&lt;uint32_t&gt;(wgs);</text>
+    <text x="574" y="282">// Prefer a multiple of the XCD count when the budget allows it, so the</text>
+    <text x="574" y="297">// resident pool spreads evenly; never inflate past the budget.</text>
+    <text x="574" y="312" fill="#ffffff">if (global_grid_wgs &gt; kNumXCDs) global_grid_wgs -= global_grid_wgs % kNumXCDs;</text>
+  </g>
+
+  <!-- Rank-width guard -->
+  <line x1="574" y1="324" x2="1060" y2="324" stroke="#ffffff" stroke-opacity="0.09"/>
+  <rect x="574" y="334" width="486" height="39" rx="6" fill="#0d0d1a" fill-opacity="0.78" stroke="#53d8fb" stroke-opacity="0.42"/>
+  <text x="588" y="350" fill="#53d8fb" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">the cap is kept ≤ 30 so 1u &lt;&lt; rank</text>
+  <text x="588" y="365" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">stays inside a u32.</text>
+
+  <!-- XCD distribution strip -->
+  <rect x="24" y="405" width="1052" height="108" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ff8800" stroke-opacity="0.45"/>
+  <text x="44" y="424" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8">XCD STRIP · EVEN RESIDENCY</text>
+  <g>
+    <rect x="44" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="171" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="298" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="425" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="552" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="679" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="806" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+    <rect x="933" y="434" width="115" height="35" rx="6" fill="url(#xcdFill)" stroke="#ff8800"/>
+  </g>
+  <g fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="middle">
+    <text x="101.5" y="456">COMPUTE DIE</text>
+    <text x="228.5" y="456">COMPUTE DIE</text>
+    <text x="355.5" y="456">COMPUTE DIE</text>
+    <text x="482.5" y="456">COMPUTE DIE</text>
+    <text x="609.5" y="456">COMPUTE DIE</text>
+    <text x="736.5" y="456">COMPUTE DIE</text>
+    <text x="863.5" y="456">COMPUTE DIE</text>
+    <text x="990.5" y="456">COMPUTE DIE</text>
+  </g>
+  <text x="550" y="495" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5" text-anchor="middle">kNumXCDs = 8 — the pool is rounded down to a multiple of 8 so it spreads evenly across the device's eight compute dies.</text>
+
+  <!-- Contrast callout -->
+  <rect x="24" y="520" width="1052" height="29" rx="8" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-opacity="0.62"/>
+  <text x="550" y="540" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">the pool now shrinks as rank grows, instead of the allocation exploding.</text>
+
+  <!-- Punchline -->
+  <rect x="24" y="562" width="1052" height="43" rx="10" fill="#e94560" fill-opacity="0.14" stroke="#e94560"/>
+  <text x="550" y="589" fill="#ffffff" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Per-workgroup memory doubles every rank; the pool halves. The product is the budget.</text>
+</svg>

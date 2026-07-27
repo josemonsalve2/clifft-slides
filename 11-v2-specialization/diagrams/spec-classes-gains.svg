@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-labelledby="title desc">
+  <title id="title">Eight Specialization Classes — Measured Gains</title>
+  <desc id="desc">Grouped bar chart comparing instruction, VALU, and SALU reduction ratios across eight specialization classes, with annotations for scalar instruction deletion, the S2 register-pressure tradeoff, and the intentionally retained S7 negative result.</desc>
+
+  <defs>
+    <linearGradient id="instructionFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dfe3ed" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#aeb4c7" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="valuFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53d8fb" stop-opacity="1"/>
+      <stop offset="1" stop-color="#53d8fb" stop-opacity="0.42"/>
+    </linearGradient>
+    <linearGradient id="saluFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e94560" stop-opacity="1"/>
+      <stop offset="1" stop-color="#e94560" stop-opacity="0.42"/>
+    </linearGradient>
+    <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="redGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="axisArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#aeb4c7"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="620" fill="#1a1a2e"/>
+  <path d="M0 62 H1100 M0 526 H1100" stroke="#ffffff" stroke-opacity="0.06"/>
+  <path d="M34 0 V620 M1066 0 V620" stroke="#ffffff" stroke-opacity="0.025"/>
+
+  <!-- Title -->
+  <text x="550" y="31" fill="#ffffff" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle">Eight Specialization Classes — Measured Gains</text>
+  <text x="550" y="50" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">interpreter → specialized, same op, same operands · ratios, higher is better</text>
+
+  <!-- Chart frame -->
+  <rect x="34" y="72" width="780" height="374" rx="10" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <line x1="54" y1="337" x2="54" y2="102" stroke="#aeb4c7" stroke-width="1.5" marker-end="url(#axisArrow)"/>
+  <text x="43" y="230" fill="#9ba3b8" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" letter-spacing="0.8" text-anchor="middle" transform="rotate(-90 43 230)">GAIN RATIO</text>
+  <line x1="63" y1="356" x2="806" y2="356" stroke="#dfe3ed" stroke-opacity="0.55"/>
+
+  <!-- Baseline -->
+  <line x1="63" y1="313" x2="806" y2="313" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.72" stroke-dasharray="5 4"/>
+  <text x="57" y="307" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700" text-anchor="end">1.0×</text>
+  <text x="57" y="320" fill="#aeb4c7" font-family="Arial, sans-serif" font-size="9" text-anchor="end">no gain</text>
+
+  <!-- Legend -->
+  <rect x="830" y="72" width="236" height="40" rx="8" fill="#0d0d1a" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.10"/>
+  <rect x="840" y="87" width="15" height="10" rx="2" fill="#aeb4c7"/>
+  <text x="861" y="96" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">instructions</text>
+  <rect x="941" y="87" width="15" height="10" rx="2" fill="#53d8fb"/>
+  <text x="962" y="96" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">VALU</text>
+  <rect x="1004" y="87" width="15" height="10" rx="2" fill="#e94560"/>
+  <text x="1025" y="96" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="10.5">SALU</text>
+
+  <!-- S7 negative-result highlight -->
+  <rect x="720" y="92" width="84" height="350" rx="8" fill="#cc2222" fill-opacity="0.08" stroke="#cc2222" stroke-opacity="0.52" stroke-dasharray="4 4"/>
+
+  <!-- S1: frame operand folding -->
+  <g>
+    <rect x="71" y="231.73" width="18" height="124.27" rx="3" fill="url(#instructionFill)"/>
+    <rect x="95" y="119.5" width="18" height="236.5" rx="3" fill="url(#valuFill)" filter="url(#cyanGlow)"/>
+    <rect x="119" y="265.27" width="18" height="90.73" rx="3" fill="url(#saluFill)"/>
+    <text x="80" y="225.73" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.89×</text>
+    <text x="104" y="113.5" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">5.50×</text>
+    <text x="128" y="259.27" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.11×</text>
+    <text x="104" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S1</text>
+    <text x="104" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">frame operand</text>
+    <text x="104" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">folding</text>
+    <rect x="72" y="416" width="64" height="18" rx="9" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66" stroke-opacity="0.72"/>
+    <text x="104" y="429" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">register</text>
+  </g>
+
+  <!-- S2: flag folding -->
+  <g>
+    <rect x="165" y="229.58" width="18" height="126.42" rx="3" fill="url(#instructionFill)"/>
+    <rect x="189" y="161.21" width="18" height="194.79" rx="3" fill="url(#valuFill)"/>
+    <rect x="213" y="266.99" width="18" height="89.01" rx="3" fill="url(#saluFill)"/>
+    <text x="174" y="223.58" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.94×</text>
+    <text x="198" y="155.21" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">4.53×</text>
+    <text x="222" y="260.99" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.07×</text>
+    <path d="M225 365 V385 M225 365 H241 L234 372 L241 379 H225" fill="#ff8800" fill-opacity="0.86" stroke="#ffb35c" stroke-width="1"/>
+    <text x="198" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S2</text>
+    <text x="198" y="400" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">flag folding</text>
+    <rect x="166" y="416" width="64" height="18" rx="9" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66" stroke-opacity="0.72"/>
+    <text x="198" y="429" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">register</text>
+  </g>
+
+  <!-- S5: scatter-index folding -->
+  <g>
+    <rect x="259" y="245.92" width="18" height="110.08" rx="3" fill="url(#instructionFill)"/>
+    <rect x="283" y="246.35" width="18" height="109.65" rx="3" fill="url(#valuFill)"/>
+    <rect x="307" y="223.13" width="18" height="132.87" rx="3" fill="url(#saluFill)"/>
+    <text x="268" y="239.92" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.56×</text>
+    <text x="292" y="240.35" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.55×</text>
+    <text x="316" y="217.13" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">3.09×</text>
+    <path d="M305 218 V211 H327 V218" fill="none" stroke="#53d8fb" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="316" cy="211" r="2.5" fill="#53d8fb" filter="url(#cyanGlow)"/>
+    <text x="292" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S5</text>
+    <text x="292" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">scatter-index</text>
+    <text x="292" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">folding</text>
+    <rect x="260" y="416" width="64" height="18" rx="9" fill="#ff8800" fill-opacity="0.14" stroke="#ff8800" stroke-opacity="0.72"/>
+    <text x="292" y="429" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">coop</text>
+  </g>
+
+  <!-- S3: static rank tracking -->
+  <g>
+    <rect x="353" y="270.86" width="18" height="85.14" rx="3" fill="url(#instructionFill)"/>
+    <rect x="377" y="249.36" width="18" height="106.64" rx="3" fill="url(#valuFill)"/>
+    <rect x="401" y="280.75" width="18" height="75.25" rx="3" fill="url(#saluFill)"/>
+    <text x="362" y="264.86" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.98×</text>
+    <text x="386" y="243.36" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.48×</text>
+    <text x="410" y="274.75" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.75×</text>
+    <text x="386" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S3</text>
+    <text x="386" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">static rank</text>
+    <text x="386" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">tracking</text>
+    <rect x="354" y="416" width="64" height="18" rx="9" fill="#ff8800" fill-opacity="0.14" stroke="#ff8800" stroke-opacity="0.72"/>
+    <text x="386" y="429" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">coop</text>
+  </g>
+
+  <!-- S4: rank-folded reduction -->
+  <g>
+    <rect x="447" y="296.66" width="18" height="59.34" rx="3" fill="url(#instructionFill)"/>
+    <rect x="471" y="293.65" width="18" height="62.35" rx="3" fill="url(#valuFill)"/>
+    <rect x="495" y="294.51" width="18" height="61.49" rx="3" fill="url(#saluFill)"/>
+    <text x="456" y="290.66" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.38×</text>
+    <text x="480" y="287.65" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.45×</text>
+    <text x="504" y="288.51" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.43×</text>
+    <text x="480" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S4</text>
+    <text x="480" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">rank-folded</text>
+    <text x="480" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">reduction</text>
+    <rect x="448" y="416" width="64" height="18" rx="9" fill="#ff8800" fill-opacity="0.14" stroke="#ff8800" stroke-opacity="0.72"/>
+    <text x="480" y="429" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">coop</text>
+  </g>
+
+  <!-- S6: fused-matrix lookup -->
+  <g>
+    <rect x="541" y="282.47" width="18" height="73.53" rx="3" fill="url(#instructionFill)"/>
+    <rect x="565" y="300.53" width="18" height="55.47" rx="3" fill="url(#valuFill)"/>
+    <rect x="589" y="256.67" width="18" height="99.33" rx="3" fill="url(#saluFill)"/>
+    <text x="550" y="276.47" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.71×</text>
+    <text x="574" y="294.53" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.29×</text>
+    <text x="598" y="250.67" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">2.31×</text>
+    <path d="M587 251 V244 H609 V251" fill="none" stroke="#53d8fb" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="598" cy="244" r="2.5" fill="#53d8fb" filter="url(#cyanGlow)"/>
+    <text x="574" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S6</text>
+    <text x="574" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">fused-matrix</text>
+    <text x="574" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">lookup</text>
+    <rect x="542" y="416" width="64" height="18" rx="9" fill="#ff8800" fill-opacity="0.14" stroke="#ff8800" stroke-opacity="0.72"/>
+    <text x="574" y="429" fill="#ffb35c" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">coop</text>
+  </g>
+
+  <!-- S8: Pauli-mask index -->
+  <g>
+    <rect x="635" y="297.95" width="18" height="58.05" rx="3" fill="url(#instructionFill)"/>
+    <rect x="659" y="307.41" width="18" height="48.59" rx="3" fill="url(#valuFill)"/>
+    <rect x="683" y="279.46" width="18" height="76.54" rx="3" fill="url(#saluFill)"/>
+    <text x="644" y="291.95" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.35×</text>
+    <text x="668" y="301.41" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.13×</text>
+    <text x="692" y="273.46" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.78×</text>
+    <path d="M681 274 V267 H703 V274" fill="none" stroke="#53d8fb" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="692" cy="267" r="2.5" fill="#53d8fb" filter="url(#cyanGlow)"/>
+    <text x="668" y="378" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S8</text>
+    <text x="668" y="394" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">Pauli-mask</text>
+    <text x="668" y="406" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">index</text>
+    <rect x="636" y="416" width="64" height="18" rx="9" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66" stroke-opacity="0.72"/>
+    <text x="668" y="429" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">register</text>
+  </g>
+
+  <!-- S7: noise runtime loop -->
+  <g>
+    <rect x="729" y="308.7" width="18" height="47.3" rx="3" fill="url(#instructionFill)"/>
+    <rect x="753" y="312.14" width="18" height="43.86" rx="3" fill="url(#valuFill)"/>
+    <rect x="777" y="301.82" width="18" height="54.18" rx="3" fill="url(#saluFill)"/>
+    <text x="738" y="302.7" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.10×</text>
+    <text x="762" y="306.14" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.02×</text>
+    <text x="786" y="295.82" fill="#ff7b91" font-family="Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="-0.25" text-anchor="middle">1.26×</text>
+    <circle cx="762" cy="379" r="11" fill="#cc2222" fill-opacity="0.28" stroke="#ff5555" stroke-width="1.5" filter="url(#redGlow)"/>
+    <text x="762" y="383" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">S7</text>
+    <text x="762" y="400" fill="#ffaaaa" font-family="Arial, sans-serif" font-size="9.5" text-anchor="middle">noise runtime loop</text>
+    <rect x="730" y="416" width="64" height="18" rx="9" fill="#00cc66" fill-opacity="0.14" stroke="#00cc66" stroke-opacity="0.72"/>
+    <text x="762" y="429" fill="#67f0a9" font-family="Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">register</text>
+  </g>
+
+  <!-- SALU-deletion annotation -->
+  <rect x="830" y="124" width="236" height="76" rx="9" fill="#53d8fb" fill-opacity="0.10" stroke="#53d8fb" stroke-width="1"/>
+  <text x="848" y="143" fill="#8ce9ff" font-family="Arial, sans-serif" font-size="10" font-weight="700">S5 · S6 · S8</text>
+  <text x="848" y="162" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700">SALU falls fastest:</text>
+  <text x="848" y="179" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11.5">work is <tspan fill="#53d8fb" font-weight="700">deleted</tspan>, not moved</text>
+  <text x="848" y="194" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11.5">to the scalar pipe</text>
+
+  <!-- S2 exception annotation -->
+  <rect x="830" y="214" width="236" height="120" rx="9" fill="#ff8800" fill-opacity="0.09" stroke="#ff8800" stroke-width="1"/>
+  <path d="M844 228 V248 M844 228 H860 L853 235 L860 242 H844" fill="#ff8800" fill-opacity="0.88" stroke="#ffb35c" stroke-width="1"/>
+  <text x="870" y="237" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">S2 · the one case where</text>
+  <text x="844" y="253" fill="#ffb35c" font-family="Arial, sans-serif" font-size="10.5" font-weight="700">SGPR pressure goes up: 13→26</text>
+  <text x="844" y="272" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">while SALU instructions fall 93→45 and</text>
+  <text x="844" y="288" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5">branches fall 18→0.</text>
+  <text x="844" y="307" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">Deleted branches became <tspan font-family="monospace">s_cselect</tspan>s over</text>
+  <text x="844" y="323" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">folded literals; literals need registers.</text>
+
+  <!-- S7 negative-result annotation -->
+  <rect x="830" y="348" width="236" height="142" rx="9" fill="#cc2222" fill-opacity="0.11" stroke="#cc2222" stroke-width="1"/>
+  <text x="848" y="368" fill="#ff7777" font-family="Arial, sans-serif" font-size="11" font-weight="700">S7 · the negative result —</text>
+  <text x="848" y="384" fill="#ff7777" font-family="Arial, sans-serif" font-size="11" font-weight="700">kept on purpose</text>
+  <text x="848" y="405" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">1.10× instrs · 1.02× VALU ·</text>
+  <text x="848" y="421" fill="#ffffff" font-family="Arial, sans-serif" font-size="9.5" font-weight="700">VGPR 56→56, unchanged</text>
+  <text x="848" y="441" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">Data-dependent; there is nothing to fold.</text>
+  <text x="848" y="457" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">This case predicts the <tspan font-family="monospace">circuit_d5</tspan></text>
+  <text x="848" y="473" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="9.5">behaviour in §11.1.</text>
+
+  <!-- Spread note -->
+  <rect x="34" y="462" width="780" height="48" rx="8" fill="#e94560" fill-opacity="0.10" stroke="#e94560" stroke-opacity="0.70"/>
+  <text x="424" y="483" fill="#ffffff" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="middle">spread is 5.50× to 1.02× — specialization is not a uniform multiplier;</text>
+  <text x="424" y="500" fill="#dfe3ed" font-family="Arial, sans-serif" font-size="11.5" text-anchor="middle">opcode mix predicts speedup.</text>
+
+  <!-- Punchline -->
+  <rect x="34" y="546" width="1032" height="56" rx="10" fill="#e94560" fill-opacity="0.14" stroke="#e94560" stroke-width="1"/>
+  <text x="550" y="579" fill="#ffffff" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">All three counters fall in all eight cases. The mechanism is deletion, not substitution — confirmed at corpus scale on 26 of 26 circuits (§14.3).</text>
+</svg>
