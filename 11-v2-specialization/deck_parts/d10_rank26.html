@@ -1,0 +1,378 @@
+
+    <!-- ================= 10. Extending past rank 19 ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">10</div>
+      <h1>Extending past rank 19</h1>
+      <div class="section-sub">Raising the cap took exactly one substantive change. Finding a benchmark
+      that could exercise it produced a more interesting result than the change itself.</div>
+    </section>
+
+    <section>
+      <h2>10.1 &nbsp;Why the cap could not simply be raised</h2>
+      <p class="lede">The blocker was an <b>addressing convention</b>, not a memory limit. Every global-tier
+      kernel strided its per-workgroup HBM slice by <code>kGlobalMaxAmplitudes</code> &mdash; <b>the
+      cap</b> &mdash; rather than by the circuit's actual amplitude count:</p>
+      <pre><code><span class="cm">// before: every slot is 2^kGlobalMaxPeakRank amplitudes wide, regardless of circuit</span>
+CV2Complex* v = global_v + (u64)slot * kGlobalMaxAmplitudes;</code></pre>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">At rank 19</div>
+          <div class="d">A <b>4 MB</b> amplitude slice per resident workgroup. Fine.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">At rank 26</div>
+          <div class="d"><b>512 MB per workgroup</b> &mdash; for a rank-3 circuit as much as for a rank-26
+          one. With a 2,048-workgroup pool that is <b>a terabyte of HBM to run <code>frame_h</code></b>.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-bad"><b>The cap was self-limiting: raising the constant made <em>every</em>
+      circuit unaffordable, not just the large ones.</b></div>
+      <div class="footnote">Both figures are the <code>global_v</code> slice alone, which is what the stride
+      above governs; &sect;10.2's quoted code comment counts the half-size scratch too, so the same two
+      points read <b>6 MB</b> and <b>768 MB</b> there.</div>
+    </section>
+
+    <section>
+      <h2>10.2 &nbsp;The fix (<code>b266f80</code>) &mdash; four places that must agree</h2>
+      <p class="lede">Derive every per-slot stride from <code>flat.peak_rank</code>:</p>
+      <table class="tight">
+        <thead><tr><th>File</th><th>What it addresses</th></tr></thead>
+        <tbody>
+          <tr><td><code>hip_sampler.hip</code></td><td><code>sample_kernel_global_coop</code> device addressing <b>and</b> the matching host <code>v_count</code>/<code>scratch_count</code> allocation</td></tr>
+          <tr><td><code>emit_global_kernel.cc</code></td><td>the Hybrid compiled-codegen kernel</td></tr>
+          <tr><td><code>mlir_emit.cc</code></td><td>the MLIR V1 global kernel</td></tr>
+          <tr><td><code>v2_kernel.cc</code></td><td>already rank-derived on the device side; only the resident-pool sizing needed the same treatment</td></tr>
+        </tbody>
+      </table>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The <code>emit_global_kernel.cc</code> change fixed a <b>latent out-of-bounds bug</b> unrelated to the cap</div>
+        <div class="d" style="font-size:0.85em;"><code>scratch_v</code> used the <b>FULL</b> <code>v</code>
+        stride while the host allocated scratch at <b>HALF</b> the amplitude count.</div>
+      </div>
+      <div class="insight">Scratch is only ever <code>2^(k-1)</code> amplitudes &mdash; it holds the fold
+      half &mdash; so the host allocated half. The device strided as if it were full. <b>Any global-tier
+      circuit using more than one workgroup was addressing past its scratch slice.</b> It had never been
+      caught because the overrun landed in the <em>next</em> workgroup's scratch, <b>which is written before
+      it is read on the next op.</b></div>
+    </section>
+
+    <section>
+      <h2>The HBM budget &mdash; the pool shrinks as rank grows</h2>
+      <pre><code><span class="cm">// Resident pool sized to a fixed HBM budget: each workgroup owns one</span>
+<span class="cm">// amplitude slice (1&lt;&lt;peak_rank) + a half-size scratch, i.e. 12 bytes</span>
+<span class="cm">// per amplitude. At rank 19 that is 6 MB/wg; at rank 26 it is 768 MB/wg.</span>
+<span class="cm">// The 32 GB budget keeps the pool sane at both ends on a 288 GB MI355X.</span>
+<span class="kw">const</span> uint64_t amp = <span class="lit">1ull</span> &lt;&lt; flat.peak_rank;
+<span class="kw">const</span> uint64_t bytes_per_wg = amp * <span class="kw">sizeof</span>(GpuComplex) + (amp / <span class="lit">2</span>) * <span class="kw">sizeof</span>(GpuComplex);
+<span class="kw">const</span> uint64_t budget = <span class="lit">32ull</span> &lt;&lt; <span class="lit">30</span>;  <span class="cm">// 32 GB</span>
+uint64_t wgs = budget / bytes_per_wg;
+<span class="kw">if</span> (wgs &lt; <span class="lit">1</span>) wgs = <span class="lit">1</span>;               <span class="cm">// rank 26+: at least one resident wg</span>
+<span class="kw">if</span> (wgs &gt; <span class="lit">2048</span>) wgs = <span class="lit">2048</span>;
+global_grid_wgs = <span class="kw">static_cast</span>&lt;uint32_t&gt;(wgs);
+<span class="cm">// Prefer a multiple of the XCD count when the budget allows it, so the</span>
+<span class="cm">// resident pool spreads evenly; never inflate past the budget.</span>
+<span class="kw">if</span> (global_grid_wgs &gt; kNumXCDs) global_grid_wgs -= global_grid_wgs % kNumXCDs;</code></pre>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">At rank 19 the pool clamps at 2,048</div>
+          <div class="d">At rank 26 it falls to a handful of resident workgroups. <b>The allocation no
+          longer explodes &mdash; the pool contracts instead.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The XCD-alignment step</div>
+          <div class="d"><code>kNumXCDs = 8</code> keeps the pool spread evenly across the device's eight
+          compute dies. One further constraint: the cap is kept <b>&le; 30</b> so <code>1u &lt;&lt;
+          rank</code> stays inside a <code>u32</code>.</div>
+        </div>
+      </div>
+      <figure>
+        <img src="diagrams/hbm-budget-pool.svg" alt="Resident pool size vs circuit rank under the 32 GB budget" class="mid" />
+        <figcaption><b>Figure 10.1</b> &mdash; Below rank ~19 the pool is clamped at 2,048 workgroups; above
+        it, <b>the pool halves with every rank while per-workgroup memory doubles. The product is constant,
+        which is the point.</b></figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>10.3 &nbsp;The gate had the same bug</h2>
+      <p class="lede">The specializer's correctness gate dispatched a <b>fixed 64-workgroup pool and a fixed
+      5,000 shots</b> regardless of rank (<code>6960527</code>). At rank &le; 19 that is harmless. At rank
+      20+ it means the gate validates on a pool <b>tens of times narrower</b> than the real dispatch, while
+      per-shot cost grows as <code>2^peak_rank</code>:</p>
+      <div class="verdict verdict-bad">The gate for <code>qv20</code> had not finished after <b>10
+      minutes</b> &mdash; longer than the benchmark it gates.</div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">Fixed by giving the gate the <em>same</em> budget formula</div>
+          <div class="d">Capped at 512 &mdash; it only needs enough parallelism to finish promptly.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">And by tapering the shot sample above rank 19</div>
+          <div class="d"><b>1,000 shots at rank 20&ndash;21, 250 at rank 22+.</b> The justification is
+          statistical rather than budgetary &mdash; <em>"a divergence needs far fewer shots to surface at
+          high rank, since each shot touches millions of amplitudes"</em> &mdash; and
+          <code>V2_GATE_SHOTS</code> overrides it for paranoid validation.</div>
+        </div>
+      </div>
+      <div class="insight"><b>Verdicts were unchanged everywhere they had already been computed.</b></div>
+    </section>
+
+    <section>
+      <h2>10.4 &nbsp;Finding a circuit that actually reaches rank 20</h2>
+      <p class="lede">This is the part worth reading. With the cap raised, <b>nothing in the tree could
+      exercise it</b> &mdash; and the reason is a compiler pass working <em>correctly</em>.</p>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h"><code>StatevectorSqueezePass</code> defeats most "high rank" circuits</div>
+        <div class="d">It reorders operations so that T-injection circuits with only local Clifford glue
+        collapse almost completely. From <code>4b9efc7</code>:
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.85em;margin-top:0.3em;color:var(--warn);">
+        "<code>rank19_q100_d10_wide</code> compiles to <b>peak_rank = 1</b>, and the
+        <code>surface_d11</code> family tops out around 14."</div></div>
+      </div>
+      <div class="insight">A fixture named for rank 19 that compiles to rank 1. <b>This is not a bug &mdash;
+      it is the entire premise of the SVM</b>, which is that near-Clifford circuits have a small
+      <em>active</em> rank regardless of how many qubits they name.</div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">Quantum Volume circuits do not squeeze</div>
+          <div class="d">Each QV layer applies a random SU(4) to a <b>fresh random pairing of all
+          qubits</b>, so the whole register stays entangled and <code>peak_rank == num_qubits</code>
+          exactly.</div>
+        </div>
+        <div>
+          <div class="diff-title">Verified with a host-side rank probe running the identical compile path
+          as <code>run_v2</code> (trace &rarr; HIR passes &rarr; reference syndrome &rarr; lower &rarr;
+          bytecode passes)</div>
+          <div class="diff">
+<span class="add">qv20_L8 = 20    qv21_L8 = 21    qv22_L6 = 22</span>
+<span class="add">qv23_L5 = 23    qv24_L4 = 24</span>
+          </div>
+          <div class="footnote">Layer counts taper with width (<code>L8</code> &rarr; <code>L4</code>) to
+          keep compile and run time bounded.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>10.5 &nbsp;The census &mdash; 22 of 353</h2>
+      <p class="lede">"Are these all the circuits?" was a fair challenge, and it was answered by measurement
+      (<code>89d541e</code>). <code>probe_all.sh</code> ran the rank probe over <b>every</b> live
+      <code>.stim</code> in the tree &mdash; <b>353 files</b> across <code>tests/fixtures</code>,
+      <code>tools/bench/fixtures</code> and <code>docs/guide/circuits</code> &mdash; recording the
+      <b>compiled</b> <code>peak_rank</code>, i.e. what the tier dispatcher actually sees <em>after</em>
+      <code>StatevectorSqueezePass</code>.</p>
+      <div class="grid-2">
+        <div>
+          <table class="tight">
+            <thead><tr><th class="num">compiled rank</th><th class="num">fixtures</th><th>tier</th></tr></thead>
+            <tbody>
+              <tr><td class="num">0</td><td class="num">82</td><td>register</td></tr>
+              <tr><td class="num">1</td><td class="num">244</td><td>register</td></tr>
+              <tr><td class="num">3</td><td class="num">3</td><td>register</td></tr>
+              <tr><td class="num">4</td><td class="num">2</td><td>register</td></tr>
+              <tr><td class="num"><b>0&ndash;1 subtotal</b></td><td class="num"><b>326</b></td><td><b>register</b></td></tr>
+              <tr><td class="num">7</td><td class="num">3</td><td>coop</td></tr>
+              <tr><td class="num">10</td><td class="num">8</td><td>coop</td></tr>
+              <tr><td class="num">11</td><td class="num">2</td><td>global</td></tr>
+              <tr><td class="num">12</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">13</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">14</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">20</td><td class="num">2</td><td>global</td></tr>
+              <tr><td class="num">21</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">22</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">23</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num">24</td><td class="num">1</td><td>global</td></tr>
+              <tr><td class="num"><b>&ge; 5 subtotal</b></td><td class="num win"><b>22</b></td><td><b>coop + global</b></td></tr>
+              <tr><td class="num"><b>total</b></td><td class="num"><b>353</b></td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">Note what is <em>absent</em></div>
+            <div class="d"><b>Nothing in the entire tree compiles to rank 2, 5, 6, 8, 9, 15, 16, 17, 18 or
+            19.</b>
+            <hr/>
+            The distribution is not a smooth spread with a long tail &mdash; it is <b>two dense clusters
+            (0&ndash;1 and 10) plus a thin spine of surface codes</b> and the six hand-built QV
+            circuits.</div>
+          </div>
+          <div class="stat-callout">
+            <div class="stat-num">11</div>
+            <div class="stat-label">fixtures exercise the <b>coop tier</b>, which the bulk of the
+            optimization work in &sect;9 targets. Three <code>surface_*_t10</code> at rank 7, and eight at
+            rank 10 &mdash; five being the <code>circuit_d5</code> parameter sweep, the other three
+            <code>qv10</code>, <code>cultivation_d5</code> and <code>surface_d7_t15</code>.</div>
+          </div>
+          <div class="card card-warn">
+            <div class="h">Every one of <code>sweep</code> (188) and <code>rank_sweep</code> (56) squeezes flat</div>
+            <div class="d"><em>Despite names like <code>rank_q17_r12_d1.stim</code> promising rank
+            12.</em></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Two consequences, recorded in <code>BENCHMARKS.md</code></h2>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">1. &nbsp;A benchmark set covering "all the high-rank circuits" is <b>22 circuits, not hundreds</b></div>
+          <div class="d">The 26-circuit corpus in &sect;15 is therefore <b>not a sample &mdash; it is
+          effectively the population</b>, plus four parameter variants.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">2. &nbsp;Do not infer a fixture's tier from its name or qubit count. <b>Probe it.</b></div>
+          <div class="d">The names in this tree are, demonstrably, aspirational.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed">This also reframes the whole project's scope honestly: <b>the GPU
+      backend's tiering matters for a small, specific class of circuits.</b> Most of what a user throws at
+      <code>clifft</code> collapses to rank 0&ndash;1 and never leaves the register tier.</div>
+    </section>
+
+    <section>
+      <h2>10.6 &nbsp;What rank 20&ndash;26 actually costs</h2>
+      <p class="lede">The five QV circuits are the only ones in the corpus above rank 19, and they are where
+      V2's advantage thins out:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">rank</th><th class="num">V2 (µs)</th><th class="num">SVM (µs)</th><th class="num">ratio</th><th class="num">VGPR spill</th><th class="num">SGPR spill</th><th class="num">scratch</th></tr></thead>
+        <tbody>
+          <tr><td><code>qv20_seed42</code></td><td class="num">20</td><td class="num">1,804,648</td><td class="num">2,123,250</td><td class="num win">0.850</td><td class="num">0</td><td class="num">0</td><td class="num">96</td></tr>
+          <tr><td><code>qv20_L8_seed42</code></td><td class="num">20</td><td class="num">1,583,246</td><td class="num">2,162,954</td><td class="num win">0.732</td><td class="num">0</td><td class="num">0</td><td class="num">112</td></tr>
+          <tr><td><code>qv21_L8_seed42</code></td><td class="num">21</td><td class="num">2,977,386</td><td class="num">4,045,316</td><td class="num win">0.736</td><td class="num">0</td><td class="num">0</td><td class="num">112</td></tr>
+          <tr><td><code>qv22_L6_seed42</code></td><td class="num">22</td><td class="num">3,179,445</td><td class="num">3,243,842</td><td class="num lose"><b>0.980</b></td><td class="num lose"><b>136</b></td><td class="num lose"><b>762</b></td><td class="num">448</td></tr>
+          <tr><td><code>qv23_L5_seed42</code></td><td class="num">23</td><td class="num">6,086,167</td><td class="num">6,146,952</td><td class="num lose"><b>0.990</b></td><td class="num lose"><b>199</b></td><td class="num lose"><b>662</b></td><td class="num">576</td></tr>
+          <tr><td><code>qv24_L4_seed42</code></td><td class="num">24</td><td class="num">7,241,815</td><td class="num">8,211,443</td><td class="num">0.882</td><td class="num lose"><b>152</b></td><td class="num lose"><b>594</b></td><td class="num">480</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-mixed"><b>The break is sharp and it is at rank 22.</b> Below it: zero
+      spilling, V2 wins 0.72&ndash;0.84. At and above it: <b>the three worst-spilling kernels in the entire
+      89-kernel corpus</b> &mdash; SGPR spill 762 / 662 / 594, the top three by that metric <em>and</em> by
+      VGPR spill &mdash; and the advantage collapses to 0.98&ndash;0.99.</div>
+    </section>
+
+    <section>
+      <h2>Provenance &mdash; read this before quoting the timing columns</h2>
+      <p class="lede"><b>The resource columns are solid.</b> Both binaries survive in-tree &mdash; pre-fence
+      under <code>history/stale_spec_cache_20260725/</code>, post-fence under
+      <code>scratch/fence_cache/all/</code> &mdash; so this is directly checkable:</p>
+      <table class="tight" style="font-size:0.8em;">
+        <thead><tr><th>kernel</th><th class="num">pre (B)</th><th class="num">post (B)</th><th class="num">&Delta;</th><th class="num">bytes differing</th><th class="num">vgpr_spill</th><th class="num">sgpr_spill</th><th class="num">sgpr_count</th><th class="num">scratch</th></tr></thead>
+        <tbody>
+          <tr><td><code>global_r22_n359</code></td><td class="num">217,424</td><td class="num">218,576</td><td class="num">+1,152</td><td class="num lose"><b>83.8%</b></td><td class="num win">136 = 136</td><td class="num win">762 = 762</td><td class="num win">108 = 108</td><td class="num win">448 = 448</td></tr>
+          <tr><td><code>global_r23_n335</code></td><td class="num">190,480</td><td class="num">191,568</td><td class="num">+1,088</td><td class="num lose"><b>82.9%</b></td><td class="num win">199 = 199</td><td class="num win">662 = 662</td><td class="num win">108 = 108</td><td class="num win">576 = 576</td></tr>
+          <tr><td><code>global_r24_n320</code></td><td class="num">172,880</td><td class="num">173,904</td><td class="num">+1,024</td><td class="num lose"><b>82.8%</b></td><td class="num win">152 = 152</td><td class="num win">594 = 594</td><td class="num win">108 = 108</td><td class="num win">480 = 480</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>Five-sixths of the binary changed and not one resource number
+      moved.</b> Register pressure is a property of <em>what the specializer emits</em>, not of the fences
+      around it &mdash; so the spill table is unaffected by the &sect;11.4 invalidation.</div>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">The timing columns are <b>post-fence</b></div>
+          <div class="d">Every cell comes from the report's canonical run &mdash;
+          <code>20260727T125310Z_report-final-allfixtures</code>, SLURM job <b>50793</b>, node
+          <code>smci350-rck-g03-d13-21</code>, commit <code>79d4463</code>, clean tree &mdash; the same run
+          &sect;14 and &sect;15 draw on. <code>git merge-base --is-ancestor 150d09f 79d4463</code> confirms
+          the fence fix is an ancestor of it.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">A second post-fence run corroborates the <em>conclusion</em>, not the table</div>
+          <div class="d"><code>report-final-postdust</code> (job 50469, commit <code>f565075</code>) landed
+          on a <b>different node</b>, <code>f13-21</code>. Its ratios agree to within <b>1.3%</b> on every
+          circuit (0.839/0.723/0.728/0.981/0.990/0.880 against the published
+          0.850/0.732/0.736/0.980/0.990/0.882), identical scratch sizes.
+          <hr/>
+          <b><code>mi350x-es</code> is heterogeneous and ratios are not comparable across node types, so the
+          two runs are never mixed within a row.</b></div>
+        </div>
+      </div>
+      <div class="footnote">That the fence made no measurable difference here is <b>the expected result and
+      not a null finding to be embarrassed about</b>: the fence bug corrupted reduction totals in the
+      <b>coop</b> tier, and every kernel in this table is global-tier.</div>
+    </section>
+
+    <section>
+      <h2>Why spilling appears exactly there &mdash; and what the data rules out</h2>
+      <p class="lede">The tempting explanation: the specializer emits one call per instruction with
+      constants baked in, so <b>longer circuits carry more live scalars</b> until the SGPR budget breaks.</p>
+      <div class="verdict verdict-bad"><b>The corpus refutes this.</b></div>
+      <p class="lede">All fifteen <code>global_*</code> kernels in <code>lowering/kernel_resources.csv</code>,
+      nothing omitted, sorted by emitted instruction count:</p>
+      <table class="tight" style="font-size:0.78em;">
+        <thead><tr><th class="num">rank</th><th class="num">instrs</th><th class="num">VGPR</th><th class="num">AGPR</th><th class="num">SGPR</th><th class="num">VGPR spill</th><th class="num">SGPR spill</th><th class="num">scratch</th></tr></thead>
+        <tbody>
+          <tr><td class="num">14</td><td class="num">16,521</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">352</td></tr>
+          <tr><td class="num">11</td><td class="num">16,415</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">320</td></tr>
+          <tr><td class="num">11</td><td class="num">16,415</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">320</td></tr>
+          <tr><td class="num">13</td><td class="num">9,359</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">336</td></tr>
+          <tr><td class="num">13</td><td class="num">9,359</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">336</td></tr>
+          <tr><td class="num">11</td><td class="num">8,952</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">320</td></tr>
+          <tr><td class="num">11</td><td class="num">8,952</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">320</td></tr>
+          <tr><td class="num">12</td><td class="num">4,296</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">4</td><td class="num">320</td></tr>
+          <tr><td class="num">12</td><td class="num">4,296</td><td class="num">128</td><td class="num">64</td><td class="num">106</td><td class="num">0</td><td class="num">0</td><td class="num">320</td></tr>
+          <tr><td class="num">20</td><td class="num">418</td><td class="num win"><b>104</b></td><td class="num win"><b>40</b></td><td class="num">106</td><td class="num">0</td><td class="num">0</td><td class="num win">96</td></tr>
+          <tr><td class="num">20</td><td class="num">387</td><td class="num win"><b>106</b></td><td class="num win"><b>42</b></td><td class="num">106</td><td class="num">0</td><td class="num">0</td><td class="num win">112</td></tr>
+          <tr><td class="num">21</td><td class="num">393</td><td class="num win"><b>104</b></td><td class="num win"><b>40</b></td><td class="num">106</td><td class="num">0</td><td class="num">0</td><td class="num win">112</td></tr>
+          <tr><td class="num lose"><b>22</b></td><td class="num lose"><b>359</b></td><td class="num">128</td><td class="num">64</td><td class="num">108</td><td class="num lose"><b>136</b></td><td class="num lose"><b>762</b></td><td class="num">448</td></tr>
+          <tr><td class="num lose"><b>23</b></td><td class="num lose"><b>335</b></td><td class="num">128</td><td class="num">64</td><td class="num">108</td><td class="num lose"><b>199</b></td><td class="num lose"><b>662</b></td><td class="num">576</td></tr>
+          <tr><td class="num lose"><b>24</b></td><td class="num lose"><b>320</b></td><td class="num">128</td><td class="num">64</td><td class="num">108</td><td class="num lose"><b>152</b></td><td class="num lose"><b>594</b></td><td class="num">480</td></tr>
+        </tbody>
+      </table>
+      <div class="insight"><b>The three spilling kernels are the three <em>shortest</em> in the tier.</b> A
+      rank-14 kernel emits 16,521 instructions &mdash; <b>46&times; more</b> than rank 22's 359 &mdash; and
+      spills 4 SGPRs. <b>Instruction count is not the mechanism; if anything the correlation runs
+      backwards.</b> That also disposes of the "qv24 is an anomaly because it has the fewest instructions"
+      story: fewest instructions is <em>the norm among the spillers</em>, not an exception.</div>
+    </section>
+
+    <section>
+      <h2>What the full listing sharpens</h2>
+      <div class="card card-hl">
+        <div class="h">Rank 20&ndash;21 is the <em>only</em> region in the tier where the allocator does not take the VGPR 128 / AGPR 64 cap</div>
+        <div class="d">Three kernels at 104&ndash;106 / 40&ndash;42, all with zero spill and the smallest
+        scratch in the tier (96&ndash;112 B). <b>Every other kernel &mdash; rank 11&ndash;14 and rank
+        22&ndash;24 alike &mdash; is at the cap.</b></div>
+      </div>
+      <div class="verdict verdict-mixed">So the rank-22 break is <b>not</b> "the allocator hits the cap" —
+      the long rank-11&ndash;14 kernels are at the cap too and spill 4 SGPRs at most. <b>It is that rank 22
+      hits the cap <em>and</em> finds nothing left to overflow into.</b></div>
+      <p class="lede">What actually changes at the boundary is narrower than expected. Diffing the emitted C
+      for rank 21 against rank 22 with all numeric literals normalized shows <b>no structural
+      difference</b> &mdash; same preprocessor preamble, same <code>spec_body</code> shape, near-identical
+      opcode mix (169/80/42 <code>array_u2</code>/<code>array_u4</code>/<code>array_rot</code> vs
+      142/66/44). The tier wrapper is rank-independent by construction. <b>The one thing that differs is a
+      single baked constant:</b></p>
+      <div class="diff">
+<span class="ctx">const u64 amp_capacity = 2097152ull;   // rank 21</span>
+<span class="del">const u64 amp_capacity = 4194304ull;   // rank 22</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>The inference, stated as an open question</h2>
+      <p class="lede">Crossing 2&sup2;&sup2; also moves the allocator's chosen register split: the
+      non-spilling rank 20/21 kernels sit at VGPR 104&ndash;106 / AGPR 40&ndash;42, while <b>every spilling
+      kernel jumps to the VGPR 128 / AGPR 64 cap</b>.</p>
+      <div class="card card-accent">
+        <div class="h">On CDNA the AGPR file is repurposed as overflow storage when MFMA is unused</div>
+        <div class="d">(<code>SQ_INSTS_MFMA = 0</code> throughout here.) So the pattern is <b>consistent
+        with</b> the allocator exhausting AGPR overflow at the cap and falling through to scratch.</div>
+      </div>
+      <div class="verdict verdict-mixed"><b>That is an inference from resource metadata, not a verified
+      mechanism.</b> The emitted C is essentially unchanged, so the cause lies inside LLVM's allocation for
+      the wider constant, which has not been isolated. <b>Stated as an open question rather than an
+      answer.</b></div>
+      <div class="card card-success">
+        <div class="h">What <em>is</em> solid: the correlation is exact</div>
+        <div class="d">Every global kernel at <b>rank &le; 21</b> spills &le; 4 SGPRs and wins
+        <b>0.72&ndash;0.84</b>. Every one at <b>rank &ge; 22</b> spills <b>594&ndash;762 SGPRs</b> to
+        HBM-backed scratch &mdash; <b>the same memory the kernel is already bandwidth-bound on</b> &mdash;
+        and the win collapses to <b>0.98&ndash;0.99</b>.</div>
+      </div>
+      <div class="verdict verdict-bad"><b>V2's specialization advantage decays above rank 21 and is
+      essentially gone by rank 23.</b> &sect;16 lists it as the top open item; the first step is an
+      <b>LLVM allocation study at the rank-21/22 boundary</b>, not a code change.</div>
+    </section>

@@ -1,0 +1,645 @@
+
+    <!-- ================= 9. Optimizations, tier by tier ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">9</div>
+      <h1>Optimizations, tier by tier</h1>
+      <div class="section-sub">Specialization was the <em>fifth</em> thing that happened. If it had been the
+      first, most of the speedup would have been invisible.</div>
+    </section>
+
+    <section>
+      <h2>The earliest V2 build was <span class="lose">28&times; slower</span> than SVM</h2>
+      <div class="stat-callout">
+        <div class="stat-num">28.258&times;</div>
+        <div class="stat-label"><code>frame_h</code>, the first V2 build, V2/SVM kernel time. <b>No amount
+        of constant folding closes a 28&times; gap.</b></div>
+      </div>
+      <p class="lede">This chapter walks the optimization history with the progressive ratio table as the
+      spine. Every row is a real archived benchmark run under <code>V2_performance/runs/</code>.</p>
+      <div class="card card-warn">
+        <div class="h">The sections are ordered by <em>magnitude</em>, not by date &mdash; and the two differ</div>
+        <div class="d">The actual commit order on <code>mlir-v2</code>, from <code>git log --reverse</code>:</div>
+      </div>
+      <table class="tight" style="font-size:0.8em;">
+        <thead><tr><th class="num">#</th><th>commit</th><th>time</th><th>what</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td><code>d873997</code></td><td>07-25 04:46</td><td>P1a &mdash; shrink reduction LDS</td></tr>
+          <tr><td class="num">2</td><td><code>7802423</code></td><td>07-25 04:50</td><td>P1b &mdash; bit-pack <code>lds_meas</code></td></tr>
+          <tr><td class="num">3</td><td><code>715f8d0</code></td><td>07-25 05:11</td><td><b>P0 &mdash; shot-packed register tier</b></td></tr>
+          <tr><td class="num">4</td><td><code>eea6e13</code></td><td>07-25 07:36</td><td>specializer Phase 1 &mdash; operand library</td></tr>
+          <tr><td class="num">5</td><td><code>b31b400</code></td><td>07-25 07:47</td><td>specializer Phase 2+3 &mdash; register emitter</td></tr>
+          <tr><td class="num">6</td><td><code>60d5728</code></td><td>07-25 08:24</td><td>specializer &mdash; coop tier + correctness gate</td></tr>
+          <tr><td class="num">7</td><td><code>4b55871</code></td><td>07-25 08:34</td><td>force-inline <code>v2_op_*</code> in the interpreter</td></tr>
+          <tr><td class="num">8</td><td><code>9d9cc68</code></td><td>07-25 16:24</td><td>noise/measurement <code>noinline</code> fencing</td></tr>
+          <tr><td class="num">9</td><td><code>bbb5e42</code></td><td>07-25 16:35</td><td>gate: multi-seed + disk cache</td></tr>
+          <tr><td class="num">10</td><td><code>5d10409</code></td><td>07-25 17:18</td><td>specializer &mdash; global tier</td></tr>
+          <tr><td class="num">11</td><td><code>842d646</code></td><td>07-25 23:06</td><td>XOR observable parity</td></tr>
+          <tr><td class="num">12</td><td><code>150d09f</code></td><td>07-26 06:33</td><td><code>v2_barrier</code> &rarr; memory barrier</td></tr>
+        </tbody>
+      </table>
+      <div class="insight"><b>P1 shipped 25 minutes before P0</b>, despite being numbered after it and being
+      worth ~10% against P0's 28&times;. It was picked first because it was judged the safest change in the
+      plan (layout only, no algorithm change) &mdash; <b>a reasonable way to start and a misleading way to
+      report</b>, so the ordering is stated here rather than smoothed over.</div>
+    </section>
+
+    <section>
+      <h2>9.1 &nbsp;The progression</h2>
+      <p class="lede">V2/SVM kernel-time ratio, lower is better, <code>&lt; 1</code> means V2 wins. Seven of
+      the twelve archived runs, at the points where something changed. Column 4 is included <b>because it
+      regressed</b>.</p>
+      <table class="tight" style="font-size:0.76em;">
+        <thead><tr><th>circuit</th><th class="num">baseline</th><th class="num">+P0+P1</th><th class="num">+specializer</th><th class="num"><em>fenced+gated</em></th><th class="num">+noise-spec</th><th class="num">+global-spec</th><th class="num"><b>final</b></th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td class="num lose"><b>28.258</b></td><td class="num">1.215</td><td class="num win">0.612</td><td class="num" style="font-style:italic;color:var(--dim);">2.859</td><td class="num">0.614</td><td class="num">0.645</td><td class="num win"><b>0.626</b></td></tr>
+          <tr><td><code>circuit_d3_p0.001</code></td><td class="num lose">15.193</td><td class="num">1.081</td><td class="num">1.116</td><td class="num" style="font-style:italic;color:var(--dim);">2.117</td><td class="num win">0.524</td><td class="num">0.504</td><td class="num win"><b>0.525</b></td></tr>
+          <tr><td><code>qv10</code></td><td class="num">1.313</td><td class="num">1.237</td><td class="num win"><b>0.252</b></td><td class="num" style="font-style:italic;color:var(--dim);">0.675</td><td class="num">0.308</td><td class="num">0.310</td><td class="num win"><b>0.310</b></td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">1.650</td><td class="num">1.469</td><td class="num">1.787</td><td class="num" style="font-style:italic;color:var(--dim);">1.427</td><td class="num win"><b>0.503</b></td><td class="num">0.507</td><td class="num win"><b>0.505</b></td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">1.642</td><td class="num">1.473</td><td class="num">1.796</td><td class="num" style="font-style:italic;color:var(--dim);">1.402</td><td class="num win"><b>0.484</b></td><td class="num">0.481</td><td class="num win"><b>0.481</b></td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">0.968</td><td class="num">0.872</td><td class="num">1.014</td><td class="num">1.017</td><td class="num">1.015</td><td class="num win"><b>0.312</b></td><td class="num win"><b>0.298</b></td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">0.906</td><td class="num">0.817</td><td class="num">0.973</td><td class="num">0.971</td><td class="num">0.972</td><td class="num win"><b>0.262</b></td><td class="num win"><b>0.262</b></td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">0.938</td><td class="num">0.854</td><td class="num">1.005</td><td class="num">1.005</td><td class="num">1.005</td><td class="num win"><b>0.259</b></td><td class="num win"><b>0.256</b></td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>Each tier's win arrives in exactly one step, and does not move
+      afterwards.</b> That is the signature of a <em>structural</em> change rather than a tuning change.
+      Register lands at P0. Coop lands at the specializer. Noise-heavy coop lands at the noise fence. Global
+      lands at the global emitter.</div>
+    </section>
+
+    <section>
+      <h2>That reading does not have to be taken on trust</h2>
+      <p class="lede">Every archived run kept its <code>rocprofv3</code> kernel trace, and the kernel
+      <em>name</em> says which code path produced each cell. <code>clifft_v2_register</code> /
+      <code>_coop</code> / <code>_global</code> are the three <b>interpreter</b> kernels;
+      <code>clifft_v2_spec</code> is a <b>specialized</b> one.</p>
+      <table class="tight" style="font-size:0.78em;">
+        <thead><tr><th>circuit</th><th>+specializer</th><th><em>fenced+gated</em></th><th>+noise-spec</th><th>+global-spec</th><th><b>final</b></th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td class="win"><code>spec</code></td><td class="lose"><code>register</code>+<code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>circuit_d3</code></td><td class="win"><code>spec</code></td><td class="lose"><code>register</code>+<code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>qv10</code></td><td class="win"><code>spec</code></td><td class="lose"><code>coop</code>+<code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>surface_d7_t15</code></td><td class="lose"><b><code>coop</code></b></td><td class="lose"><code>coop</code>+<code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="lose"><b><code>coop</code></b></td><td class="lose"><code>coop</code>+<code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="lose"><b><code>global</code></b></td><td class="lose"><code>global</code></td><td class="lose"><b><code>global</code></b></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="lose"><b><code>global</code></b></td><td class="lose"><code>global</code></td><td class="lose"><b><code>global</code></b></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="lose"><b><code>global</code></b></td><td class="lose"><code>global</code></td><td class="lose"><b><code>global</code></b></td><td class="win"><code>spec</code></td><td class="win"><code>spec</code></td></tr>
+        </tbody>
+      </table>
+      <div class="insight">Each <b>~1.0</b> in the ratio table is a cell where the trace shows an
+      <em>interpreter</em> kernel: the specializer had not reached that tier yet, or the gate had rejected
+      the circuit. The step to ~0.5 or ~0.3 is always <b>the same cell flipping to <code>spec</code></b>.
+      <b>Nothing in this table is a tuning effect</b> &mdash; every movement is a change of which kernel
+      ran.</div>
+    </section>
+
+    <section>
+      <h2>The italic column is a measurement artifact &mdash; shown, not dropped</h2>
+      <p class="lede">At <code>9d9cc68</code> the correctness gate existed but its verdict was cached
+      <b>only in-process</b>. <code>rocprofv3</code> spawns a fresh process per invocation, so the gate's
+      own validation dispatches re-ran <em>inside the profiled region</em> and the digester summed them into
+      the kernel time.</p>
+      <div class="diff">
+<span class="ctx">noise-fenced-gated   frame_h    clifft_v2_register x1 (19.1us) + clifft_v2_spec x2 (28.8us)</span>
+<span class="ctx">                     qv10       clifft_v2_coop     x1 (1270.2us) + clifft_v2_spec x2 (1667.2us)</span>
+<span class="add">noise-specialized    frame_h    clifft_v2_spec     x1 (10.5us)</span>
+<span class="add">noise-specialized    qv10       clifft_v2_spec     x1 (1340.0us)</span>
+      </div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Three dispatches where every other run has one</div>
+          <div class="d">One interpreter run and two specialized runs: <b>the gate executing the circuit
+          both ways to compare them</b>, plus the real sampling dispatch. The reported "regression" is the
+          <b>sum of all three</b>. <code>frame_h</code> 0.612 &rarr; 2.859, <code>circuit_d3</code> 1.116
+          &rarr; 2.117, <code>qv10</code> 0.252 &rarr; 0.675. <b>Nothing had actually slowed down.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The next commit fixed it, and named the mechanism</div>
+          <div class="d"><code>bbb5e42</code> persisted the verdict to <code>&lt;hsaco&gt;.gate</code> so it
+          is computed once ever:
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.82em;margin-top:0.3em;color:var(--warn);">
+          "that polluted kernel traces with clifft_v2_coop+spec dispatches summed by the digester &rarr;
+          inflated times."</div></div>
+        </div>
+      </div>
+      <div class="verdict verdict-bad"><b>The lesson is worth more than the column: a correctness mechanism
+      that runs on the measurement path becomes a performance number.</b> Three of these eight circuits
+      would have been reported as 2&ndash;4&times; <em>regressions</em> by anyone reading the table without
+      the commit history.</div>
+      <div class="footnote">The trace also settles the italic column independently of the commit history:
+      <code>noise-fenced-gated</code> is the <b>only</b> run in which any circuit dispatched <em>two
+      different</em> kernels. That is the gate's validation dispatch, caught in the act.</div>
+    </section>
+
+    <section>
+      <h2>Two caveats, from the project's own benchmarking rule</h2>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">The runs were not all on the same node</div>
+          <div class="d">Columns 1&ndash;8 ran on <code>smci350-rck-g03-d13-21</code>; columns 9&ndash;12,
+          including <b>final</b>, on <code>smci350-rck-g03-f13-21</code> (recovered via <code>sacct</code>;
+          only the final run recorded node identity in <code>node.json</code>, whose own note warns
+          <em>"mi350x-es is heterogeneous &mdash; do not compare ratios across nodes"</em>).
+          <hr/>
+          Because every cell is a V2/SVM <b>ratio</b> with both halves measured in the same job, the node
+          change affects both backends together and the comparison survives. But <b>the step between
+          columns 8 and 9 carries a node change as well as a code change</b> and should not be read as a
+          pure code effect.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h"><code>frame_h</code>'s 0.085 in the omitted column is not a real 10&times; step</div>
+          <div class="d">That <code>specializer-verify</code> run's <b>SVM side</b> measured <b>128.2 µs</b>
+          against 16&ndash;20 µs everywhere else &mdash; a baseline outlier on a 12 µs kernel, <b>not a V2
+          improvement</b>. It is left out for that reason, and named here <b>so the omission is not
+          silent</b>.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The whole progression, one figure</h2>
+      <figure>
+        <img src="diagrams/optimization-timeline.svg" alt="V2/SVM ratio over the optimization sequence" />
+        <figcaption><b>Figure 9.1</b> &mdash; V2/SVM kernel-time ratio across the twelve archived benchmark
+        runs. <b>Each tier's curve is flat until the one change that addresses it, then flat again.</b> The
+        y-axis is log-scaled to fit <code>frame_h</code>'s 28.258 baseline.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>9.2 &nbsp;P0 &mdash; the shot-packed register tier <span class="win">(28.3&times; &rarr; 1.2&times;)</span></h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">The problem</div>
+          <div class="d">The first V2 was a <b>single kernel topology</b>: 256 threads cooperate on one
+          shot, amplitudes in LDS, <code>s_barrier</code> between every op.
+          <hr/>
+          That is the right shape for rank 10. For <code>frame_h</code> &mdash; <b>rank 0, four
+          instructions, no amplitudes worth speaking of</b> &mdash; it means <b>256 threads doing the work
+          of one</b>, with a barrier after each of four instructions, while SVM's register path runs one
+          shot per thread. Hence 28.258&times;.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The fix (<code>715f8d0</code>)</div>
+          <div class="d">Rather than write a second kernel, the shared <code>execute_shot</code> body was
+          parameterized on <b><em>how threads cooperate</em></b>, through five macros.</div>
+        </div>
+      </div>
+      <pre><code><span class="kw">#ifdef</span> V2_REGISTER
+<span class="kw">#  define</span> V2_STRIDE 1u
+   <span class="kw">static inline</span> u32 <span class="fn">v2_tid</span>(<span class="kw">void</span>)  { <span class="kw">return</span> <span class="lit">0u</span>; }
+<span class="kw">#  define</span> IS_OWNER 1
+   <span class="cm">/* v2_barrier() -&gt; nothing; V2_REDUCE2 -&gt; identity (a stride-1 loop already summed) */</span>
+<span class="kw">#else</span>
+<span class="kw">#  define</span> V2_STRIDE 256u
+   <span class="kw">static inline</span> u32 <span class="fn">v2_tid</span>(<span class="kw">void</span>)  { <span class="kw">return</span> <span class="fn">__builtin_amdgcn_workitem_id_x</span>(); }
+<span class="kw">#  define</span> IS_OWNER (t == <span class="lit">0</span>)
+   <span class="cm">/* v2_barrier() -&gt; fenced s_barrier; V2_REDUCE2 -&gt; coop_reduce2 butterfly */</span>
+<span class="kw">#endif</span></code></pre>
+      <div class="insight"><b>The same opcode arithmetic now compiles two ways from one source.</b> Under
+      <code>-DV2_REGISTER</code>, <code>for (u64 i = t; i &lt; iters; i += V2_STRIDE)</code> becomes
+      <code>for (i = 0; i &lt; iters; i += 1)</code> &mdash; a plain serial loop in one thread &mdash; the
+      barriers vanish, <code>IS_OWNER</code> is constant-true so the tid0 guards evaporate, the reduction is
+      the identity, and <code>GpuComplex v[16]</code> lives in <b>VGPRs</b>.</div>
+    </section>
+
+    <section>
+      <h2>P0's result, and why it mattered beyond its number</h2>
+      <div class="card card-hl" style="padding:0.9em;">
+        <div class="h">The commit's measured result, verbatim</div>
+        <div class="d" style="font-size:0.85em;">Clean kernel-time vs GPU-SVM: <b>frame_h
+        30.6x&rarr;1.14x, circuit_d3 14.1x&rarr;1.13x.</b> The 15-28x low-rank catastrophe is eliminated; V2
+        register tier is now at the 1-shot-per-thread floor (SVM's own topology). <b>Byte-exact vs SVM:
+        38/38.</b></div>
+      </div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">"At the floor" is the right reading</div>
+          <div class="d">P0 did not make V2 <em>faster</em> than SVM. <b>It made V2 the same shape as
+          SVM.</b> The specialization win in &sect;9.4 is measured <em>from that floor</em>.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The commit's closing line is the more important one</div>
+          <div class="d" style="font-size:0.82em;">"The thread=shot topology and single tier-parameterized
+          body are exactly what the MLIR specializer emits per-tier &mdash; <b>this refactor is the
+          specializer's substrate.</b>"</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">Without P0 there is no <code>spec_body</code> that all three tiers
+      can share, and <b>the specializer would have needed three separate emitters.</b></div>
+    </section>
+
+    <section>
+      <h2>9.3 &nbsp;P1a/P1b &mdash; LDS reclamation: 25,088 &rarr; 13,312 B</h2>
+      <p class="lede">The coop tier's occupancy is set by LDS. Two commits took the declared workgroup
+      footprint down by 47%. Both changes are of the form <b>"the buffer was declared for a worst case that
+      cannot happen"</b>:</p>
+      <table class="tight">
+        <thead><tr><th>Buffer</th><th class="num">Before</th><th class="num">After</th><th>Why it is safe</th></tr></thead>
+        <tbody>
+          <tr><td><code>lds_red0</code>, <code>lds_red1</code></td><td class="num">[256]</td><td class="num win">[8]</td><td><code>coop_reduce2</code> only touches warps 0&ndash;3</td></tr>
+          <tr><td><code>lds_red_scratch</code></td><td class="num">[1024]</td><td class="num win">[512]</td><td>The coop <code>SWAP_MEAS</code> fold half is &le; 2<sup>10-1</sup> = 512</td></tr>
+          <tr><td><code>lds_meas</code></td><td class="num">u8 [4096] = 4 KB</td><td class="num win">u64 [64] = 512 B</td><td>Records are booleans; every access is tid0-only</td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">P1a (<code>d873997</code>) &mdash; 25,088 &rarr; 16,896 B</div>
+          <div class="d">Confirmed by <code>rocprofv3</code>'s <code>LDS_Block_Size</code>
+          (<code>tools/ldscheck_50017.log</code>).</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">P1b (<code>7802423</code>) &mdash; 16,896 &rarr; 13,312 B</div>
+          <div class="d">Bit-packing behind three accessors (<code>mget</code>/<code>mset</code>/<code>mxor1</code>)
+          replacing all 15 access sites (<code>ldscheck_50021.log</code>).</div>
+        </div>
+      </div>
+      <div class="card card-warn" style="padding:0.8em;">
+        <div class="h">The 13,312 / 13,064 discrepancy is a reporting granule, not a change</div>
+        <div class="d" style="font-size:0.78em;">Every coop <code>.hsaco</code> on disk records
+        <code>.group_segment_fixed_size: 13064</code>, while <code>rocprofv3</code> reports 13,312. An
+        earlier draft read the difference as 248 bytes "reclaimed by later changes." It is not: <b>13,312 is
+        13,064 rounded up to the next 256-byte granule</b>, and the global tier shows the identical pattern
+        (ELF 784 &rarr; profiler 1,024). <b>The two numbers describe one allocation.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Correction: the "2 &rarr; 4 wg/CU" claim is wrong on this hardware</h2>
+      <p class="lede">Both commit messages derive occupancy from <code>floor(64 KB / LDS)</code>, and the P1
+      planning documents state "CDNA4, 64 KB LDS/CU" as a premise.</p>
+      <div class="verdict verdict-bad"><b>gfx950 has 160 KB of LDS per CU, not 64 KB.</b></div>
+      <p class="lede">Asking the compiler directly &mdash; the same clang that builds these kernels &mdash;
+      by binary-searching the largest accepted <code>address_space(3)</code> array:</p>
+      <div class="diff">
+<span class="ctx">gfx90a: max LDS per workgroup =  65,473 B    (64 KB limit)</span>
+<span class="ctx">gfx942: max LDS per workgroup =  65,473 B    (64 KB limit)</span>
+<span class="add">gfx950: max LDS per workgroup = 163,681 B   (160 KB limit)</span>
+<span class="note">over-allocating by one byte prints the constant verbatim:</span>
+<span class="del">error: local memory (163844) exceeds limit (163840) in 'k'</span>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="diff-title">LLVM's own <code>; Occupancy:</code> comment, 256-thread workgroup</div>
+          <table class="tight">
+            <thead><tr><th>LDS bytes</th><th class="num">gfx942</th><th class="num"><b>gfx950</b></th></tr></thead>
+            <tbody>
+              <tr><td>25,088 (baseline)</td><td class="num">2</td><td class="num win"><b>8</b>&nbsp;<span style="color:var(--dim);">(6)</span></td></tr>
+              <tr><td>16,896 (after P1a)</td><td class="num">3</td><td class="num win"><b>8</b></td></tr>
+              <tr><td>13,312 (after P1b)</td><td class="num">4</td><td class="num win"><b>8</b></td></tr>
+              <tr><td>8,704 (global tier)</td><td class="num">7</td><td class="num win"><b>8</b></td></tr>
+            </tbody>
+          </table>
+          <div class="footnote">The gfx942 column is exactly the "2 &rarr; 3 &rarr; 4" the commits claim:
+          <b>the reasoning was right for the <em>previous</em> generation.</b></div>
+        </div>
+        <div>
+          <div class="card card-accent">
+            <div class="h">On gfx950 the model is <code>min(8, 163840 / LDS)</code></div>
+            <div class="d">Verified against LLVM at every step boundary &mdash; occupancy first drops below
+            8 at <b>20,992 bytes</b>, and <code>163840/20992 = 7</code>.
+            <hr/>
+            <b>Both P1 steps therefore moved entirely inside the flat region: 8 wg/CU before, 8 wg/CU
+            after.</b> The occupancy cap here is the hardware's 8 waves/SIMD, and the kernel was already at
+            it.</div>
+          </div>
+          <div class="card card-hl">
+            <div class="h">Registers were never binding either</div>
+            <div class="d">Sweeping VGPR from 32 to 256 at each LDS size leaves <b>every entry
+            unchanged</b>.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>So what did P1 actually buy?</h2>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">The measurement is real</div>
+          <div class="d">P0+P1 together take <code>surface_d9_t19</code> from 0.906 to 0.817 and
+          <code>surface_d11_t15</code> from 0.938 to 0.854 &mdash; about <b>10%, real and
+          reproducible</b>.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">But it cannot be occupancy on this node</div>
+          <div class="d">And the two commits are <b>not separable</b> in the archived runs: the
+          <code>after-P0-P1</code> run measures all three changes at once, on top of P0's topology change,
+          which is itself worth 28&times;.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed"><b>The honest statement: the LDS reclamation is a
+      correctness-preserving footprint reduction whose measured benefit on gfx950 is not isolated, and whose
+      stated mechanism does not hold here.</b></div>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">It <em>would</em> be the 2 &rarr; 4 wg/CU claimed &mdash; on MI300X</div>
+          <div class="d">gfx942, which is where the plan was written. And it becomes binding again on
+          gfx950 for any future kernel that pushes past <b>20 KB</b>.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">What it definitely bought: headroom</div>
+          <div class="d"><b>The rank-26 work in &sect;10 spends LDS that P1 freed.</b></div>
+        </div>
+      </div>
+      <div class="insight">This is the one place where the report's ground rule cuts against a result the
+      project was pleased with. <b>The measurement (25,088 &rarr; 16,896 &rarr; 13,312) was correct at every
+      step; the <em>inference from it</em> used a constant from the wrong chip.</b></div>
+      <div class="footnote">Both commit messages note the forward connection: <em>"This is the same
+      per-circuit LDS sizing the MLIR specializer will bake at compile time; here a conservative static
+      bound."</em> The specializer knows each circuit's peak rank, so it <em>could</em> size these exactly.
+      It currently does not &mdash; it inherits the static bound. Open item in &sect;16.</div>
+    </section>
+
+    <section>
+      <h2>9.4 &nbsp;The specializer, in four commits &mdash; Phase 1</h2>
+      <p class="lede"><b><code>eea6e13</code> &mdash; extract the operand library.</b> A behavior-preserving
+      refactor: the interpreter becomes a thin <code>for(pc) switch</code> dispatching to
+      <code>static inline v2_op_*(st, v, scratch, active_k, operands...)</code> in a new shared header. Each
+      op takes its operands <b>and the pre-op <code>active_k</code> by value</b>. That signature is the
+      whole design:</p>
+      <div class="card card-hl" style="padding:0.9em;">
+        <div class="d" style="font-size:0.82em;">the interpreter passes runtime values (unchanged behavior),
+        and the per-circuit specializer emits a straight-line sequence of the <b>same calls</b> with
+        COMPILE-TIME-CONSTANT operands &rarr; <code>-O2</code> folds loop bounds
+        (<code>1&lt;&lt;(active_k-2)</code> &rarr; literal) and matrix indices, <b>WITHOUT unrolling the
+        <code>2^k</code> sweeps (avoids V1's IR-bloat disease).</b></div>
+      </div>
+      <div class="verdict verdict-good"><b>Byte-exactness is then true <em>by construction</em>, not by
+      testing</b> &mdash; both paths call the same function bodies. 38/38 byte-exact, timing unchanged.</div>
+      <div class="card card-warn">
+        <div class="h"><code>4b55871</code> marked the bodies <code>always_inline</code></div>
+        <div class="d">So the interpreter gets them inlined into <code>execute_shot</code> exactly as the
+        pre-refactor switch bodies were. That commit also honestly records a cost that had not yet been
+        explained:
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.82em;margin-top:0.3em;color:var(--warn);">
+        "a ~20% coop-interpreter regression vs pre-Phase1 remains on noise-heavy fallback circuits (under
+        investigation)"</div>
+        <hr/>
+        That regression is still visible today as the <code>circuit_d5</code> family's 1.44&ndash;1.46&times;
+        &mdash; see &sect;11.1, where it turns out <b>not to be a performance problem at all</b> but the
+        visible consequence of a correctness gate doing its job.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 2+3 (<code>b31b400</code>) &mdash; the register-tier emitter</h2>
+      <p class="lede">The first per-circuit kernel. Measured against the <em>interpreter</em> on the same
+      tier:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">interpreter (V2/SVM)</th><th class="num">specialized (V2/SVM)</th><th class="num">gain over interpreter</th></tr></thead>
+        <tbody>
+          <tr><td><code>frame_h</code></td><td class="num">0.16&times;</td><td class="num win"><b>0.08&times;</b></td><td class="num win">2.0&times;</td></tr>
+          <tr><td><code>circuit_d3</code></td><td class="num">1.07&times;</td><td class="num win"><b>0.32&times;</b></td><td class="num win">3.3&times;</td></tr>
+          <tr><td><code>color_d3</code></td><td class="num">1.09&times;</td><td class="num win"><b>0.36&times;</b></td><td class="num win">3.0&times;</td></tr>
+        </tbody>
+      </table>
+      <div class="stat-callout">
+        <div class="stat-num">~3&times;</div>
+        <div class="stat-label">for compile-time opcode resolution. The commit states the thesis it was
+        testing and the verdict: <em>"This validates R5's thesis: compile-time opcode resolution + constant
+        folding is worth ~3x."</em></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Coop tier (<code>60d5728</code>) &mdash; and a commit-message claim that does not reproduce</h2>
+      <p class="lede">The same <code>spec_body</code>, a 1-workgroup-per-shot wrapper, LDS state. This is the
+      commit where <code>qv10</code> drops to 0.252. The message claims <b><em>"qv10 5.5x, surface_d7_t15
+      7.6x"</em></b> over the coop interpreter.</p>
+      <div class="verdict verdict-bad"><b>Those were measured ad-hoc during development and are not
+      reproducible from the archived runs</b>, which give a consistently smaller number.</div>
+      <p class="lede">Each circuit's last interpreter run against its first specialized run &mdash; same
+      node, same shot count, kernel identity confirmed by trace:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">interpreter (µs)</th><th class="num">specialized (µs)</th><th class="num">gain</th></tr></thead>
+        <tbody>
+          <tr><td><code>surface_d7_t15</code></td><td class="num">39,352.8 <span style="color:var(--dim);">(<code>coop</code>)</span></td><td class="num">11,117.4 <span style="color:var(--dim);">(<code>spec</code>)</span></td><td class="num win"><b>3.54&times;</b></td></tr>
+          <tr><td><code>surface_d9_t10</code></td><td class="num">79,242.3 <span style="color:var(--dim);">(<code>coop</code>)</span></td><td class="num">21,318.3</td><td class="num win"><b>3.72&times;</b></td></tr>
+          <tr><td><code>surface_d7_t19</code></td><td class="num">20,295.2 <span style="color:var(--dim);">(<code>global</code>)</span></td><td class="num">6,229.2</td><td class="num win"><b>3.26&times;</b></td></tr>
+          <tr><td><code>surface_d9_t19</code></td><td class="num">43,588.2 <span style="color:var(--dim);">(<code>global</code>)</span></td><td class="num">11,726.6</td><td class="num win"><b>3.72&times;</b></td></tr>
+          <tr><td><code>surface_d11_t15</code></td><td class="num">75,154.0 <span style="color:var(--dim);">(<code>global</code>)</span></td><td class="num">19,412.2</td><td class="num win"><b>3.87&times;</b></td></tr>
+        </tbody>
+      </table>
+      <div class="insight"><b>Specialization is worth ~3.3&ndash;3.9&times; over the interpreter, uniformly
+      across coop and global.</b> That is a cleaner result than the commit messages' spread of
+      2.0&times;&ndash;7.6&times;, and it agrees with the register tier's independently-measured ~3&times;
+      and with the per-op instruction counts in &sect;7 (a 2.9&times; median). <b>Three different
+      measurements of the same lever converge on ~3&times;.</b></div>
+    </section>
+
+    <section>
+      <h2><code>qv10</code> is the exception, and it is instructive</h2>
+      <p class="lede">5,358.7 µs interpreter &rarr; 1,085.9 µs specialized is <b>4.93&times;</b> &mdash; but
+      its specialized time then <em>rises</em> to 1,340&ndash;1,361 µs in every later run and settles at
+      0.310 rather than 0.252. The counters name the cause without ambiguity:</p>
+      <table class="tight">
+        <thead><tr><th>run</th><th class="num">V2 µs</th><th class="num">V2/SVM</th><th class="num">VGPR</th><th class="num">VALU</th></tr></thead>
+        <tbody>
+          <tr><td>after-specializer</td><td class="num">1085.9</td><td class="num">0.252</td><td class="num">24</td><td class="num">5.10e+08</td></tr>
+          <tr><td>specializer-final</td><td class="num">1088.6</td><td class="num">0.251</td><td class="num">24</td><td class="num">5.31e+08</td></tr>
+          <tr><td>noise-specialized</td><td class="num lose">1340.0</td><td class="num">0.308</td><td class="num lose"><b>36</b></td><td class="num win">5.02e+08</td></tr>
+          <tr><td>global-specialized</td><td class="num lose">1346.4</td><td class="num">0.310</td><td class="num lose"><b>36</b></td><td class="num win">5.02e+08</td></tr>
+          <tr><td>final</td><td class="num lose">1361.3</td><td class="num">0.310</td><td class="num lose"><b>36</b></td><td class="num win">5.02e+08</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-mixed"><b>VALU goes <em>down</em> while time goes up, and VGPR jumps 24
+      &rarr; 36 at exactly the run that follows the noise fence.</b></div>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">Fewer vector instructions, more time, more registers live</div>
+          <div class="d">That is the signature of the <code>noinline</code> boundaries in
+          <code>9d9cc68</code>: <b>the ops can no longer be interleaved across call edges</b>, so the
+          scheduler has less to overlap and the ABI forces values live across the calls.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">Ruled out: noise, node, baseline</div>
+          <div class="d">All five runs are <code>d13-21</code>; the SVM baseline is 4,317&ndash;4,388 µs
+          throughout.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good"><b><code>qv10</code> pays about 23% for byte-exactness</b> &mdash;
+      and the progressive table reports the post-fence number rather than quoting the faster incorrect
+      one.</div>
+    </section>
+
+    <section>
+      <h2>The correctness gate</h2>
+      <p class="lede"><code>60d5728</code> also introduced the gate, and it did so <b>because coop
+      specialization of noise-heavy circuits diverged</b>.</p>
+      <div class="card card-success" style="padding:0.9em;">
+        <div class="h">The mechanism, restated</div>
+        <div class="d">Every <code>.hsaco</code> is validated against the interpreter on a <b>multi-seed
+        shot sample</b> before it is allowed to run, with the verdict cached to disk (<code>bbb5e42</code>
+        added the multi-seed + disk cache). <b>A circuit that fails the gate silently falls back to the
+        interpreter.</b></div>
+      </div>
+      <div class="verdict verdict-good"><b>Byte-exactness is guaranteed for every circuit, not just the
+      tested ones.</b></div>
+    </section>
+
+    <section>
+      <h2>Global tier (<code>5d10409</code>) &mdash; this one began with a bottleneck analysis</h2>
+      <div class="card card-hl" style="padding:0.9em;">
+        <div class="h">The commit records it</div>
+        <div class="d" style="font-size:0.82em;">Bottleneck analysis (rocprofv3, V2 global vs SVM): V2 did
+        <b>2&times; the VALU (2.34B vs 1.18B)</b> and <b>25&times; more L2 misses</b> at the same wall time
+        &mdash; the extra VALU is per-amplitude scatter-index recompute (<code>scatter_bits_2</code> &rarr;
+        <code>insert_zero_bit</code>, ~8&ndash;12 VALU each) that the runtime interpreter pays 256-way per
+        shot and <b>SVM avoids via a scatter LUT it leaves OFF for global.</b></div>
+      </div>
+      <div class="insight">That is <b>S5 (&sect;7) showing up as a whole-kernel bottleneck.</b> SVM's answer
+      was a runtime lookup table; V2's answer is to fold the index arithmetic at compile time, which is
+      <b>strictly better &mdash; no table, no LDS for the table, no lookup.</b></div>
+      <div class="verdict verdict-good">Result: <b>3.37&times; / 3.78&times; / 3.87&times;</b> over the
+      global interpreter on <code>surface_d7_t19</code> / <code>d9_t19</code> / <code>d11_t15</code>, and in
+      the progressive table those three go from ~1.0 to ~0.26&ndash;0.31 <b>in a single step</b>.</div>
+      <figure>
+        <img src="diagrams/scatter-index-folding.svg" alt="scatter_bits_2 at runtime vs folded" class="mid" />
+        <figcaption><b>Figure 9.2</b> &mdash; The global-tier bottleneck. Left: the interpreter recomputes
+        <code>scatter_bits_2</code> per amplitude, 8&ndash;12 VALU each, 256 threads deep. Centre: SVM's
+        runtime scatter LUT, which it <em>disables</em> on the global tier. Right: V2's compile-time fold
+        &mdash; three constant masks and a <code>v_or3</code>.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>9.5 &nbsp;The noise fence (<code>9d9cc68</code>) &mdash; what shipped</h2>
+      <p class="lede">After the coop emitter, noise-heavy circuits still failed the gate. The fix had two
+      parts:</p>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">1. <code>V2_NOISE_ATTR</code></div>
+          <div class="d">Emit the FP-carrying noise ops and the reduction-carrying measurement ops
+          <b><code>noinline</code></b> in the specialized build, so each straight-lined op is an
+          optimization barrier the <code>-O2</code> scheduler cannot move FP across.
+          <hr/>
+          The commit describes this as <em>"the specializer analog of 'resolve to a loop instead of
+          unrolling'."</em></div>
+        </div>
+        <div class="card card-success">
+          <div class="h">2. Identical compile flags</div>
+          <div class="d">The runtime compile had drifted: <code>-fno-vectorize -fno-unroll</code> had been
+          added, which themselves differed from the build-time interpreter. <b>Dropping them made the two
+          paths compile the same way.</b></div>
+        </div>
+      </div>
+      <div class="stat-callout">
+        <div class="stat-num">1.793 &rarr; 0.503</div>
+        <div class="stat-label"><code>surface_d7_t15</code>; and <code>surface_d9_t10</code> 1.800 &rarr;
+        0.484. A <b>3.5&times;</b> and <b>3.7&times;</b> step &mdash; because those circuits could now
+        <b>pass the gate and run specialized</b>.</div>
+      </div>
+      <div class="footnote">The step must be measured from the <code>specializer-final</code> column, not
+      from the italic 1.427/1.402. Those intermediate cells are the gate-polluted ones: they are
+      <em>already partly specialized</em>, being the sum of an interpreter dispatch and two specialized
+      dispatches, so they sit between the two real values and understate the step. The VALU counter makes
+      the three states plain &mdash; <b>4.71e+09 interpreter, 3.49e+09 polluted mixture, 1.15e+09
+      specialized.</b></div>
+    </section>
+
+    <section>
+      <h2>But the stated explanation was wrong, and the correction matters</h2>
+      <p class="lede">The commit attributed the divergence to <code>-O2</code> <b>reassociating FP across
+      inlined call boundaries</b>. Four commits later (<code>150d09f</code>) that theory was refuted:</p>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="d" style="font-size:0.84em;">That theory was refuted: the build is <code>-O2
+        -ffp-contract=off</code> with no fast-math, under which <b>inlining cannot legally change an FP
+        result</b>, and <code>V2_GATE_SELFTEST</code> caught the kernel <b>disagreeing with itself across
+        two runs of the same binary.</b></div>
+      </div>
+      <div class="verdict verdict-bad"><b>A deterministic kernel that disagrees with itself is not a
+      rounding problem. It is a race.</b> &sect;11.2 tells that story.</div>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h"><code>V2_NOISE_ATTR</code> was retained</div>
+          <div class="d">But <b>for code size, not correctness</b>. And <code>V2_SPEC_NOISE_INLINE=1</code>
+          exists precisely so the hypothesis can be <b>A/B tested rather than assumed</b>.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">The best example in the project of the ground rule paying off</div>
+          <div class="d">The fence <em>worked</em>; the <em>reason given for why it worked</em> was false;
+          and <b>believing the false reason would have left the actual race in the code.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>9.6 &nbsp;A correctness fix that looked like a performance result (<code>842d646</code>)</h2>
+      <p class="lede">V2 counted the <b>raw</b> observable parity; every reference implementation &mdash;
+      GPU-SVM in <code>hip_sampler.hip</code> and the CPU sampler in <code>svm.cc</code> &mdash; XORs it
+      against the noiseless reference syndrome first.</p>
+      <div class="verdict verdict-bad">On any circuit whose reference observable is 1, V2 reported the exact
+      <b>complement</b> of SVM's count: <code>surface_d11_t19</code> gave <b>674</b> where SVM gave
+      <b>1326</b> of 2000 passed shots.</div>
+      <p class="lede">The fix threads the reference through as a packed <code>u32
+      expected_obs_mask</code>. The implementation detail is the interesting part:</p>
+      <div class="card card-hl" style="padding:0.8em;">
+        <div class="d" style="font-size:0.82em;">placed in the implicit pad slot after
+        <code>num_noise_sites</code> so the kernarg struct <b>SIZE is unchanged</b> (a 120-vs-116 mismatch
+        silently breaks every dispatch).</div>
+      </div>
+      <div class="diff">
+<span class="ctx">sizeof(CV2KernArgs)        = 152</span>
+<span class="ctx">offsetof num_noise_sites   = 112</span>
+<span class="add">offsetof expected_obs_mask = 116     &lt;- into padding the u32 at 112 already forced</span>
+      </div>
+      <div class="verdict verdict-good"><b>A whole new argument was added for free.</b> (The commit's
+      "120-vs-116" refers to that boundary, not the total, which is 152 both before and after.)</div>
+    </section>
+
+    <section>
+      <h2>Why the ABI checks exist at all</h2>
+      <p class="lede">With HSA dispatch <b>there is no runtime checking the kernarg layout for you</b>
+      (&sect;13): the AQL packet carries a pointer and the kernel casts it. <b>A size or offset mismatch is
+      not an error, it is silently reading the wrong bytes.</b></p>
+      <pre><code><span class="kw">static_assert</span>(<span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(clifft::Opcode::OP_FRAME_CNOT) == <span class="lit">0</span>,  <span class="st">"opcode FRAME_CNOT"</span>);
+<span class="kw">static_assert</span>(<span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(clifft::Opcode::OP_EXPAND)     == <span class="lit">19</span>, <span class="st">"opcode EXPAND"</span>);
+<span class="kw">static_assert</span>(<span class="kw">sizeof</span>(CV2Instr) == <span class="kw">sizeof</span>(GpuInstr), <span class="st">"CV2Instr size"</span>);
+<span class="kw">static_assert</span>(<span class="fn">offsetof</span>(CV2Instr, opcode) == <span class="fn">offsetof</span>(GpuInstr, opcode), <span class="st">"instr.opcode"</span>);</code></pre>
+      <div class="stat-callout">
+        <div class="stat-num">55</div>
+        <div class="stat-label"><code>static_assert</code>s in <code>device_abi_checks.cc</code>, pinning
+        every offset and size in the device header to the host structs in <code>gpu_types.h</code>, plus the
+        opcode numbering.</div>
+      </div>
+      <div class="insight">Its header comment records that this is not hypothetical: <em>"this caught an
+      off-by-one: EXPAND/MEAS were numbered -1."</em> <b>A build error instead of a silent GPU miscompute is
+      the whole return on the file.</b></div>
+    </section>
+
+    <section>
+      <h2>9.7 &nbsp;Where the wins came from</h2>
+      <table class="tight" style="font-size:0.8em;">
+        <thead><tr><th>Change</th><th>Mechanism</th><th>Who it helped</th><th class="num">Magnitude</th></tr></thead>
+        <tbody>
+          <tr><td>P0 shot-packed register tier</td><td>topology: 1 shot/thread instead of 256 threads/shot</td><td>rank &le; 4</td><td class="num win"><b>28.3&times; &rarr; 1.2&times;</b></td></tr>
+          <tr><td>P1a/P1b LDS reclamation</td><td>25,088 &rarr; 13,312 B/workgroup</td><td>all coop</td><td class="num">~10%, <span class="lose">mechanism unconfirmed on gfx950</span></td></tr>
+          <tr><td>Specializer, register</td><td>constant-fold operands, delete dispatch</td><td>rank &le; 4</td><td class="num win">3.3&times; over interpreter</td></tr>
+          <tr><td>Specializer, coop</td><td>same, plus rank-folded loop bounds</td><td>rank 5&ndash;10</td><td class="num win"><b>3.5&ndash;3.7&times;</b></td></tr>
+          <tr><td>Noise fence + gate</td><td>made noise circuits <em>eligible</em> to specialize</td><td>noise-heavy coop</td><td class="num win">1.79 &rarr; 0.50</td></tr>
+          <tr><td>Specializer, global</td><td>fold <code>scatter_bits_2</code>, no LUT needed</td><td>rank 11&ndash;19</td><td class="num win"><b>3.3&ndash;3.9&times;</b></td></tr>
+          <tr><td>Rank cap 19 &rarr; 26</td><td>size HBM from circuit rank, not the cap</td><td>rank 20&ndash;26</td><td class="num">new capability (&sect;10)</td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">Two rows changed under audit</div>
+          <div class="d">The coop specializer is <b>3.5&ndash;3.7&times;</b>, not the 5.5&ndash;7.6&times;
+          its commit message claims; and the P1 occupancy mechanism does not hold on this chip. <b>Both
+          corrections came from the archived runs rather than from the commit log.</b></div>
+        </div>
+        <div class="card card-success">
+          <div class="h">The specialization rows now agree with each other</div>
+          <div class="d"><b>~3.3&ndash;3.9&times; across all three tiers</b> &mdash; a stronger claim than
+          the scattered original figures, because it says <b>the lever is the same lever everywhere:
+          resolve the opcode at compile time.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-good"><b>Every large win came from removing something the runtime was
+      doing, not from making the arithmetic faster.</b> The arithmetic &mdash; the complex multiplies in the
+      butterfly &mdash; is essentially unchanged from SVM. What changed is that V2 stopped fetching
+      instructions, stopped switching on opcodes, stopped recomputing indices, and stopped reloading the
+      rank.</div>
+    </section>
