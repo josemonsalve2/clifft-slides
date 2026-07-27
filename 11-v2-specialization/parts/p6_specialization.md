@@ -53,57 +53,87 @@ values. The harness kernel signature is the same in both builds:
 #define IN(n) (instrs[pc + (n)])   // fetch instruction pc+n, the interpreter's access pattern
 ```
 
-Metrics are scraped from the emitted assembly by `build_examples.sh`: ISA line
-count, `NumVgprs`/`NumSgprs`/`ScratchSize` from the AMDGPU metadata comments,
-and counts of `s_load`, `ds_read`/`ds_write`, `v_*`, and `s_cbranch`/`s_branch`.
-Raw output is in `V2_performance/lowering/spec_examples/stats.csv`; the `.s`
-files for both forms of all eight cases are checked in alongside it.
+Metrics are scraped from the emitted assembly by `build_examples.sh`:
+instruction count, `num_vgpr`/`numbered_sgpr`/`private_seg_size` from the
+AMDGPU `.set` directives, and counts of `s_load`, `ds_read`/`ds_write`, `v_*`,
+and `s_cbranch`/`s_branch`. Raw output is in
+`V2_performance/lowering/spec_examples/stats.csv`; the `.s` files for both forms
+of all eight cases are checked in alongside it, and `build_examples.sh`
+reproduces all sixteen byte-for-byte.
 
-### 7.2 The result, in one table
+> **A measurement note, because an earlier draft of this chapter got it wrong.**
+> The first version of the harness reported an *ISA line count* — `wc -l` of the
+> `.s` file. That number is dominated by assembler directives, comments, labels
+> and the AMDGPU metadata block: 205–316 lines per case, which for these small
+> kernels is more than half the file. Because that constant overhead is
+> approximately equal in both forms, it diluted every ratio toward 1.0 and
+> systematically *understated* the effect this chapter is about. S1 read 1.37×
+> where the instruction ratio is 2.89×. The table below counts instructions —
+> tab-indented lines that are neither `.directive` nor `; comment`. Two further
+> bugs are fixed in the same pass: the resource columns were scraped from the
+> `; NumVgprs:` comment, which LLVM emits as a *symbolic expression*
+> (`max(56, amdgpu.max_num_vgpr)`) for any kernel that calls an external
+> function — so S7, which calls `__ocml_log_f64`, scraped to **0** and appeared
+> to use no vector registers at all, when it in fact uses 56 in both forms — and
+> `; NumSgprs:` does not appear in this LLVM's output at all, so that column read
+> 0 for all sixteen files. All three are read from the `.set` directives now.
 
 ```
-S1_frame_cnot    isa  347->254  (1.37x)  vgpr   8->3    v_alu   44->8    (5.50x)  branch  6->4
-S2_meas_dormant  isa  428->269  (1.59x)  vgpr  25->14   v_alu   86->19   (4.53x)  branch 18->0
-S3_expand_rank   isa  381->294  (1.30x)  vgpr  18->8    v_alu   67->27   (2.48x)  branch  9->6
-S4_meas_active   isa  560->456  (1.23x)  vgpr  24->14   v_alu  139->96   (1.45x)  branch 15->7
-S5_array_cnot    isa  424->294  (1.44x)  vgpr  16->8    v_alu   84->33   (2.55x)  branch 10->8
-S6_array_u2      isa  364->289  (1.26x)  vgpr  24->18   v_alu   54->42   (1.29x)  branch 10->2
-S7_noise_block   isa  763->716  (1.07x)  vgpr   0->0    v_alu  214->210  (1.02x)  branch 23->20
-S8_apply_pauli   isa  390->342  (1.14x)  vgpr  22->21   v_alu   71->63   (1.13x)  branch  3->3
+S1_frame_cnot    instrs  136->47   (2.89x)  vgpr   8->3    v_alu   44->8    (5.50x)  branch   6->4
+S2_meas_dormant  instrs  206->70   (2.94x)  vgpr  25->14   v_alu   86->19   (4.53x)  branch  18->0
+S3_expand_rank   instrs  164->83   (1.98x)  vgpr  18->8    v_alu   67->27   (2.48x)  branch   9->6
+S4_meas_active   instrs  331->240  (1.38x)  vgpr  24->14   v_alu  139->96   (1.45x)  branch  15->7
+S5_array_cnot    instrs  207->81   (2.56x)  vgpr  16->8    v_alu   84->33   (2.55x)  branch  10->8
+S6_array_u2      instrs  147->86   (1.71x)  vgpr  24->18   v_alu   54->42   (1.29x)  branch  10->2
+S7_noise_block   instrs  447->407  (1.10x)  vgpr  56->56   v_alu  214->210  (1.02x)  branch  23->20
+S8_apply_pauli   instrs  185->137  (1.35x)  vgpr  22->21   v_alu   71->63   (1.13x)  branch   3->3
 ```
 
-With the scalar-memory column, which is where the story actually is:
+With the scalar-memory and register columns, which is where the story actually
+is:
 
-| Case | Class | Tier | ISA | VGPR | `s_load` | `ds_*` | VALU | branch |
-|---|---|---|---|---|---|---|---|---|
-| S1 | frame operand folding | register | 347→254 | 8→3 | 6→3 | 0→0 | 44→8 | 6→4 |
-| S2 | flag folding | register | 428→269 | 25→14 | 9→4 | 0→0 | 86→19 | **18→0** |
-| S3 | static rank tracking | coop | 381→294 | 18→8 | 6→4 | 0→0 | 67→27 | 9→6 |
-| S4 | rank-folded reduction | coop | 560→456 | 24→14 | 7→5 | 4→4 | 139→96 | 15→7 |
-| S5 | scatter-index folding | coop | 424→294 | 16→8 | **4→1** | 0→0 | 84→33 | 10→8 |
-| S6 | fused-matrix lookup | coop | 364→289 | 24→18 | 12→7 | 0→0 | 54→42 | 10→2 |
-| S7 | noise runtime loop | register | 763→716 | 0→0 | 9→5 | 0→0 | 214→210 | 23→20 |
-| S8 | Pauli-mask index | register | 390→342 | 22→21 | 17→11 | 0→0 | 71→63 | 3→3 |
+| Case | Class | Tier | instrs | VALU | VGPR | SGPR | `s_load` | `ds_*` | branch |
+|---|---|---|---|---|---|---|---|---|---|
+| S1 | frame operand folding | register | 136→47 (2.89×) | 44→8 (5.50×) | 8→3 | 14→12 | 6→3 | 0→0 | 6→4 |
+| S2 | flag folding | register | 206→70 (2.94×) | 86→19 (4.53×) | 25→14 | 13→26 | 9→4 | 0→0 | **18→0** |
+| S3 | static rank tracking | coop | 164→83 (1.98×) | 67→27 (2.48×) | 18→8 | 16→10 | 6→4 | 0→0 | 9→6 |
+| S4 | rank-folded reduction | coop | 331→240 (1.38×) | 139→96 (1.45×) | 24→14 | 30→26 | 7→5 | **4→4** | 15→7 |
+| S5 | scatter-index folding | coop | 207→81 (2.56×) | 84→33 (2.55×) | 16→8 | 24→10 | **4→1** | 0→0 | 10→8 |
+| S6 | fused-matrix lookup | coop | 147→86 (1.71×) | 54→42 (1.29×) | 24→18 | 23→16 | 12→7 | 0→0 | 10→2 |
+| S7 | noise runtime loop | register | 447→407 (1.10×) | 214→210 (1.02×) | 56→56 | 86→85 | 9→5 | 0→0 | 23→20 |
+| S8 | Pauli-mask index | register | 185→137 (1.35×) | 71→63 (1.13×) | 22→21 | 44→42 | 17→11 | 0→0 | 3→3 |
 
-Three things fall out of this table immediately, and they set up the rest of the
+Four things fall out of this table immediately, and they set up the rest of the
 report:
 
-1. **The VALU ratios are much larger than the ISA ratios.** S1 deletes 82 % of
-   its vector ALU work but only 27 % of its instructions. What replaces the
-   deleted VALU is *scalar* work — see §7.3 and §14.3.
-2. **The spread is enormous — 5.50× down to 1.02×.** Specialization is not a
-   uniform multiplier. It is worth a great deal on frame/flag/index ops and
-   almost nothing on data-dependent ops. Which opcodes a circuit is made of
+1. **The VALU ratios still exceed the instruction ratios, but the gap is now
+   honest.** S1 deletes 82 % of its vector ALU work and 65 % of its
+   instructions. What replaces the deleted VALU is *scalar* work — the SGPR
+   column is the tell, and §7.3 and §14.3 develop it.
+2. **The spread is enormous — 5.50× down to 1.02× on VALU.** Specialization is
+   not a uniform multiplier. It is worth a great deal on frame/flag/index ops
+   and almost nothing on data-dependent ops. Which opcodes a circuit is made of
    therefore predicts its speedup, and §14 confirms that it does.
-3. **S7 is the negative result, and it is in the table on purpose.** 1.07× ISA,
-   1.02× VALU. The noise block is genuinely data-dependent; there is nothing to
-   fold. This is the case that predicts the `circuit_d5` regression in §11.1.
+3. **S7 is the negative result, and it is in the table on purpose.** 1.10×
+   instructions, 1.02× VALU, and — now that the column is read correctly —
+   **VGPR 56→56, unchanged**. The noise block is genuinely data-dependent; there
+   is nothing to fold, and specialization does not even relieve register
+   pressure. This is the case that predicts the `circuit_d5` regression in §11.1,
+   and the corrected register number strengthens that prediction rather than
+   weakening it.
+4. **S2 is the one case where SGPR pressure goes *up*, 13→26.** That is the
+   scalar-substitution effect made visible: the work removed from the vector pipe
+   did not vanish, it moved, and it now lives in scalar registers. On the
+   register tier this is a good trade — SGPRs are not the occupancy limiter there
+   — but it is the mechanism, not a free lunch.
 
 <figure>
 <img src="diagrams/spec-classes-gains.svg" alt="Per-class specialization gains" width="100%">
-<figcaption><b>Figure 7.1</b> — Per-class specialization gains, ISA vs VALU. The
-gap between the two bars is the scalar-substitution effect: work is not only
-deleted, it is moved off the vector pipe. S7 (noise) is flat on both.
+<figcaption><b>Figure 7.1</b> — Per-class specialization gains, instructions vs
+VALU, ordered by VALU ratio. The gap between the two bars is the
+scalar-substitution effect: work is not only deleted, it is moved off the vector
+pipe — most visibly in S2, whose SGPR count doubles as its branch count goes to
+zero. S7 (noise) is flat on both, and flat on registers too.
 </figcaption>
 </figure>
 
@@ -173,21 +203,31 @@ compile to 8 VALU instructions total, and those 8 are just the `v_mov`s that
 stage a scalar result into a vector register for `global_store`. The frame
 logic itself has left the vector pipe entirely.
 
-The interpreter form for the identical three ops:
+The interpreter form for the identical three ops. The instruction fetch
+(`interp/S1_frame_cnot.s:9-18`):
 
 ```asm
-	s_mul_i32   s7, s6, 40              ; pc * sizeof(CV2Instr)  -- address math
+	s_load_dword s6, s[0:1], 0x20       ; pc
+	s_load_dwordx2 s[2:3], s[0:1], 0x18 ; instrs
+	s_mul_i32 s7, s6, 40                ; pc * sizeof(CV2Instr) -- address math
+	s_mul_hi_u32 s5, s6, 40
+	s_add_u32 s4, s2, s7
+	s_addc_u32 s5, s3, s5
 	global_load_dword v0, v3, s[4:5] offset:2   ; load the instruction
 	v_readfirstlane_b32 s9, v0                  ; move the operand to the SALU
-	s_lshr_b32  s11, s9, 16
+```
+
+and then, for each frame access (`:34-46`):
+
+```asm
 	v_lshrrev_b32_e32 v2, 3, v0         ; a >> 6 -> word index, DYNAMIC
 	v_and_b32_e32 v2, 0x1ff8, v2
+	v_readfirstlane_b32 s2, v2
 	s_load_dwordx2 s[6:7], s[0:1], s2 offset:0x0  ; dynamically-indexed frame word
 	v_lshlrev_b64 v[0:1], v0, 1         ; 1 << (a & 63) -> bit mask, DYNAMIC
 	v_and_b32_e32 v4, s6, v0
 	v_and_b32_e32 v5, s7, v1
 	v_cmp_eq_u64_e32 vcc, 0, v[4:5]
-	...
 ```
 
 Three separate costs are visible and all three disappear under specialization:
@@ -203,9 +243,13 @@ Three separate costs are visible and all three disappear under specialization:
    `v_lshlrev_b64` to compute the word index and the bit mask. Under
    specialization these are *literals in the instruction encoding*.
 
-The 44 → 8 VALU drop (5.50×) is the sum of (2) and (3). Note also VGPR 8 → 3:
-with the operands and masks resolved, the op needs almost no vector registers,
-which directly raises tier occupancy (§9).
+The 44 → 8 VALU drop (5.50×) is the sum of (2) and (3), and the whole kernel
+falls 136 → 47 instructions (2.89×) — the largest instruction-level gain in the
+study. Note also VGPR 8 → 3: with the operands and masks resolved, the op needs
+almost no vector registers, which directly raises tier occupancy (§9). The
+scalar side barely moves, 14 → 12 SGPRs, because the *same* frame words are
+still being read and XORed — they are simply addressed by literal masks now
+instead of by computed ones.
 
 > **This is the mechanism behind the SALU finding in §14.3.** V2's speedup is
 > not primarily "fewer instructions." It is *the same computation moved from the
@@ -271,7 +315,17 @@ control flow is the `rng_uniform` compare inside the `_random` variant:
 Note the `s_cselect_b32`: even the genuinely random outcome is if-converted,
 because with constant `axis`/`slot` both arms write the same fixed bit and the
 compiler can pick the *value* rather than the *path*. VALU falls 86 → 19
-(4.53×).
+(4.53×) and the kernel as a whole 206 → 70 instructions (2.94×), the largest
+instruction ratio of the eight.
+
+This is also the case where **SGPR usage doubles, 13 → 26** — the only such case
+in the study. Nothing was lost: the eighteen deleted branches and the vector work
+behind them were replaced by scalar selects and the literals they select between,
+all of which need scalar registers. It is worth stating plainly because it is the
+clearest single instance of the pattern §14.3 generalizes — specialization does
+not simply *delete* work, it **moves work from the vector pipe to the scalar
+pipe**, and the scalar pipe is not free either. It is just very much cheaper: one
+lane instead of sixty-four, and it issues in parallel with vector instructions.
 
 Why this matters more on a GPU than the raw count suggests: on AMDGCN a taken
 `s_cbranch` inside a divergent region forces `s_and_saveexec_b64` /
@@ -355,12 +409,16 @@ argument changes:
 Because the specializer tracks the rank, the second call gets `1u` and the third
 gets `2u` — the compiler sees the rank *grow*, statically, across the program.
 
-**What it buys:** ISA 381→294 (1.30×), VALU 67→27 (2.48×), VGPR 18→8. The
-`1u << active_k` becomes a literal bound, so the loop's trip count is known;
-`dagger` being a literal folds the `imag` sign at compile time (the `?:` and the
-negate both disappear); and the store address `v[i + half]` gets a constant
-displacement instead of a computed one. The `s_load` count drops 6→4 — the two
-removed loads are the `st->active_k` reads.
+**What it buys:** 164→83 instructions (1.98×), VALU 67→27 (2.48×), VGPR 18→8,
+SGPR 16→10. The `1u << active_k` becomes a literal bound, so the loop's trip
+count is known; `dagger` being a literal folds the `imag` sign at compile time
+(the `?:` and the negate both disappear); and the store address `v[i + half]`
+gets a constant displacement instead of a computed one. The `s_load` count drops
+6→4, and the specific load that disappears is visible in the artifacts: the
+interpreter form contains exactly one `s_load_dword ..., 0x278` — the
+`st->active_k` read — and the specialized form contains **none**. (`0x278` is
+`active_k`'s offset in `V2State`; the other removed load is the bytecode fetch
+itself.)
 
 **What it does not buy, and this is the point:** the loop is still there. At
 rank 8 with `V2_STRIDE = 256` it is a handful of iterations; at rank 22 it is
@@ -430,10 +488,10 @@ them, and a PRNG draw at the branch point.
 #endif
 ```
 
-**Result:** ISA 560→456 (1.23×), VALU 139→96 (1.45×), branches 15→7,
-VGPR 24→14. Constant `k` fixes both trip counts and the LDS offsets the
-reduction indexes with; constant `slot`/`flags` folds the bounds check and the
-sign XOR as in S2.
+**Result:** 331→240 instructions (1.38×), VALU 139→96 (1.45×), branches 15→7,
+VGPR 24→14, SGPR 30→26. Constant `k` fixes both trip counts and the LDS offsets
+the reduction indexes with; constant `slot`/`flags` folds the bounds check and
+the sign XOR as in S2.
 
 **The `ds_op` column stays at 4 in both forms**, and that is the load-bearing
 observation for §12. The `ds_read`/`ds_write` pairs are the cooperative
@@ -515,24 +573,40 @@ shift/or steps, all on 64-bit values, *per iteration*.
 the paired access becomes a **constant address displacement**, folded into the
 memory instruction's encoding. No second address register, no add.
 
-The interpreter form has to build all of it at runtime:
+The interpreter form has to build all of it at runtime. First the trip count,
+which cannot be known until `active_k` has been loaded
+(`interp/S5_array_cnot.s:31-35`):
 
 ```asm
-	s_min_u32   s10, s22, s21           ; scatter_bits_2: min/max of the two axes
-	s_max_u32   s14, s22, s21
-	s_lshl_b64  s[10:11], -1, s10       ; ...then variable-shift masks
-	s_lshl_b64  s[14:15], -1, s14
-	v_lshlrev_b64 v[2:3], v2, 1         ; 1 << c, on the VECTOR pipe
-	s_lshl_b64  s[8:9], 1, s8
-	s_load_dword s23, s[4:5], 0x278     ; st->active_k
-	s_add_i32   s23, s23, -2
-	v_lshrrev_b64 v[4:5], s23, v[0:1]   ; the loop bound, computed
+	s_load_dword s23, s[4:5], 0x278     ; st->active_k -- a memory round trip
+	s_add_i32 s23, s23, -2              ; k - 2
+	v_lshrrev_b64 v[4:5], s23, v[0:1]   ; iters = 1<<(k-2), by VARIABLE shift
+	v_cmp_eq_u64_e32 vcc, 0, v[4:5]
 ```
 
-**Result:** ISA 424→294 (1.44×), VALU 84→33 (2.55×), VGPR 16→8, and **`s_load`
-4→1** — the largest relative scalar-load reduction in the study. Three of the
-four scalar loads were the instruction fetch and the `active_k` read; the
-survivor is the kernel argument pointer, which nothing can remove.
+then the index math itself, once per loop entry (`:41-48`):
+
+```asm
+	s_min_u32 s10, s22, s21             ; scatter_bits_2: min/max of the two axes
+	s_max_u32 s14, s22, s21
+	v_and_b32_e32 v2, 0xffff, v2
+	s_and_b32 s8, 0xffff, s21
+	s_lshl_b64 s[10:11], -1, s10        ; ...then variable-shift masks
+	s_lshl_b64 s[14:15], -1, s14
+	v_lshlrev_b64 v[2:3], v2, 1         ; 1 << c, on the VECTOR pipe
+	s_lshl_b64 s[8:9], 1, s8
+```
+
+followed by two `s_not_b64` to complete the masks. Every one of those operands
+is a literal in the specialized form, so the entire sequence — both blocks —
+collapses into the five constant-mask instructions quoted above.
+
+**Result:** 207→81 instructions (2.56×), VALU 84→33 (2.55×), VGPR 16→8, SGPR
+24→10, and **`s_load` 4→1** — the largest relative scalar-load reduction in the
+study. The four interpreter loads are, in file order: the `pc` (`0x20`), the
+`instrs` pointer (`0x18`), the kernel argument block (`0x0`), and `st->active_k`
+(`0x278`). Only the third survives specialization; it is the kernel argument
+pointer, which nothing can remove.
 
 The 16→8 VGPR halving is significant beyond the instruction count: on the coop
 tier, VGPR count sets waves-per-SIMD occupancy, and array two-qubit ops
@@ -583,12 +657,15 @@ on measurement outcomes, which depend on the PRNG, which depends on the shot.
 No amount of static analysis recovers it. The matrix row therefore stays a
 runtime load in both forms.
 
-**Result:** ISA 364→289 (1.26×), VALU 54→42 (1.29×), `s_load` 12→7, but
-**branches 10→2**. What *did* fold: `cp` (the table entry — a fixed
-displacement into `fused_u2`), `axis` (so `scatter_bits_1` and `axis_bit` become
-constant masks, as in S5), and crucially `axis < active_k` — with both constant,
-that guard is decided at compile time and the entire `if` either stays or
-vanishes. That single fold is most of the 10→2 branch drop.
+**Result:** 147→86 instructions (1.71×), VALU 54→42 (1.29×), `s_load` 12→7,
+SGPR 23→16, but **branches 10→2**. What *did* fold: `cp` (the table entry — a
+fixed displacement into `fused_u2`), `axis` (so `scatter_bits_1` and `axis_bit`
+become constant masks, as in S5), and crucially `axis < active_k` — the case
+calls it with `axis=4, active_k=8`, so with both constant the guard is decided at
+compile time and the `if` is entered unconditionally. That single fold is most of
+the 10→2 branch drop; the two survivors in the specialized form are both
+`s_cbranch_execz`, the loop's own exec-mask guards, which no amount of constant
+folding removes.
 
 The VALU ratio of 1.29× is the honest ceiling for this class. Four complex
 multiplies and two adds per amplitude pair are irreducible arithmetic. This is
@@ -635,21 +712,30 @@ forms; specialization folds only `start` and `count`.
 #endif
 ```
 
-**Result: ISA 763→716 (1.07×), VALU 214→210 (1.02×), branches 23→20, VGPR
-0→0.** This is essentially nothing. The assembly diff confirms it — what
-changed is only the range test:
+**Result: 447→407 instructions (1.10×), VALU 214→210 (1.02×), branches 23→20,
+VGPR 56→56, SGPR 86→85.** This is essentially nothing — and the register
+columns, which an earlier draft misreported as `0→0` because LLVM prints them
+symbolically for kernels that call external functions (see the note in §7.2),
+say something stronger than "no gain": **specialization does not reduce this
+op's register pressure at all.** 56 VGPRs in both forms. That matters for §11.1,
+because register pressure is precisely the cost that straight-lining hundreds of
+these into one function *adds*.
+
+The assembly diff confirms it — what changed is only the range test
+(`interp:11-38` vs `spec:15-25`):
 
 ```diff
 -	s_load_dword s0, s[4:5], 0x20              ; pc
--	s_mul_i32   s6, s0, 40                     ; instruction address
--	s_load_dword s68, s[2:3], 0x8              ; ins.a, ins.b
--	s_cmp_lt_u32 s0, s70                       ; next_noise < start   (runtime start)
+-	s_mul_i32 s6, s0, 40                       ; instruction address
+-	s_load_dwordx2 s[70:71], s[4:5], 0x8       ; ins.a = start, ins.b = count
+-	s_add_i32 s69, s71, s70                    ; end = start + count, at RUNTIME
+-	s_cmp_lt_u32 s0, s70                       ; next_noise < start
 -	s_cselect_b64 s[2:3], -1, 0
--	s_cmp_ge_u32 s0, s69                       ; next_noise >= end    (runtime end)
+-	s_cmp_ge_u32 s0, s69                       ; next_noise >= end
 -	s_cselect_b64 s[4:5], -1, 0
--	s_or_b64    s[2:3], s[2:3], s[4:5]
-+	s_load_dword s0, s[64:65], 0x27c           ; st->next_noise
-+	s_add_i32   s1, s0, 0xffffff7d             ; next_noise - 131
+-	s_or_b64 s[2:3], s[2:3], s[4:5]
+ 	s_load_dword s0, s[64:65], 0x27c           ; st->next_noise -- in BOTH forms
++	s_add_i32 s1, s0, 0xffffff7d               ; next_noise - 131
 +	s_cmp_gt_u32 s1, 56                        ; ...single unsigned compare vs 56
 ```
 
@@ -660,25 +746,32 @@ none of them care what `start` was.
 
 **Why this negative result is important.** It is the first-principles prediction
 of the `circuit_d5` regression in §11.1. A circuit whose instruction mix is
-dominated by `OP_NOISE_BLOCK` has almost nothing for the specializer to fold —
-so specialization buys ~1.05× on the op bodies, while *paying* the cost of
+dominated by noise ops has almost nothing for the specializer to fold — so
+specialization buys ~1.05× on the op bodies, while *paying* the cost of
 straight-lining hundreds of them into one function (register pressure, I-cache
 pressure, and the FP-scheduling hazard that `V2_NOISE_ATTR` exists to fence).
+
 `coop_circuit_d5.c`, the emitted specialization for `circuit_d5`, contains
-**1,720** `v2_op_*` calls, and the very first ones are:
+**1,720** `v2_op_*` calls. Counting them by opcode gives the mix directly:
 
-```c
-    v2_op_apply_pauli(st, pauli_masks, 0u, 112u);
-    ...
-    v2_op_noise_block(st, noise_sites, noise_channels, noise_hazards, num_noise_sites, 0u, 401u);
-    v2_op_expand_t(st, v, 0u, 0u, 1);
-    v2_op_noise_block(st, noise_sites, noise_channels, noise_hazards, num_noise_sites, 401u, 165u);
-    v2_op_noise(st, noise_sites, noise_channels, noise_hazards, num_noise_sites, 566u);
-    v2_op_noise_block(st, noise_sites, noise_channels, noise_hazards, num_noise_sites, 567u, 3u);
-```
+| Opcode family | calls | share | S7 verdict |
+|---|---:|---:|---|
+| `frame_cnot` / `frame_cz` / `frame_h` / `frame_swap` | 757 | 44.0 % | folds well (S1) |
+| `meas_dormant_static` / `_random` | 215 | 12.5 % | folds well (S2) |
+| **`noise` / `noise_block` / `readout_noise`** | **329** | **19.1 %** | **does not fold (S7)** |
+| `apply_pauli` | 135 | 7.8 % | bounded (S8) |
+| `detector` / `observable` | 109 | 6.3 % | — |
+| array ops (`array_t`, `multi_cnot`, `cnot`, `s`, `multi_cz`) | 136 | 7.9 % | bounded (S5, S6) |
+| `expand_t` / `swap_meas_interfere` | 39 | 2.3 % | folds (S3, S4) |
 
-Noise-dominated, exactly the profile S7 says is unprofitable. §11.1 shows what
-happened when it was specialized anyway.
+Nearly a fifth of the program is in the one class S7 measured at 1.02× — and
+that class is by far the most *expensive* per call (447 instructions in the
+interpreter form, against 136 for a frame op), so its share of runtime is much
+larger than its share of call sites. The frame and measurement ops that do fold
+well are individually cheap. That is the regression in one table: the ops worth
+specializing are the ones that cost little, and the op that dominates the time
+is the one specialization cannot touch. §11.1 shows what happened when it was
+specialized anyway.
 
 ---
 
@@ -702,8 +795,8 @@ The case comment states the boundary precisely:
 > the mask **INDEX** and the measurement slot fold, the mask **CONTENTS** do not
 > (they live in a device buffer).
 
-**Result:** ISA 390→342 (1.14×), VALU 71→63 (1.13×), VGPR 22→21, `s_load`
-17→11, **branches 3→3**.
+**Result:** 185→137 instructions (1.35×), VALU 71→63 (1.13×), VGPR 22→21, SGPR
+44→42, `s_load` 17→11, **branches 3→3**.
 
 This is a different shape of bounded gain from S6. In S6 the *arithmetic* was
 irreducible; here the **memory traffic** is. `pauli_masks[cp]` with a constant

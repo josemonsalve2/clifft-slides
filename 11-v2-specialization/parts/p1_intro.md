@@ -245,8 +245,9 @@ Stated plainly, because the failures cost more engineering time than the wins:
 - **V1 (MLIR) was 5–60× *slower* than SVM.** Full unrolling of the operand
   sequence produced 20 MB of IR, 115 KB/thread of spill scratch [unverified,
   see §5.5], and 221-second compiles.
-- **Straight-lining noise operations does not help.** Measured gain: 1.07× on
-  code size, 1.02× on VALU (§7.7).
+- **Straight-lining noise operations does not help.** Measured gain: 1.10× on
+  instruction count, 1.02× on VALU, and **zero** VGPR relief — 56 in both forms
+  (§7.9).
 - **MFMA is inapplicable.** `SQ_INSTS_MFMA = 0.0` on all 26 circuits in both
   backends. The workload is a butterfly reduction over amplitudes, not a GEMM.
   Any claim that the matrix cores can be brought to bear here is unsupported by
