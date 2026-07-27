@@ -16,10 +16,12 @@ kernel strided its per-workgroup HBM slice by **`kGlobalMaxAmplitudes`** — the
 CV2Complex* v = global_v + (u64)slot * kGlobalMaxAmplitudes;
 ```
 
-At rank 19 that reserves 6 MB per resident workgroup, which is fine. At rank 26
-it reserves **512 MB per workgroup** — for a rank-3 circuit as much as for a
-rank-26 one. With a 2,048-workgroup pool that is a terabyte of HBM to run
-`frame_h`. The cap was therefore self-limiting: raising the constant made *every
+At rank 19 that reserves a 4 MB amplitude slice per resident workgroup, which is
+fine. At rank 26 it reserves **512 MB per workgroup** — for a rank-3 circuit as
+much as for a rank-26 one. With a 2,048-workgroup pool that is a terabyte of HBM
+to run `frame_h`. (Both figures are the `global_v` slice alone, which is what
+the stride above governs; §10.2's quoted code comment counts the half-size
+scratch too, so the same two points read 6 MB and 768 MB there.) The cap was therefore self-limiting: raising the constant made *every
 circuit* unaffordable, not just the large ones.
 
 ### 10.2 The fix (`b266f80`)
@@ -167,8 +169,10 @@ Note what is *absent*: **nothing in the entire tree compiles to rank 2, 5, 6,
 8, 9, 15, 16, 17, 18 or 19.** The distribution is not a smooth spread with a
 long tail — it is two dense clusters (0–1 and 10) plus a thin spine of surface
 codes and the six hand-built QV circuits. The coop tier, which the bulk of the
-optimization work in §9 targets, is exercised by exactly **eleven** fixtures,
-eight of which are the `circuit_d5` parameter sweep.
+optimization work in §9 targets, is exercised by exactly **eleven** fixtures —
+three `surface_*_t10` at rank 7, and eight at rank 10, of which five are the
+`circuit_d5` parameter sweep and the other three are `qv10`, `cultivation_d5`
+and `surface_d7_t15`.
 
 Every one of `tests/fixtures/sweep` (188 files) and `rank_sweep` (56) squeezes
 flat, *despite names like `rank_q17_r12_d1.stim` promising rank 12.*
@@ -192,8 +196,8 @@ where V2's advantage thins out:
 
 | circuit | rank | V2 (µs) | SVM (µs) | ratio | VGPR spill | SGPR spill | scratch |
 |---|---|---|---|---|---|---|---|
-| qv20_seed42 | 20 | 1,780,109 | 2,121,123 | 0.839 | 0 | 0 | 112 |
-| qv20_L8_seed42 | 20 | 1,560,026 | 2,158,259 | 0.723 | 0 | 0 | 96 |
+| qv20_seed42 | 20 | 1,780,109 | 2,121,123 | 0.839 | 0 | 0 | 96 |
+| qv20_L8_seed42 | 20 | 1,560,026 | 2,158,259 | 0.723 | 0 | 0 | 112 |
 | qv21_L8_seed42 | 21 | 2,946,337 | 4,045,623 | 0.728 | 0 | 0 | 112 |
 | qv22_L6_seed42 | 22 | 3,176,355 | 3,237,575 | **0.981** | **136** | **762** | 448 |
 | qv23_L5_seed42 | 23 | 6,083,877 | 6,142,585 | **0.990** | **199** | **662** | 576 |
@@ -220,20 +224,26 @@ by VGPR spill — and the advantage collapses to 0.98–0.99.
 > Register pressure is a property of what the specializer emits, not of the
 > fences around it, so the spill table is unaffected by the §11.4 invalidation.
 >
-> The **timing columns are provisional.** They come from a run that predates the
-> fence fix (`150d09f`, 2026-07-26 06:33). A second run agrees to within 0.4 %
-> — ratios 0.844 / 0.729 / 0.733 / 0.980 / 0.992 / 0.881, identical scratch
-> sizes — but that run is `20260726T014859Z_all-tier5plus` at commit `89d541e`
-> (01:52), which `git merge-base --is-ancestor` confirms is **also pre-fence**.
-> Two pre-fence runs agreeing is a reproducibility check, **not** independent
-> corroboration: both executed the same unfenced binaries.
+> The **timing columns are post-fence**, and an earlier provisional note in this
+> section saying otherwise has been retired. Every cell above comes from
+> `20260726T182433Z_report-final-postdust`, run at commit `f565075` — and
+> `git merge-base --is-ancestor 150d09f f565075` confirms the fence fix is an
+> ancestor of it. The published figures reproduce exactly from that run's raw
+> `total_kernel_ns`.
 >
-> Whether that matters here is itself checkable, and the answer is *probably
-> not for these six circuits* — the fence bug corrupted reduction totals in the
-> coop tier, and these are global-tier kernels — but "probably" is not the
-> standard this report holds itself to. The post-fix full-corpus re-run is the
-> arbiter; §15 carries the final numbers and this table is superseded by it if
-> they disagree.
+> The pre-fence runs are now usable as corroboration rather than as the source.
+> Three of them — `fullbench-rank26` (`000322Z`), `fullbench-3way` (`011254Z`)
+> and `all-tier5plus` (`014859Z`) — bracket the published ratios within 0.6 %
+> on every circuit (0.844/0.728/0.731/0.980/0.992/0.880 in the first, against
+> the published 0.839/0.723/0.728/0.981/0.990/0.880), with identical scratch
+> sizes throughout. All four runs, pre- and post-fence, executed on the same
+> node `smci350-rck-g03-f13-21`, so the comparison is within-node.
+>
+> That the fence made no measurable difference here is the expected result and
+> not a null finding to be embarrassed about: the fence bug corrupted reduction
+> totals in the **coop** tier, and every kernel in this table is global-tier.
+> §15 still carries the final full-corpus numbers, but this table no longer
+> awaits them.
 
 **Why spilling appears exactly there — and what the data rules out.** The
 tempting explanation is that the specializer emits one call per instruction with
