@@ -1,0 +1,316 @@
+
+    <!-- ================= 12. The gap: f32 vs f64 ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">12</div>
+      <h1>The gap</h1>
+      <div class="section-sub">f32 vs f64, and how it was narrowed &mdash; which turns out not to be a story
+      about precision at all.</div>
+    </section>
+
+    <section>
+      <h2>The gap, as designed</h2>
+      <div class="grid-2">
+        <div class="card card-accent">
+          <div class="h">GPU: f32 storage</div>
+          <div class="d"><pre style="margin:0;"><code><span class="cm">// ---- Complex amplitude</span>
+<span class="cm">//   (f32 storage; f64 used</span>
+<span class="cm">//    only in reductions) ----</span>
+<span class="kw">typedef struct</span> __attribute__((aligned(8)))
+    { <span class="kw">float</span> re; <span class="kw">float</span> im; } CV2Complex;</code></pre></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">CPU reference: f64</div>
+          <div class="d"><code>std::complex&lt;double&gt;</code> throughout
+          <code>src/clifft/svm/svm.h</code>.</div>
+        </div>
+      </div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">What the in-tree documentation asserted</div>
+        <div class="d"><code>docs/v2/pre_V2.md:66</code> &mdash; <em>"f32 vs f64 accumulation differs across
+        backends"</em>. <b>That is prose.</b> This section replaces it with an experiment, and the result is
+        <b>more specific and more actionable</b> than the prose suggests.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>12.1 &nbsp;Why a <em>precision</em> difference becomes a <em>correctness</em> difference</h2>
+      <div class="verdict verdict-bad">The mechanism is <b>not</b> that the answers are slightly different.
+      It is that the two backends can consume <b>different numbers of random numbers</b>.</div>
+      <pre><code><span class="cm">// The clamp decision must match the SVM's on every call: a branch clamped on</span>
+<span class="cm">// one side and rolled on the other consumes a PRNG draw the other never did,</span>
+<span class="cm">// and the two streams never resynchronize. See V2_DUST_EPS.</span>
+<span class="kw">static inline</span> u8 <span class="fn">sample_branch</span>(u64* rng, <span class="kw">double</span> p0, <span class="kw">double</span> p1, <span class="kw">double</span> total) {
+    <span class="kw">double</span> eps = V2_DUST_EPS * total;
+    <span class="kw">if</span> (p1 &lt;= eps) <span class="kw">return</span> 0;          <span class="cm">// &lt;-- returns WITHOUT drawing</span>
+    <span class="kw">if</span> (p0 &lt;= eps) <span class="kw">return</span> 1;          <span class="cm">// &lt;-- returns WITHOUT drawing</span>
+    <span class="kw">return</span> (<span class="fn">rng_uniform</span>(rng) * total &lt; p0) ? 0u : 1u;
+}</code></pre>
+      <div class="insight">Both early returns skip <code>rng_uniform</code>. If one backend clamps and the
+      other does not, <b>the clamping side is one draw behind forever.</b> The PRNG is xoshiro256++: a
+      shifted stream is not <em>approximately</em> right, <b>it is a different sequence.</b></div>
+    </section>
+
+    <section>
+      <h2>Two distinct failure modes &mdash; separating them is the whole story</h2>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">1. Branch-probability rounding</div>
+          <div class="d">Probabilities are reduced in f64 but from f32 <em>inputs</em>, so
+          <code>p0/total</code> is good to only <b>~1e-6 relative</b> after summing <code>2^k</code> terms.
+          When <code>rand*total</code> lands within that window of <code>p0</code>, the two sides take
+          different branches.
+          <hr/>
+          <b>Prediction:</b> divergence should scale with amplitudes summed &mdash; invisible at register
+          rank, visible at coop rank 10.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">2. A mis-calibrated clamp threshold</div>
+          <div class="d">Independent of rounding, and &mdash; as it turned out &mdash; <b>the dominant
+          effect.</b></div>
+        </div>
+      </div>
+      <figure>
+        <img src="diagrams/prng-desync.svg" class="mid" alt="How one skipped PRNG draw desynchronizes two backends permanently" />
+        <figcaption><b>Figure 12.1</b> &mdash; The desynchronization mechanism. A single clamp taken on one
+        side and not the other shifts the entire remaining draw sequence for that shot. The outcome of the
+        clamped branch is <em>identical</em> on both sides; <b>it is the bookkeeping that diverges.</b></figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>12.2 &nbsp;The dominant cause: a constant that outlived its precision</h2>
+      <p class="lede"><code>V2_DUST_EPS</code> was copied verbatim from the SVM's
+      <code>kDustEpsilon = 1e-18</code> (<code>svm_internal.h:46</code>).</p>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">Calibrated for <code>std::complex&lt;double&gt;</code></div>
+          <div class="d">whose analytically-zero interference lands at <b>1e-30 … 1e-24</b>.</div>
+        </div>
+        <div class="card card-accent">
+          <div class="h">Applied to f32</div>
+          <div class="d">where the same interference concentrates at
+          <code>fp32_eps² = <b>1.4e-14</b></code> &mdash; <b>four decades above the threshold.</b>
+          <hr/>On the GPU the dust branch therefore <b>never clamped.</b></div>
+        </div>
+      </div>
+      <p class="lede">The reference case is a four-line circuit (<code>H; T^4; H; M</code>, the one
+      <code>tests/test_svm.cc:1995</code> pins):</p>
+      <table class="tight">
+        <thead><tr><th>precision</th><th class="num">p0</th><th>vs <code>1e-18</code></th><th>behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>fp64</td><td class="num">2.465e-32</td><td>&le; eps</td><td class="win"><b>clamp</b>, no draw</td></tr>
+          <tr><td>fp32</td><td class="num">8.882e-16</td><td>&gt; eps</td><td class="lose"><b>no clamp</b>, draw consumed</td></tr>
+        </tbody>
+      </table>
+      <div class="insight">Both sides still pick the same <em>outcome</em> &mdash; <code>p0/total</code> is
+      <code>1 - 1e-15</code>, so any uniform draw lands the same way &mdash; but the GPU has consumed a draw
+      the CPU has not. <b>In a surface-code circuit nearly every stabilizer measurement is deterministic, so
+      this fires constantly.</b></div>
+      <div class="verdict verdict-bad">As the commit puts it: <em>"A threshold that never fires is a
+      correctness bug, not dead code."</em></div>
+    </section>
+
+    <section>
+      <h2>Sizing the replacement &mdash; not a guess</h2>
+      <p class="lede">A branch probability is a sum of <code>half = 1 &lt;&lt; (active_k - 1)</code> squared
+      fp32 magnitudes, and the rounding error is <em>relative to each amplitude</em> &mdash; so the dust
+      floor does <b>not</b> grow with term count; <b>summing more terms averages the residuals rather than
+      accumulating them.</b> Measured with <code>V2_performance/tools/dust_floor.py</code>
+      (<code>p1/total</code>, 2,000 trials per rank):</p>
+      <div class="grid-2-1">
+        <div>
+          <table class="tight">
+            <thead><tr><th class="num">rank</th><th class="num">median</th><th class="num">max</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td class="num">9.7e-15</td><td class="num lose"><b>1.2e-13</b></td></tr>
+              <tr><td class="num">4</td><td class="num">1.3e-14</td><td class="num">5.8e-14</td></tr>
+              <tr><td class="num">12</td><td class="num">1.42e-14</td><td class="num">1.6e-14</td></tr>
+              <tr><td class="num">26</td><td class="num">1.42e-14</td><td class="num">1.5e-14</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card card-success">
+          <div class="h">Why one constant covers ranks 1&ndash;26</div>
+          <div class="d">The distribution concentrates on <code>fp32_eps² = 1.42e-14</code> and
+          <b>tightens</b> with rank; <b>the widest tail is at <em>low</em> rank</b> (~1.2e-13).
+          <hr/>
+          <code>1e-11</code> sits <b>~2 decades above that tail</b> and <b>~5 decades below</b> the smallest
+          probability f32 can meaningfully carry &mdash; margin on both sides. Nothing real is clamped away:
+          genuine small probabilities (the SVM comment cites <code>R_ZZ</code> angles producing ~1e-16) are
+          <b>not representable in f32 storage in the first place.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">This inverts the intuition the "f32 vs f64" framing invites. <b>The
+      dust floor is rank-<em>independent</em>, and the <em>low</em>-rank circuits have the widest spread. A
+      threshold picked for the largest circuit would have been wrong for the smallest.</b></div>
+    </section>
+
+    <section>
+      <h2>Provenance &mdash; and a correction the re-derivation turned up</h2>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The same gap that produced the incorrect barrier figure in &sect;11.2</div>
+        <div class="d">These four rows were originally recorded <b>only as prose</b>, in the
+        <code>V2_DUST_EPS</code> comment &mdash; <b>the generating code was never committed.</b></div>
+      </div>
+      <p class="lede">"Residual model" is literal: a <b>statistical</b> model, not a simulation of the
+      kernel's arithmetic. It assumes each analytically-zero output carries a relative error at full
+      <code>eps</code> &mdash; <code>resid_i = a_i · eps · z_i</code>, <code>z_i</code> unit-variance complex
+      Gaussian &mdash; giving <code>p1/total = eps² · Σ|a_i|²|z_i|² / Σ|a_i|²</code>: <code>eps²</code> times
+      a weighted mean of <code>Exp(1)</code> variables.</p>
+      <div class="verdict verdict-good">Re-running that model <b>reproduces the table to the digit</b>
+      (9.730e-15 / 1.222e-13, 1.315e-14 / 5.048e-14, 1.422e-14 / 1.586e-14, 1.422e-14 / 1.476e-14). Both the
+      model and the four values are now committed as <code>dust_floor.py --model residual</code>, its
+      default.</div>
+    </section>
+
+    <section>
+      <h2>Simulating the arithmetic instead puts the real floor <b>~48&times; lower</b></h2>
+      <p class="lede"><code>--model butterfly</code> computes <code>fl(fl(u·a) + fl(v·b))</code> over
+      fp32-stored amplitudes whose exact fp64 counterparts cancel identically:</p>
+      <table class="tight">
+        <thead><tr><th class="num">rank</th><th class="num">butterfly median</th><th class="num">worst tail</th></tr></thead>
+        <tbody>
+          <tr><td class="num">26</td><td class="num">2.9e-16</td><td class="num">&mdash;</td></tr>
+          <tr><td class="num">12</td><td class="num">2.7e-16</td><td class="num">&mdash;</td></tr>
+          <tr><td class="num">1</td><td class="num win"><b>exactly zero</b></td><td class="num">2.7e-15 (2.9e-15 at 20,000 trials)</td></tr>
+        </tbody>
+      </table>
+      <div class="grid-2">
+        <div class="card card-hl">
+          <div class="h">Why rank 1's median is zero</div>
+          <div class="d">With a single term <b>there is nothing to cancel against</b>, so the fp32 product is
+          either exact or it is not.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">Why a max is only comparable at equal <code>--trials</code></div>
+          <div class="d">A max is an <b>order statistic</b> and grows with the trial count &mdash; hence both
+          figures for rank 1.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good"><b>This does not disturb the choice of <code>1e-11</code>, and it is
+      worth being precise about why.</b> Every structural fact the threshold rests on holds under
+      <em>both</em> estimators: the floor is <b>rank-independent</b>, the spread <b>tightens with rank</b> so
+      the widest tail is at low rank, and the floor is <b>insensitive to circuit depth</b>
+      (<code>--depth 256</code> moves the medians by &lt;5%, because accumulated error is itself relative and
+      <b>divides out of the ratio</b>).</div>
+      <div class="insight">The two models disagree only on the <b>absolute location</b>. <code>1e-11</code>
+      clears the <em>conservative</em> one by two decades &mdash; so it clears the simulated one by nearly
+      four. <b>What the correction changes is the margin, which is larger than claimed, not the
+      decision.</b></div>
+      <div class="footnote">Both tables were regenerated for this report from the committed tool, whose RNG
+      is seeded <code>1234 + rank</code> and so reproduces to the digit:
+      <code>dust_floor.py --model residual</code> and <code>--model butterfly</code>, defaults
+      otherwise.</div>
+    </section>
+
+    <section>
+      <h2>12.3 &nbsp;The A/B that confirmed it</h2>
+      <p class="lede">Two arms, identical in every respect but the constant (job 50444, node
+      <code>smci350-rck-g03-f13-21</code>):</p>
+      <table class="tight">
+        <thead><tr><th>arm</th><th><code>V2_DUST_EPS</code></th><th>d5 (coop, rank 10) shot 0</th><th>d3 (register, rank 4) shot 0</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td><code>1e-18</code> (fp64-calibrated)</td><td class="lose">gpu=[0] cpu=[1] <b>MISMATCH</b></td><td class="win">gpu=[0] cpu=[0] ok</td></tr>
+          <tr><td>B</td><td><code>1e-11</code> (fp32-calibrated)</td><td class="win">gpu=[1] cpu=[1] <b>match</b></td><td class="win">gpu=[0] cpu=[0] ok</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good">The rank-dependence prediction from &sect;12.1 holds <b>exactly</b>:
+      the register-tier circuit agreed under <em>both</em> thresholds, and the coop-tier circuit disagreed
+      <em>only</em> under the fp64-calibrated one.</div>
+      <div class="insight">Fixed in <code>2a015fd</code> &mdash; <b>a constant-only change</b>; all four
+      <code>sample_branch</code> call sites are untouched.</div>
+    </section>
+
+    <section>
+      <h2>12.4 &nbsp;Post-fix verification: separating logic from statistics</h2>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">The mistake available here</div>
+        <div class="d">Check aggregate counts, see them differ by a percent or two, and conclude the backend
+        is still wrong. <code>d5_verify.sh</code> (job 50453) therefore asks <b>two different
+        questions.</b></div>
+      </div>
+      <p class="lede"><b>Q1 &mdash; same-stream, shot-for-shot. Must be EXACT.</b> Twelve seeds &times; three
+      circuits, comparing the GPU seed against the CPU seed that reproduces the identical 256-bit xoshiro
+      state:</p>
+      <div class="stat-callout">
+        <div class="stat-num">36 / 36</div>
+        <div class="stat-label">Q1 exact &mdash; every shot matches</div>
+      </div>
+      <div class="insight">This is the <em>logical</em> claim, and it is <b>binary</b>: either the two
+      backends compute the same thing or they do not.</div>
+    </section>
+
+    <section>
+      <h2>Q2 &mdash; statistical convergence</h2>
+      <p class="lede">Two <em>independent</em> streams sampling the same distribution should converge as
+      <code>1/&radic;shots</code>:</p>
+      <table class="tight">
+        <thead><tr><th>circuit</th><th class="num">shots</th><th class="num">cpu</th><th class="num">gpu</th><th class="num">rel gap</th><th class="num">z</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="4"><code>circuit_d5_p0.001</code></td><td class="num">2,000</td><td class="num">709</td><td class="num">661</td><td class="num">6.77 %</td><td class="num">&minus;1.60</td></tr>
+          <tr><td class="num">10,000</td><td class="num">3,395</td><td class="num">3,364</td><td class="num">0.913 %</td><td class="num">&minus;0.46</td></tr>
+          <tr><td class="num">50,000</td><td class="num">17,005</td><td class="num">16,862</td><td class="num">0.841 %</td><td class="num">&minus;0.96</td></tr>
+          <tr><td class="num">200,000</td><td class="num">67,376</td><td class="num">66,968</td><td class="num">0.606 %</td><td class="num">&minus;1.37</td></tr>
+          <tr><td rowspan="4"><code>circuit_d3_p0.001</code></td><td class="num">2,000</td><td class="num">52</td><td class="num">63</td><td class="num">21.15 %</td><td class="num">1.04</td></tr>
+          <tr><td class="num">10,000</td><td class="num">250</td><td class="num">270</td><td class="num">8.00 %</td><td class="num">0.89</td></tr>
+          <tr><td class="num">50,000</td><td class="num">1,225</td><td class="num">1,224</td><td class="num">0.082 %</td><td class="num">&minus;0.02</td></tr>
+          <tr><td class="num">200,000</td><td class="num">4,811</td><td class="num">4,922</td><td class="num">2.31 %</td><td class="num">1.14</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-good"><b>Every |z| &lt; 1.7.</b> The residual gap is sampling noise between
+      two independent streams, not a numerical defect &mdash; <b>and Q1 is what proves that</b>: since
+      shot-for-shot agreement is exact, the aggregate difference <em>can only be</em> the difference between
+      two valid samples of the same distribution.</div>
+    </section>
+
+    <section>
+      <h2>The row that would mislead if read alone</h2>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h"><code>circuit_d3</code> at 200,000 shots</div>
+        <div class="d">The relative gap goes <b>up</b> (0.082 % &rarr; 2.31 %) while <code>|z|</code> stays
+        near 1. <b>Reading the percentage alone would suggest a regression at scale.</b>
+        <hr/>
+        The z-score says otherwise, and the z-score is the right statistic &mdash; the raw counts are small
+        (&asymp;4,800 of 200,000), so <b>the relative gap is dominated by Poisson noise.</b></div>
+      </div>
+      <figure>
+        <img src="diagrams/q2-convergence.svg" class="mid" alt="Statistical convergence of GPU vs CPU observable counts" />
+        <figcaption><b>Figure 12.2</b> &mdash; Q2 convergence. Relative gap shrinks roughly as
+        1/&radic;shots while every z-score stays inside &plusmn;1.7. The two backends are sampling the same
+        distribution with different streams.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>12.5 &nbsp;What "narrowing the gap" actually meant</h2>
+      <p class="lede">The framing this section inherited &mdash; f32 vs f64 &mdash; <b>is not what was
+      fixed</b>, and saying so plainly matters more than preserving the tidier story:</p>
+      <div class="grid-3">
+        <div class="card card-accent">
+          <div class="h">Not the arithmetic</div>
+          <div class="d">No accumulation order was changed, no reduction was promoted to f64, no amplitude
+          was widened.
+          <hr/>
+          <b>&sect;8.6 makes the same point from the codegen side:</b> V1's 23&times; larger f64 instruction
+          count is <b>68% inlined <code>log()</code> polynomial</b>, and once that is factored out both
+          backends widen to f64 in exactly <b>the same three places</b>, deliberately, to stay byte-exact
+          with the interpreter.</div>
+        </div>
+        <div class="card card-success">
+          <div class="h">It was a threshold</div>
+          <div class="d">A constant <b>calibrated for one precision and left in place when the storage
+          format changed</b> &mdash; whose effect was to make one side consume a random number the other
+          side did not.</div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">The economics of the fix</div>
+          <div class="d"><b>The fix is one token. The diagnosis was the entire cost.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-mixed">And the residual, genuine f32-vs-f64 effect predicted in &sect;12.1
+      &mdash; branch probabilities good to only ~1e-6 relative &mdash; <b>is real but is <em>not</em> what
+      the d5 divergence was.</b> It remains a bounded source of rare divergence at high rank, and
+      <b>nothing in this corpus has yet isolated an instance of it.</b> Stated as an open item rather than a
+      solved one (&sect;16).</div>
+    </section>
