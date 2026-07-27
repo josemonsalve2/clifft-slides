@@ -131,10 +131,15 @@ before and after the MLIR stage:
 | Op | emitted | after opt |
 |---|---|---|
 | `llvm.mlir.constant` | 240 | **59** |
-| `llvm.ptr` | 192 | 160 |
 | `llvm.and` | 54 | 9 |
 | `llvm.shl` | 73 | 34 |
 | `llvm.xor` | 68 | 29 |
+| `llvm.ptr` † | 192 | 160 |
+
+† `llvm.ptr` is a *type*, not an op, and occurs several times on some lines
+(each `getelementptr` mentions it twice). Its row counts occurrences (192 → 160)
+where the op rows count one per line; by line it is 136 → 118. The other four
+rows are unambiguous — one op per line.
 
 The emitter materialized the same constant over and over — 240 constant ops for
 a four-instruction circuit — and canonicalization deduplicated them down to 59.
