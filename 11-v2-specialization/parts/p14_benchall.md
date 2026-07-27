@@ -186,8 +186,17 @@ Three observations, all structural:
   the opcodes the circuit actually contains.
 - **VGPRs.** V2 uses fewer than SVM on five circuits (32, 32, 36, 52, 52/56) and
   the same 64 on the rest. It never uses more. The three QV circuits where V2 is
-  at 64 are the three weakest results in the corpus — §14.5 records that as the
-  report's strongest open lead, not as a finding.
+  at 64 are the three weakest results in the corpus, and they are also the three
+  that spill — see §14.5.
+
+> **The VGPR column above is `rocprofv3`'s, and it disagrees with the binaries.**
+> The AMDHSA metadata in the same kernels' `.hsaco` files reports 104–128 VGPRs
+> plus 40–64 AGPRs where the profiler reports 52–64 and `Accum_VGPR_Count = 0`.
+> Scratch sizes match one-to-one across both sources, so these are the same
+> kernels and the profiler is reporting a different quantity, not a different
+> kernel. The column is retained here for consistency with the rest of this
+> table, which is profiler-sourced. **For register allocation and spilling,
+> §14.5 and §10 use the `.hsaco` metadata, and those are authoritative.**
 
 ### 15.6 The complete counter table
 

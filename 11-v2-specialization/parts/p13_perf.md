@@ -226,16 +226,53 @@ the clearest single explanation for the QV band, and it is structural rather
 than incidental: it follows from the budget constant and the rank, both known
 before the kernel launches.
 
-A second observation is worth recording as a *lead* rather than a finding. The
-three weakest circuits — `qv22_L6` (0.980), `qv23_L5` (0.990), `qv24_L4` (0.882)
-— are exactly the three where V2's specialized kernel is allocated **64 VGPRs**,
-against 52–56 on the ranks that win comfortably (`qv20` 52, `qv20_L8` 56,
-`qv21_L8` 52), and where V2's scratch allocation jumps to 448–576 B from 96–112 B.
-64 VGPRs is a plausible occupancy cliff, and the correlation across six circuits
-is perfect. But six points is not an experiment, VGPR count and rank are
-confounded here, and this counter set cannot distinguish "allocated but not
-spilled" from "actually spilling." §16 records it as the report's strongest open
-lead, not as a mechanism.
+**The second mechanism is register spilling, and it is measured, not inferred.**
+The three weakest circuits — `qv22_L6` (0.980), `qv23_L5` (0.990), `qv24_L4`
+(0.882) — are exactly the three whose kernels spill. This does not require
+interpreting a performance counter: the AMDHSA metadata note in each `.hsaco`
+states it directly.
+
+| rank | circuit | ratio | `.vgpr_count` | `.agpr_count` | `.vgpr_spill_count` | `.sgpr_spill_count` | scratch |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 20 | `qv20_seed42` | 0.850 | 104 | 40 | **0** | **0** | 96 |
+| 20 | `qv20_L8` | 0.732 | 106 | 42 | **0** | **0** | 112 |
+| 21 | `qv21_L8` | 0.736 | 104 | 40 | **0** | **0** | 112 |
+| 22 | `qv22_L6` | 0.980 | 128 | 64 | **136** | **762** | 448 |
+| 23 | `qv23_L5` | 0.990 | 128 | 64 | **199** | **662** | 576 |
+| 24 | `qv24_L4` | 0.882 | 128 | 64 | **152** | **594** | 480 |
+
+Read out of the binaries with `llvm-readelf --notes`, e.g. for rank 22:
+
+```
+.vgpr_count:       128       .agpr_count:       64
+.vgpr_spill_count: 136       .sgpr_spill_count: 762
+.private_segment_fixed_size: 448
+```
+
+Ranks 20 and 21 sit *below* the VGPR 128 / AGPR 64 cap and spill nothing. Rank
+22 and above take the cap and spill 594–762 scalars to scratch — which is
+HBM-backed, and therefore the same memory these kernels are already
+bandwidth-bound on. Spilling and the collapse in speedup begin at exactly the
+same rank.
+
+> **A note on two register numbers that disagree.** `rocprofv3` reports 52, 56
+> and 64 VGPRs for these kernels where the metadata says 104, 106 and 128. The
+> scratch sizes match one-to-one across the two sources (96/112/112/448/576/480),
+> so these are certainly the same kernels. The counts differ by roughly 2× and
+> `rocprofv3` reports `Accum_VGPR_Count = 0` where the metadata reports 40–64
+> AGPRs, so the profiler is evidently reporting a different quantity — an
+> allocation granule or an architected-only count — rather than contradicting
+> the binary. §15.5 tabulates the profiler's numbers because that is what that
+> chapter's other columns come from; **the spill counts above are from the
+> `.hsaco` and are the authoritative ones.** §10 analyses this boundary in
+> depth from the same metadata.
+
+§10 establishes what this is *not*: it is not driven by circuit length. The
+three spilling kernels are the three **shortest** in the tier (320–359
+instructions), while a rank-14 kernel emitting 16,521 instructions — 46× more —
+spills 4 SGPRs. What changes at the boundary is a single baked constant, the
+`amp_capacity` crossing 2²². The mechanism inside LLVM's allocator has not been
+isolated, and §16 keeps that as the top open item.
 
 > **What this section does not claim.** An earlier draft argued the QV band was
 > explained by an occupancy inversion — "V2 runs a third as many waves, each 3×
