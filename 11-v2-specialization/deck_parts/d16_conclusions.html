@@ -1,0 +1,255 @@
+
+    <!-- ================= 16. Conclusions and open items ================= -->
+
+    <section class="section-divider">
+      <div class="section-num">16</div>
+      <h1>Conclusions<br/>and open items</h1>
+      <div class="section-sub">What was built, where the speedup comes from, where it does not, and the seven
+      things still open.</div>
+    </section>
+
+    <section>
+      <h2>16.1 &nbsp;What was built &mdash; three rewrites, each answering the previous one's failure</h2>
+      <table class="tight">
+        <thead><tr><th></th><th>approach</th><th>outcome</th></tr></thead>
+        <tbody>
+          <tr><td><b>SVM</b></td><td>one interpreter kernel, three tiers, bytecode in HBM</td><td>the baseline. Correct, general, and <b>paying interpretation cost on every instruction of every shot.</b></td></tr>
+          <tr><td><b>Hybrid</b></td><td>interpreter + per-circuit HIP source compiled at runtime</td><td>worked, <b>did not push execution further</b>. Compilation cost and HIP's launch path ate the gain.</td></tr>
+          <tr><td><b>V1</b></td><td>per-circuit MLIR &rarr; single monolithic kernel, no interpreter, no runtime</td><td class="lose"><b>failed.</b> Unrolling the circuit into straight-line IR produced kernels <b>too large to compile or schedule.</b></td></tr>
+          <tr><td><b>V2</b></td><td>per-circuit specialization <em>over</em> a runtime, direct C &rarr; amdgcn, HSA dispatch</td><td class="win"><b>0.573 geometric mean against SVM, 26 of 26 circuits faster.</b></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>The load-bearing lesson sits between V1 and V2</h2>
+      <div class="verdict verdict-bad">It is <b>not</b> "MLIR was the wrong tool."</div>
+      <div class="stat-callout">
+        <div class="stat-num">Specialization &ne; unrolling</div>
+        <div class="stat-label">and V1 conflated them</div>
+      </div>
+      <div class="insight">V1 assumed that <b>to specialize a circuit you must emit it as straight-line
+      code.</b> V2 specializes <b>exactly as aggressively</b> &mdash; the same constants folded, the same
+      branches removed &mdash; <b>while keeping loops as loops and keeping a runtime underneath.</b>
+      <hr/>
+      The result <b>compiles in seconds instead of failing to compile</b>, and <b>it is faster.</b></div>
+    </section>
+
+    <section>
+      <h2>16.2 &nbsp;Where the speedup comes from &mdash; 1. Scalar instruction deletion</h2>
+      <div class="verdict verdict-good"><b>The dominant effect, and not the one the project expected.</b> On
+      <b>26 of 26 circuits</b> the SALU ratio is below the VALU ratio &mdash; V2 issues <b>2.8&times; to
+      9.1&times; fewer scalar instructions.</b></div>
+      <p class="lede">What disappears is the interpreter's per-instruction overhead:</p>
+      <div class="grid-3">
+        <div class="card card-accent"><div class="h">bytecode address arithmetic</div><div class="d"><code>pc * 40</code>, a 64-bit multiply</div></div>
+        <div class="card card-accent"><div class="h">the load</div><div class="d">a <code>global_load</code> of the instruction word</div></div>
+        <div class="card card-accent"><div class="h">the <code>v_readfirstlane</code></div><div class="d">moving the operand to the scalar unit</div></div>
+        <div class="card card-accent"><div class="h">the <code>active_k</code> reload</div><div class="d">an <code>s_load</code> from the state block</div></div>
+        <div class="card card-accent"><div class="h">the bounds check</div><div class="d">a compare per instruction</div></div>
+        <div class="card card-accent"><div class="h">the switch dispatch</div><div class="d">a jump through the opcode table</div></div>
+      </div>
+      <div class="verdict verdict-good"><b>None of it computed an amplitude.</b></div>
+      <div class="card card-warn" style="padding:0.9em;">
+        <div class="h">A retraction carried into the conclusions rather than left behind</div>
+        <div class="d">This was documented for several drafts as work <em>moved</em> from the vector pipe to
+        the scalar pipe. <b>That was wrong, and &sect;14.3 retracts it: nothing migrates, both pipes issue
+        less, and the scalar pipe issues much less.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Resource footprint &mdash; and 3. nothing exotic</h2>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">2. Resource footprint (&sect;14.6, &sect;15.5)</div>
+          <div class="d">V2's global-tier kernels declare <b>1,024 bytes of LDS against SVM's 8,704</b>
+          &mdash; <b>8.5&times;</b> &mdash; because with the amplitudes in HBM <b>there is nothing to
+          stage.</b>
+          <hr/>
+          On the register tier V2 allocates <b>656&ndash;1,040 bytes of scratch against SVM's uniform
+          4,480</b>, and executes <b>zero</b> LDS instructions against SVM's <b>25,280</b>.
+          <hr/>
+          <b>These are consequences of specialization knowing what the circuit contains, not of
+          tuning.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">3. Nothing exotic</div>
+          <div class="d"><code>SQ_INSTS_MFMA</code> is <b>0 across all 52 cells</b> &mdash; 26 circuits
+          &times; 2 backends.
+          <hr/>
+          The workload is <b>a butterfly reduction over pairs of complex amplitudes, not a GEMM</b>, and
+          <b>no part of this result comes from the matrix cores.</b> Any future proposal to use them is
+          <b>unsupported by this corpus.</b></div>
+        </div>
+      </div>
+      <div class="verdict verdict-good">The proximate check on all of it: <b><code>SQ_BUSY_CYCLES</code>
+      ratio predicts kernel-time ratio at Pearson r = 0.942</b>, and <code>GRBM_GUI_ACTIVE</code> &mdash; an
+      independent activity counter &mdash; <b>agrees with <code>SQ_BUSY_CYCLES</code> within a few percent on
+      24 of 26.</b></div>
+    </section>
+
+    <section>
+      <h2>16.3 &nbsp;Where it does <em>not</em> come from</h2>
+      <p class="lede"><b>The rank ceiling is real and it is register spilling</b> (&sect;14.5, &sect;10).
+      Above rank 21 the win collapses to <b>0.88&ndash;0.99</b>. The cause is <b>visible in the AMDHSA
+      metadata rather than inferred from counters</b>:</p>
+      <table class="tight">
+        <thead><tr><th class="num">rank</th><th>spill (VGPR / SGPR)</th><th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><td class="num">20&ndash;21</td><td class="win"><b>0 / 0</b></td><td class="num win">0.732&ndash;0.850</td></tr>
+          <tr><td class="num">22</td><td class="lose">136 / 762</td><td class="num lose">0.980</td></tr>
+          <tr><td class="num">23</td><td class="lose">199 / 662</td><td class="num lose">0.990</td></tr>
+          <tr><td class="num">24</td><td class="lose">152 / 594</td><td class="num lose">0.882</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad"><b>Spilling begins at exactly the rank where the speedup dies</b>, and
+      it spills to <b>HBM-backed scratch &mdash; the memory these kernels are already bandwidth-bound
+      on.</b></div>
+      <div class="insight"><b>Compounding it</b>, the resident workgroup pool <b>halves with every added
+      qubit</b>: the HBM budget formula yields <b>2048 / 1360 / 680 / 336 / 168</b> workgroups for ranks
+      20&ndash;24 (predicted from source constants, matching the measured grids <b>five for five</b>), so by
+      rank 24 there are <b>168 workgroups on a 256-CU device and the machine cannot be filled.</b></div>
+    </section>
+
+    <section>
+      <h2>Specialization does not help what it cannot fold</h2>
+      <p class="lede">&sect;7's taxonomy predicted this <b>circuit-by-circuit before the corpus was
+      measured</b>:</p>
+      <div class="grid-2">
+        <div class="card card-success">
+          <div class="h">surface family</div>
+          <div class="d">All <b>frame ops and dormant measurements</b> &mdash; folds <b>5.50&times; on
+          VALU</b> and runs at <b>0.256</b>.</div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">d5 family</div>
+          <div class="d"><b>19.1% noise ops</b> that fold <b>1.02&times;</b> &mdash; runs at
+          <b>0.79&ndash;0.86</b>.</div>
+        </div>
+      </div>
+      <div class="verdict verdict-good"><b>The weakest coop-tier result was predicted from a single
+      microbenchmark and was correct.</b></div>
+    </section>
+
+    <section>
+      <h2>16.4 &nbsp;Open items &mdash; 1 and 2, the two that matter</h2>
+      <div class="card card-accent" style="padding:1em;">
+        <div class="h">1. The rank-21/22 allocation cliff &mdash; <b><em>the top item</em></b></div>
+        <div class="d">The three spilling kernels are the three <b>shortest</b> in the tier
+        (320&ndash;359 instructions); a rank-14 kernel emitting <b>16,521 instructions spills 4 SGPRs.</b>
+        <b>Circuit length is not the mechanism.</b>
+        <hr/>
+        What changes at the boundary is <b>one baked constant</b> &mdash; <code>amp_capacity</code> crossing
+        <b>2²²</b> &mdash; and the emitted C is otherwise <b>structurally identical.</b> The cause is inside
+        LLVM's allocator and <b>has not been isolated.</b>
+        <hr/>
+        <b>First step is an LLVM allocation study at the boundary, not a code change.</b></div>
+      </div>
+      <div class="card card-warn" style="padding:1em;">
+        <div class="h">2. The d5 anomaly: three counters, one population, no mechanism</div>
+        <div class="d">On all six d5-family circuits, both activity counters say the GPU is <b>~0.63 as busy
+        on V2</b> while kernel time says <b>0.79&ndash;0.86</b> &mdash; <em>less busy, and yet slower than
+        that predicts</em>.
+        <hr/>
+        The same six circuits carry <b>the entire busy-cycle residual</b> (17.9&ndash;28.2%, and essentially
+        zero elsewhere) and <b>a residual L2 deficit</b> (91% against SVM's 98%, down from 71.5% pre-fence but
+        <b>not gone</b>).
+        <hr/>
+        <b>Three independent signals, one circuit family, no explanation. This is the largest unexplained
+        result in the report.</b></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Open items 3&ndash;5</h2>
+      <div class="grid-3">
+        <div class="card card-success">
+          <div class="h">3. Per-circuit LDS sizing is not yet baked</div>
+          <div class="d">The specializer <b>knows each circuit's peak rank</b> and could size the coop tier's
+          LDS exactly; it currently <b>inherits a conservative static bound</b> (&sect;9.3).
+          <hr/>
+          <b>A known, bounded win nobody has taken.</b></div>
+        </div>
+        <div class="card card-hl">
+          <div class="h">4. <code>batched16</code> is conditional, not a missed win</div>
+          <div class="d">HSA batched dispatch measures <b>2,320 ns against the persistent path's 6,326</b>
+          &mdash; 2.7&times; &mdash; but V2 issues <b>one dispatch per run</b>, so <b>there is nothing to
+          amortize.</b>
+          <hr/>
+          It would pay only if V2 moved to a multi-dispatch structure (chunked shot batches for progress
+          reporting, or memory-bounded rank-26 runs). <b>Capability, not usage.</b></div>
+        </div>
+        <div class="card card-purple">
+          <div class="h">5. The residual f32-vs-f64 branch-probability effect</div>
+          <div class="d">&sect;12 established that the d5 divergence was <em>not</em> precision &mdash; it was
+          <b>a threshold constant calibrated for f64 and left in place when storage moved to f32.</b>
+          <hr/>
+          The genuine precision effect predicted in &sect;12.1, <b>branch probabilities good to ~1e-6
+          relative</b>, remains <b>real and unobserved</b>: nothing in this corpus has isolated an instance.
+          <b>Bounded, rare, and still open.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Open items 6&ndash;7 &mdash; two measurement instruments the report does not fully trust</h2>
+      <div class="grid-2">
+        <div class="card card-warn">
+          <div class="h">6. The <code>rocprofv3</code> VGPR discrepancy</div>
+          <div class="d">The profiler reports <b>52&ndash;64 VGPRs and
+          <code>Accum_VGPR_Count = 0</code></b> where the <code>.hsaco</code> metadata reports
+          <b>104&ndash;128 plus 40&ndash;64 AGPRs</b>, for kernels whose <b>scratch sizes match
+          one-to-one.</b>
+          <hr/>
+          <b>Not a threat to any conclusion</b> &mdash; the metadata is authoritative and the spill counts
+          come from it &mdash; but <b>the report should not carry two numbers for one quantity
+          indefinitely.</b></div>
+        </div>
+        <div class="card card-warn">
+          <div class="h">7. <code>SQ_WAVES</code> on persistent global-tier kernels</div>
+          <div class="d">The counter <b>does not reconcile with launch geometry above rank 19</b>: three
+          identical 512-workgroup SVM grids report <b>8,832 / 10,240 / 8,000</b> waves where geometry implies
+          <b>2,048</b>, while on the other 20 circuits it equals <b>workgroups &times; 4 exactly.</b>
+          <hr/>
+          &sect;14.5 <b>retracted a claim built on it.</b> Worth understanding <b>before any future analysis
+          uses this counter.</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>16.5 &nbsp;What this report is, and how to check it</h2>
+      <p class="lede">Every quantitative claim here is backed by <b>an artifact in the tree</b>: a run
+      directory under <code>V2_performance/runs/</code>, a <code>.s</code> file under <code>lowering/</code>,
+      or a line of committed source.</p>
+      <div class="insight"><code>V2_performance/VERIFIED_FACTS.md</code> is the ledger &mdash; <b>sixteen
+      audit passes</b>, each recording <b>what was checked, what was wrong, and a method note about how the
+      error survived.</b></div>
+      <p class="lede">The instruction this report was written under was <b><em>trust data, not text</em></b>,
+      and <b>it was aimed first at the report itself.</b> The audits found, among others:</p>
+      <table class="tight">
+        <tbody>
+          <tr><td>a headline that said <b>20 wins</b> where the data said <b>26</b></td></tr>
+          <tr><td>a claimed mechanism (<b>scalar substitution</b>) contradicted by a counter <b>the project had already collected</b></td></tr>
+          <tr><td>a residual attributed to the wrong circuit family <b>because the surrounding argument predicted it would land there</b></td></tr>
+          <tr><td>a per-wave cost computed by <b>dividing counters from two different profiling passes</b></td></tr>
+          <tr><td>a hedge about spilling written <b>against evidence sitting in the binaries</b></td></tr>
+        </tbody>
+      </table>
+      <div class="verdict verdict-bad"><b>Four of those five errors flattered the result or the story. That
+      asymmetry is the argument for the ledger.</b></div>
+    </section>
+
+    <section>
+      <h2>Every number above is reproducible with one command</h2>
+      <pre><code>sbatch V2_performance/tools/bench_all.sh &lt;label&gt;</code></pre>
+      <div class="verdict verdict-good">If <code>manifest.json</code> reads <code>"dirty": true</code>, or
+      the circuit count is not <b>26</b>, <b>the run is void.</b></div>
+      <div class="summary-grid" style="margin-top:0.8em;">
+        <div class="card card-success"><div class="h">geomean vs SVM</div><div class="d" style="font-size:1.7em;"><b>0.573</b></div></div>
+        <div class="card card-success"><div class="h">circuits faster</div><div class="d" style="font-size:1.7em;"><b>26 / 26</b></div></div>
+        <div class="card card-hl"><div class="h">IR per instruction</div><div class="d" style="font-size:1.7em;"><b>1.00 line</b></div></div>
+        <div class="card card-hl"><div class="h">HIP calls in V2</div><div class="d" style="font-size:1.7em;"><b>0</b></div></div>
+      </div>
+    </section>
