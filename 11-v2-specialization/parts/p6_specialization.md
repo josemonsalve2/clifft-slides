@@ -496,7 +496,7 @@ the sign XOR as in S2.
 **The `ds_op` column stays at 4 in both forms**, and that is the load-bearing
 observation for §12. The `ds_read`/`ds_write` pairs are the cooperative
 reduction's LDS traffic, and specialization does **not** remove or reorder them.
-That is deliberate: `v2_ops.h:222-223` records the constraint —
+That is deliberate: `v2_ops.h:235-236` records the constraint —
 
 > MUST reproduce SVM `coop_reduce2`'s exact summation order or f64 rounding
 > diverges at measurement branch points.
