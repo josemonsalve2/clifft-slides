@@ -34,7 +34,7 @@
   <rect x="0" y="0" width="800" height="72" fill="#101023"/>
   <path d="M0 71.5 H800" stroke="#34436c"/>
   <text x="400" y="30" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700">Warp-Shuffle Reduction vs Tree Reduction</text>
-  <text x="400" y="54" text-anchor="middle" fill="#c7d2ee" font-family="Arial, Helvetica, sans-serif" font-size="14">GEAK optimization: <tspan fill="#ff7777" font-weight="700">8 barriers</tspan><tspan fill="#ffffff"> → </tspan><tspan fill="#44ff88" font-weight="700">1 barrier</tspan></text>
+  <text x="227.9" y="54" fill="#c7d2ee" font-family="Arial, Helvetica, sans-serif" font-size="14">GEAK optimization:</text><text x="353.0" y="54" fill="#ff7777" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">8 barriers</text><text x="420.9" y="54" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="14">→</text><text x="438.7" y="54" fill="#44ff88" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">1 barrier</text>
 
   <!-- Panels -->
   <rect x="8" y="80" width="382" height="404" rx="10" fill="#16213e" stroke="#405177" stroke-width="1.5"/>
@@ -174,7 +174,7 @@
     <path d="M758 208 C770 208 760 278 638 301"/>
     <path d="M758 236 C770 236 758 286 706 301"/>
   </g>
-  <text x="766" y="251" text-anchor="end" fill="#bdefff" font-family="Arial, Helvetica, sans-serif" font-size="8">wavefront leaders</text>
+  <text x="430" y="295" fill="#bdefff" font-family="Arial, Helvetica, sans-serif" font-size="8">wavefront leaders</text>
 
   <!-- LDS slots -->
   <g stroke="#44ff88" stroke-width="1.5" fill="#173f59">
