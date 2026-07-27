@@ -336,7 +336,187 @@ slower kernel.
 
 ---
 
-### 8.6 What the two pipelines' diffs collectively show
+### 8.6 The f64 gulf, and why it is not a precision difference
+
+The final ISA census turns up the single largest disparity anywhere in the
+corpus, and it is the one most likely to be misread. For `circuit_d3`:
+
+| | V1 | V2 |
+|---|---|---|
+| `v_*_f64` | **4,347** | **187** |
+| `v_*_f32` | 1,586 | 858 |
+| `v_pk_*_f32` (packed) | **0** | **847** |
+| total instructions | 16,675 | 9,421 |
+
+V1 issues **23× more f64 instructions**. The obvious reading — V1 did its
+amplitude arithmetic in double and V2 dropped to single, trading accuracy for
+speed — is wrong, and it matters that it is wrong, because §12 rests on both
+backends being byte-exact against the same interpreter. They are. Both carry
+amplitudes as `f32` pairs, and both widen to `f64` in exactly the same two
+places, deliberately:
+
+```cpp
+// V2 — v2_ops.h:193
+// f64 scalar multiply then narrow — byte-exact with SVM cscale. Do NOT relax.
+static inline CV2Complex cscale(CV2Complex a, double s) {
+    CV2Complex r; r.re = (float)((double)a.re * s); r.im = (float)((double)a.im * s); return r;
+}
+static inline double cnorm(CV2Complex v) {
+    double re = (double)v.re, im = (double)v.im; return re * re + im * im;
+}
+```
+
+```cpp
+// V1 — mlir_emit.cc:826, inside emit_cnorm
+// Match gold cnorm (hip_sampler.hip): extend each f32 component to f64,
+// then square and sum in f64. Squaring in f32 first (then extending) loses
+// precision and flips borderline stabilizer measurement branches on
+// RNG-path-dependent shots.
+```
+
+Same rule, same reason, two backends. So where do 4,347 f64 instructions come
+from?
+
+#### The experiment
+
+`V2_performance/lowering/f64_attribution.sh` compiles V1's own stage-3 IR twice
+through V1's own pipeline (`opt -O2 | llc -O2`), changing exactly one thing:
+
+- **A** — as-is. Asserted to reproduce `v1/circuit_d3.5_isa.s` byte-for-byte.
+- **B** — `clifft_log` and `clifft_draw_next_noise` marked `noinline`. Same
+  amplitude arithmetic, same PRNG, but the transcendental stays a call.
+
+```
+variant, isa_lines, isa_total_instrs, v_f64, v_f32, v_pk_f32, scratch_ops, scratch_bytes, log_expansions
+A,           17802,            16675,  4347,  1586,        0,          56,           156,             54
+B,           12038,            11148,  1380,  1586,        0,         477,           224,              1
+```
+
+<figure>
+<img src="diagrams/f64-attribution.svg" alt="Where V1's 4,347 f64 instructions come from" width="100%">
+<figcaption><b>Figure 8.2</b> — V1's f64 instruction volume for <code>circuit_d3</code>,
+decomposed by the A/B experiment. 68 % is 52 inlined copies of a hand-written
+log polynomial; the 1,380 that remain are the same PRNG, <code>cnorm</code> and
+<code>cscale</code> sites V2 has. V2 keeps <code>log()</code> as a call to
+<code>__ocml_log_f64</code> because it links ROCm device bitcode; V1 had no such
+link and had to write the polynomial in MLIR.</figcaption>
+</figure>
+
+`v_*_f32` is **identical** across A and B — 1,586 either way. The amplitude
+arithmetic never moved. What moved is 2,967 f64 instructions, **68 % of V1's
+entire f64 volume**, and 5,527 total instructions, all of it the log
+polynomial.
+
+The count is exact, not estimated. `0x3FD5555555555555` is a coefficient unique
+to that polynomial, so it counts expansions directly:
+
+```
+per-coefficient occurrence count in the V1 kernel body:
+  0x3FE62E42FEFA39EF  x52     <- ln 2
+  0x3FA1A7B9611A7B96  x52
+  ... all 13 coefficients ...  x52
+```
+
+52 copies, one per `draw_next_noise` inlined into the kernel (48 emitted call
+sites; LLVM cloned 4 more when it unrolled the surrounding loops). At 37 f64
+ops per copy that is 1,924 IR-level ops — 61.3 % of the kernel's 3,141 — before
+instruction selection turns each `fdiv double` into the `v_rcp_f64` /
+`v_div_scale_f64` / `v_div_fmas_f64` / `v_div_fixup_f64` sequence that pushes
+the ISA-level share to 68 %.
+
+#### What is actually left
+
+Strip the expansion and classify the residue by dataflow component:
+
+| what it is | ops | share |
+|---|---|---|
+| PRNG: `u64 → f64 × 2⁻⁵³` | 465 | 45.5 % |
+| `cnorm` — f64 \|a\|² accumulation | 390 | 38.1 % |
+| `cscale` — f32 → f64 × 1/√2 → f32 | 168 | 16.4 % |
+| | **1,023** | |
+
+Three sites — and **the same three sites are all V2 has**, 101 f64 ops across
+its whole module:
+
+| function | f64 ops | `u64→f64 × 2⁻⁵³` | `fpext`/`fptrunc` | what it is |
+|---|---|---|---|---|
+| `clifft_v2_spec` | 56 | 18 | 0 / 0 | 18 PRNG draws, nothing else |
+| `v2_op_noise` | 10 | 2 | 0 / 0 | PRNG |
+| `v2_op_noise_block` | 10 | 2 | 0 / 0 | PRNG |
+| `v2_op_swap_meas_interfere` | 22 | 1 | 4 / 2 | cnorm + cscale |
+| `v2_op_readout_noise` | 3 | 1 | 0 / 0 | PRNG |
+
+The specialized body itself touches f64 **only** to turn random bits into a
+uniform — every `fpext`/`fptrunc` pair in the module is inside one `noinline`
+measurement helper. Identical semantics to V1, three orders of magnitude apart
+in count, because V2's loops stayed runtime loops and V1's were unrolled.
+
+#### Why V1 had a hand-written log at all
+
+V1's compile pipeline is `opt` → `llc` → `ld.lld`
+(`mlir_kernel_cache.cc:124-150`). There is no `llvm-link` step and no ROCm
+device bitcode, so `log()` simply does not exist as a symbol. The emitter had
+to write the polynomial itself, in MLIR, by hand — `emit_log_body`,
+`mlir_emit.cc:1355`. Its author saw the size problem coming and hoisted it:
+
+```cpp
+// Emit the standalone @clifft_log(f64)->f64 function definition ONCE per
+// module. Inlining the ~64-line log body at every noise draw produced
+// hundreds of thousands of IR lines for large noisy circuits (e.g.
+// surface_d9_t5: 1444 OP_NOISE × ~317 lines). Hoisting to a called function
+// collapses that to one definition + short call sites.
+void emit_log_function_def(std::ostringstream& out) {          // :1422
+```
+
+The hoist worked at *emission* — the emitted MLIR has one `@clifft_log`
+definition and 48 short call sites, and that is what kept `surface_d9_t5`
+emittable at all. Then `opt -O2` inlined all 52 copies back. The emitter
+controlled its own output and had no way to control what the optimizer did
+next.
+
+V2 has the symbol, because it links the device libraries:
+
+```cpp
+// v2_ops.h:262
+extern double __ocml_log_f64(double);
+static inline double ocml_log_f64(double x) { return __ocml_log_f64(x); }
+```
+
+```cpp
+// v2_compile_cache.cc:161 — step 2 of 5
+run(llvmlink + " -o " + linked + " " + bc + " " +
+    ctl + "/ocml.bc " + ctl + "/ockl.bc " + ...);
+```
+
+In V2's final ISA the call survives as a relocation, three times:
+
+```asm
+	s_getpc_b64 s[0:1]
+	s_add_u32   s0, s0, __ocml_log_f64@rel32@lo+4
+	s_addc_u32  s1, s1, __ocml_log_f64@rel32@hi+12
+	s_swappc_b64 s[30:31], s[0:1]
+```
+
+Three call sites, one shared body, against V1's 52 expansions.
+
+#### The one real arithmetic difference
+
+Underneath all of that there *is* a genuine codegen difference, and the f64
+noise was hiding it. `v_pk_*_f32` is **0** in V1 — in both variant A and
+variant B, so the log expansion was never what blocked it — and **847** in V2.
+Counting packed instructions as two lanes, V2 covers 1,705 f32 lanes in 858
+instructions where V1 needs 1,586 instructions for 1,586 lanes. That is the
+`shufflevector` → `v_pk_add_f32` chain of §8.5, and it is available to V2 for
+the reason §8.5 gives: the amplitudes are in registers, not in a stack array.
+
+**The honest summary: V1's f64 volume was a transcendental-inlining artifact,
+not a numerical choice. Both backends compute the same quantities at the same
+widths. The real instruction-level win is packing, and it is 2× on the f32
+path — not 23× on the f64 one.**
+
+---
+
+### 8.7 What the two pipelines' diffs collectively show
 
 | | V1 | V2 |
 |---|---|---|
@@ -344,7 +524,9 @@ slower kernel.
 | What the "MLIR stage" contributed | constant dedup + CSE; one pass a no-op | n/a — no MLIR |
 | Where `alloca`s die | LLVM `-O2`, and only on small circuits | clang `-O2`, completely (2,268 → 0) |
 | Whether the optimizer stays enabled | no — detuned by IR size above threshold | yes — IR never gets large enough to matter |
-| Vectorization | none observed | 459 `shufflevector` → 431 `v_pk_add_f32`, 416 `v_pk_mul_f32` |
+| Vectorization | none — 0 packed ops, with or without the log inlining | 459 `shufflevector` → 431 `v_pk_add_f32`, 416 `v_pk_mul_f32` |
+| `log()` | hand-written in MLIR, re-inlined 52× by `opt` | `__ocml_log_f64`, one call, three relocations |
+| f64 instructions, `circuit_d3` | 4,347 — **68 % of it inlined log** | 187 |
 | Final ISA, `circuit_d3` | 17,802 lines | **10,398 lines** |
 | Compile time, `circuit_d3` | 3.58 s | **2.04 s** |
 | Compile time, `surface_d7_t19` | **221.48 s** | (V2 emits the same circuit in ~4,346 C lines; see §9) |
