@@ -127,15 +127,16 @@ V2 versus the SVM interpreter:
 
 | regime | circuits | V2/SVM ratio | reading |
 |---|---|---|---|
-| Large surface codes, global tier | 5 | **0.256 – 0.310** | V2 is **3.2–3.9× faster** |
-| Mid-size surface + QV10, coop tier | 5 | 0.319 – 0.534 | V2 is **1.9–3.1× faster** |
-| Register tier (`four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5`) | 4 | 0.509 – 0.742 | V2 is **1.3–2.0× faster** |
-| `circuit_d5` + `cultivation_d5`, coop tier | 6 | 0.786 – 0.856 | V2 is **1.2–1.3× faster** (post-fence, §1.3(d)) |
-| Quantum-volume, global tier rank 20–24 | 6 | 0.732 – 0.990 | V2 wins **1–37 %**, shrinking with rank (§10.6) |
+| Large surface codes, global tier | 5 | **0.257 – 0.305** | V2 is **3.3–3.9× faster** |
+| Mid-size surface + QV10, coop tier | 5 | 0.316 – 0.530 | V2 is **1.9–3.2× faster** |
+| Register tier (`four_t`, `frame_h`, `circuit_d3`, `surface_d7_t5`) | 4 | 0.497 – 0.617 | V2 is **1.6–2.0× faster** |
+| `circuit_d5` + `cultivation_d5`, coop tier | 6 | 0.794 – 0.857 | V2 is **1.2–1.3× faster** (post-fence, §1.3(d)) |
+| Quantum-volume, global tier rank 20–24 | 6 | 0.422 – 0.849 | V2 is **1.2–2.4× faster** (post pool fix, §14.5) |
 
-**mean 0.626, median 0.670, wins 26/26** — all 26 circuits, both backends, one
-job (50793), one node (`smci350-rck-g03-d13-21`), zero profiler aborts. Every
-circuit dispatches `clifft_v2_spec`; none falls back to the interpreter.
+**mean 0.575, median 0.538, geomean 0.531, wins 26/26** — all 26 circuits, both
+backends, one job (51181), one node (`smci350-rck-g03-d13-21`), zero profiler
+aborts. Every circuit dispatches `clifft_v2_spec`; none falls back to the
+interpreter.
 
 **26 circuits, 26 wins.** The five regimes sum to exactly 26, and membership is
 assigned by *measured launch geometry* rather than by circuit name — the census
@@ -169,22 +170,37 @@ measured grids:
 | 23 | 96 MB | 336 | **336** ✓ |
 | 24 | 192 MB | 168 | **168** ✓ |
 
-Five for five, including the XCD-alignment rounding. So the QV circuits lose
-occupancy geometrically as rank climbs — the pool halves with every added qubit
-— and that compounds with the register spilling of §10.6. Two independent
-mechanisms degrade the same six circuits, which is why their ratios approach 1.0
-from a corpus whose median is 0.670.
+Five for five, including the XCD-alignment rounding. So the QV circuits lost
+occupancy geometrically as rank climbed — the pool halved with every added
+qubit — and that compounded with the register spilling of §10.6. Two
+independent mechanisms degraded the same six circuits, which is why their
+ratios once approached 1.0 from a corpus whose median was 0.670.
 
-The halving is real, but the 32 GB it halves against turned out to be a
-hardcoded constant on a 288 GB device rather than a property of the problem.
-Sweeping past it recovers up to **2.09×** at rank 24; see §14.5's correction.
+**The halving was real; the 32 GB it halved against was not.** It was a
+hardcoded constant on a 288 GB device — 11 % of the VRAM — and deriving the
+budget from the device instead (§14.5) moved the three worst circuits in the
+corpus to among its best: `qv24_L4` 0.882 → **0.422**, `qv23_L5` 0.990 →
+**0.546**, `qv22_L6` 0.980 → **0.733**. The grids above are the *pre-fix* ones,
+retained because they are what the formula was validated against; §14.5 gives
+the current derivation and §15.3 both tables side by side.
+
+That fix is also the only one of four attempts that worked. The tier runs at
+**766 GB/s of ~8 TB/s — 9.6 %** — so it is latency-bound, not bandwidth-bound,
+and Little's law leaves concurrency as the only available term: register
+prefetch, LDS staging and HBM stack placement were each implemented or
+researched and each failed, for three unrelated mechanisms. §14.5a is the
+characterization and Figure 14.2 draws it.
 
 All 26 are **byte-exact** against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).
 
-> **Provenance.** The ratios above are job **50793**
-> (`20260727T125310Z_report-final-allfixtures`): 26 circuits, both backends,
-> one node, commit `79d4463` clean, zero `rocprofv3` aborts. It replaces two
+> **Provenance.** The ratios above are job **51181**
+> (`20260728T063156Z_postpoolfix`): 26 circuits, both backends, one node
+> (`smci350-rck-g03-d13-21`), commit `2f45cce` clean, zero `rocprofv3` aborts.
+> It supersedes job **50793** (`20260727T125310Z_report-final-allfixtures`,
+> commit `79d4463`), which is identical in method and differs only in carrying
+> the 32 GB pool budget; §15.3 keeps its table for the comparison. 50793 in turn
+> replaced two
 > earlier attempts — a retracted run that dispatched stale kernels (§14.0's
 > §0 notice) and job 50785, which ran only 18 of 26 because eight fixture paths
 > had gone stale, aborted silently, and reported "wins 18/18" over the
@@ -276,7 +292,7 @@ across nodes was not.
 
 So the headline "20 of 26" in §1.2 is a *pre-fix* figure. Post-fix, the corpus
 stands at **26 of 26 — every circuit measured, every circuit a V2 win**, mean
-0.626, median 0.670. An intermediate draft of this paragraph read "25 of 26
+0.575, median 0.538. An intermediate draft of this paragraph read "25 of 26
 measured", correctly refusing to assume `cultivation_d5` from the five circuits
 that shared its specialization; job 50793 paired it and it wins at 0.786.
 **§1.2's table is the conservative reading, not the optimistic one**, and §15
@@ -308,6 +324,15 @@ Stated plainly, because the failures cost more engineering time than the wins:
   The workload is a butterfly reduction over amplitudes, not a GEMM.
   Any claim that the matrix cores can be brought to bear here is unsupported by
   this corpus. (§14.6)
+- **Three attempts to hide memory latency all failed, for three unrelated
+  reasons.** The global tier runs at 766 GB/s of ~8 TB/s — 9.6 % — so it is
+  latency-bound, and the obvious responses do not work: software-pipelined
+  prefetch is 7–10 % *slower* because both arms sit at the 128 VGPR cap and the
+  prefetch is funded by 223 extra spills; LDS staging was measured at −66 % in
+  V1 because the butterfly is strided and the L2 prefetcher already handles it;
+  HBM stack placement has nothing to place, since workgroups share no data and
+  NPS1 interleaves across all eight stacks anyway. Only raising **concurrency**
+  worked. (§14.5a)
 
 ---
 
@@ -5351,39 +5376,45 @@ enforced rather than merely intended:
 
 ### 14.2 The result
 
-**Mean 0.626, median 0.670, wins 26/26.** Every circuit dispatches
-`clifft_v2_spec`; not one falls back to the interpreter.
+**Mean 0.575, median 0.538, geomean 0.531, wins 26/26.** Every circuit
+dispatches `clifft_v2_spec`; not one falls back to the interpreter.
 
 | circuit | V2 (µs) | SVM (µs) | V2/SVM | speedup |
 |---|---:|---:|---:|---:|
-| `surface_d11_t19` | 20,423 | 79,842 | **0.256** | 3.9× |
-| `surface_d11_t15` | 19,589 | 75,947 | 0.258 | 3.9× |
-| `surface_d9_t19` | 11,926 | 45,208 | 0.264 | 3.8× |
-| `surface_d9_t15` | 11,369 | 41,325 | 0.275 | 3.6× |
-| `surface_d7_t19` | 6,247 | 20,152 | 0.310 | 3.2× |
-| `qv10` | 1,386 | 4,350 | 0.319 | 3.1× |
-| `surface_d11_t10` | 37,986 | 81,369 | 0.467 | 2.1× |
-| `surface_d9_t10` | 21,632 | 44,094 | 0.491 | 2.0× |
-| `circuit_d3_p0.001` | 221 | 434 | 0.509 | 2.0× |
-| `surface_d7_t15` | 11,225 | 21,998 | 0.510 | 2.0× |
-| `surface_d7_t10` | 11,044 | 20,674 | 0.534 | 1.9× |
-| `four_t` | 13.1 | 22.3 | 0.587 | 1.7× |
-| `surface_d7_t5` | 2,051 | 3,372 | 0.608 | 1.6× |
-| `qv20_L8_seed42` | 1,583,246 | 2,162,954 | 0.732 | 1.4× |
-| `qv21_L8_seed42` | 2,977,386 | 4,045,316 | 0.736 | 1.4× |
-| `frame_h` | 12.1 | 16.3 | 0.742 | 1.3× |
-| `cultivation_d5` | 16,421 | 20,901 | 0.786 | 1.3× |
-| `circuit_d5_p0.005` | 8,727 | 10,714 | 0.815 | 1.2× |
-| `circuit_d5_p0.003` | 8,809 | 10,516 | 0.838 | 1.2× |
-| `circuit_d5_p0.002` | 8,730 | 10,319 | 0.846 | 1.2× |
-| `circuit_d5_p0.001` | 8,600 | 10,158 | 0.847 | 1.2× |
-| `qv20_seed42` | 1,804,649 | 2,123,250 | 0.850 | 1.2× |
-| `circuit_d5_p0.0005` | 8,643 | 10,102 | 0.856 | 1.2× |
-| `qv24_L4_seed42` | 7,241,815 | 8,211,443 | 0.882 | 1.1× |
-| `qv22_L6_seed42` | 3,179,445 | 3,243,842 | 0.980 | 1.0× |
-| `qv23_L5_seed42` | 6,086,167 | 6,146,952 | 0.990 | 1.0× |
+| `surface_d11_t15` | 19,542 | 76,054 | **0.257** | 3.9× |
+| `surface_d11_t19` | 20,591 | 79,850 | **0.258** | 3.9× |
+| `surface_d9_t19` | 11,894 | 45,415 | 0.262 | 3.8× |
+| `surface_d9_t15` | 11,264 | 41,444 | 0.272 | 3.7× |
+| `surface_d7_t19` | 6,167 | 20,205 | 0.305 | 3.3× |
+| `qv10` | 1,381 | 4,365 | 0.316 | 3.2× |
+| `qv24_L4_seed42` | 3,468,136 | 8,216,125 | 0.422 | 2.4× |
+| `surface_d11_t10` | 38,044 | 81,648 | 0.466 | 2.1× |
+| `surface_d9_t10` | 21,409 | 44,120 | 0.485 | 2.1× |
+| `four_t` | 10.0 | 20.0 | 0.497 | 2.0× |
+| `circuit_d3_p0.001` | 216 | 427 | 0.506 | 2.0× |
+| `surface_d7_t15` | 11,172 | 22,046 | 0.507 | 2.0× |
+| `surface_d7_t10` | 10,961 | 20,669 | 0.530 | 1.9× |
+| `qv23_L5_seed42` | 3,347,600 | 6,134,932 | 0.546 | 1.8× |
+| `surface_d7_t5` | 2,017 | 3,348 | 0.602 | 1.7× |
+| `frame_h` | 9.7 | 15.7 | 0.617 | 1.6× |
+| `qv20_L8_seed42` | 1,581,187 | 2,157,406 | 0.733 | 1.4× |
+| `qv22_L6_seed42` | 2,371,700 | 3,236,704 | 0.733 | 1.4× |
+| `qv21_L8_seed42` | 2,982,497 | 4,042,831 | 0.738 | 1.4× |
+| `cultivation_d5` | 16,612 | 20,913 | 0.794 | 1.3× |
+| `circuit_d5_p0.005` | 8,976 | 10,671 | 0.841 | 1.2× |
+| `circuit_d5_p0.003` | 8,859 | 10,494 | 0.844 | 1.2× |
+| `qv20_seed42` | 1,804,028 | 2,125,582 | 0.849 | 1.2× |
+| `circuit_d5_p0.001` | 8,640 | 10,162 | 0.850 | 1.2× |
+| `circuit_d5_p0.002` | 8,788 | 10,311 | 0.852 | 1.2× |
+| `circuit_d5_p0.0005` | 8,642 | 10,088 | 0.857 | 1.2× |
 
-The spread — 3.9× down to 1.01× — is the chapter's real subject. A single
+Note where the QV circuits now sit. Before the pool fix they occupied the last
+three rows of this table at 0.882–0.990; `qv24_L4` is now **seventh from the
+top** at 0.422, ahead of every surface-code circuit except the five deepest.
+Their remaining spread — 0.422 to 0.849 — no longer tracks rank monotonically,
+which is the sign that the occupancy mechanism has stopped dominating them.
+
+The spread — 3.9× down to 1.2× — is the chapter's real subject. A single
 average would hide the entire mechanism.
 
 ### 14.3 Where the time goes: the scalar pipe
@@ -5907,12 +5938,88 @@ what the ratio requires.
 Every circuit. Kernel time is `per_dispatch_ns_median`; each backend issues
 exactly one dispatch of the kernel under test.
 
-> **These numbers predate the pool fix of §14.5.** They were measured with the
-> 32 GB budget, which the sweep showed costs up to 2.09× at rank 24. The six QV
-> circuits — the ones setting the weak end of the spread — are precisely the
-> ones affected, so the geomean below is a **lower bound** on the corrected
-> figure. The corpus is being re-run; until it completes, the table stands as
-> the last fully measured state rather than the current one.
+These are the **post-pool-fix** numbers (run `20260728T063156Z_postpoolfix`,
+commit `2f45cce`, clean tree, one node). The pre-fix table this replaces is kept
+below, because the difference between the two is itself the measurement of
+§14.5's correction.
+
+| # | circuit | tier | shots | V2 (µs) | SVM (µs) | V2/SVM |
+|---:|---|---|---:|---:|---:|---:|
+| 1 | `circuit_d3_p0.001` | register | 20,000 | 215.9 | 427.0 | 0.506 |
+| 2 | `circuit_d5_p0.0005` | coop | 10,000 | 8,641.6 | 10,087.7 | 0.857 |
+| 3 | `circuit_d5_p0.001` | coop | 10,000 | 8,639.9 | 10,161.7 | 0.850 |
+| 4 | `circuit_d5_p0.002` | coop | 10,000 | 8,788.4 | 10,311.0 | 0.852 |
+| 5 | `circuit_d5_p0.003` | coop | 10,000 | 8,858.8 | 10,493.9 | 0.844 |
+| 6 | `circuit_d5_p0.005` | coop | 10,000 | 8,975.9 | 10,671.0 | 0.841 |
+| 7 | `cultivation_d5` | coop | 20,000 | 16,612.0 | 20,912.9 | 0.794 |
+| 8 | `four_t` | register | 20,000 | 10.0 | 20.0 | 0.497 |
+| 9 | `frame_h` | register | 20,000 | 9.7 | 15.7 | 0.617 |
+| 10 | `qv10` | coop | 20,000 | 1,381.0 | 4,364.8 | 0.316 |
+| 11 | `qv20_L8_seed42` | global | 2,000 | 1,581,186.8 | 2,157,405.6 | 0.733 |
+| 12 | `qv20_seed42` | global | 2,000 | 1,804,027.8 | 2,125,582.2 | 0.849 |
+| 13 | `qv21_L8_seed42` | global | 2,000 | 2,982,497.2 | 4,042,830.8 | 0.738 |
+| 14 | `qv22_L6_seed42` | global | 1,000 | 2,371,700.3 | 3,236,704.0 | **0.733** |
+| 15 | `qv23_L5_seed42` | global | 1,000 | 3,347,599.5 | 6,134,932.1 | **0.546** |
+| 16 | `qv24_L4_seed42` | global | 500 | 3,468,136.4 | 8,216,125.0 | **0.422** |
+| 17 | `surface_d11_t10` | coop | 10,000 | 38,043.6 | 81,647.9 | 0.466 |
+| 18 | `surface_d11_t15` | global | 5,000 | 19,542.0 | 76,053.5 | 0.257 |
+| 19 | `surface_d11_t19` | global | 5,000 | 20,590.8 | 79,850.4 | 0.258 |
+| 20 | `surface_d7_t10` | coop | 10,000 | 10,960.9 | 20,668.7 | 0.530 |
+| 21 | `surface_d7_t15` | coop | 10,000 | 11,172.1 | 22,046.2 | 0.507 |
+| 22 | `surface_d7_t19` | global | 5,000 | 6,167.3 | 20,205.0 | 0.305 |
+| 23 | `surface_d7_t5` | register | 20,000 | 2,017.3 | 3,348.4 | 0.602 |
+| 24 | `surface_d9_t10` | coop | 10,000 | 21,408.8 | 44,120.4 | 0.485 |
+| 25 | `surface_d9_t15` | global | 5,000 | 11,263.9 | 41,444.0 | 0.272 |
+| 26 | `surface_d9_t19` | global | 5,000 | 11,894.4 | 45,415.0 | 0.262 |
+
+**Aggregates.** Arithmetic mean 0.575, median 0.538, **wins 26 / 26**.
+
+Geometric mean — the correct average for a set of ratios, and the one that does
+not let a single large speedup dominate:
+
+| tier | n | geomean | best | worst |
+|---|---:|---:|---:|---:|
+| register | 4 | 0.553 | 0.497 | 0.617 |
+| coop | 11 | 0.635 | 0.316 | 0.857 |
+| global | 11 | **0.437** | 0.257 | 0.849 |
+| **all** | **26** | **0.531** | 0.257 | 0.857 |
+
+**What the pool fix changed, measured on the whole corpus.** The three circuits
+that were the corpus's *weakest* are now among its strongest, and nothing else
+moved:
+
+| circuit | pre-fix | post-fix | change |
+|---|---:|---:|---:|
+| `qv24_L4_seed42` | 0.882 | **0.422** | 2.09× |
+| `qv23_L5_seed42` | 0.990 | **0.546** | 1.81× |
+| `qv22_L6_seed42` | 0.980 | **0.733** | 1.34× |
+| geomean, global tier | 0.508 | **0.437** | — |
+| **geomean, all 26** | **0.573** | **0.531** | — |
+
+The worst ratio in the corpus improves from 0.990 to 0.857, and the spread
+collapses accordingly: before the fix the global tier ran from 0.256 to 0.990,
+after it from 0.257 to 0.849. The circuits that "resisted" were not resisting a
+property of their instruction mix. **The 22 non-QV circuits are unchanged within
+noise**, which is the control this comparison needs — the fix touches only the
+grid the global tier launches, and only where the budget rather than the 2,048
+cap was binding.
+
+The global tier now has both the best geomean *and* the narrowest justification
+for its spread: it contains the surface circuits that fold hardest and the QV
+circuits that are still rank-limited. Tier alone does not predict speedup;
+instruction mix (§14.4) and pool occupancy (§14.5) do.
+
+> **Total kernel time across the corpus is a misleading statistic, and is
+> reported here only to be dismissed.** Summing all 26: V2 15.770 s against SVM
+> 26.426 s, a ratio of 0.597. That number is dominated by the six QV circuits,
+> which alone account for 15.6 s of V2's 15.8 s because they are run at high
+> rank for thousands of shots. It describes the composition of this fixture
+> list, not the backend. The per-circuit ratios above are the result. (Note how
+> far this statistic moved — 0.873 to 0.597 — for a fix that changed 4 of 26
+> circuits: the dismissal above is exactly why.)
+
+<details>
+<summary><b>The pre-fix table</b> — measured with the 32 GB budget, retained for comparison</summary>
 
 | # | circuit | tier | shots | V2 (µs) | SVM (µs) | V2/SVM |
 |---:|---|---|---:|---:|---:|---:|
@@ -5943,29 +6050,10 @@ exactly one dispatch of the kernel under test.
 | 25 | `surface_d9_t15` | global | 5,000 | 11,368.7 | 41,325.4 | 0.275 |
 | 26 | `surface_d9_t19` | global | 5,000 | 11,925.6 | 45,207.5 | 0.264 |
 
-**Aggregates.** Arithmetic mean 0.626, median 0.670, **wins 26 / 26**.
+Aggregates: arithmetic mean 0.626, median 0.670, wins 26/26. Geomean by tier —
+register 0.606, coop 0.633, global 0.508, **all 0.573**.
 
-Geometric mean — the correct average for a set of ratios, and the one that does
-not let a single large speedup dominate:
-
-| tier | n | geomean | best | worst |
-|---|---:|---:|---:|---:|
-| register | 4 | 0.606 | 0.509 | 0.742 |
-| coop | 11 | 0.633 | 0.319 | 0.856 |
-| global | 11 | 0.508 | 0.256 | 0.990 |
-| **all** | **26** | **0.573** | 0.256 | 0.990 |
-
-The global tier has both the best geomean *and* the widest spread — it contains
-the surface circuits that fold hardest and the QV circuits that resist most.
-Tier alone does not predict speedup; instruction mix (§14.4) and pool occupancy
-(§14.5) do.
-
-> **Total kernel time across the corpus is a misleading statistic, and is
-> reported here only to be dismissed.** Summing all 26: V2 23.088 s against SVM
-> 26.445 s, a ratio of 0.873. That number is dominated by the six QV circuits,
-> which alone account for 22.9 s of V2's 23.1 s because they are run at high
-> rank for thousands of shots. It describes the composition of this fixture list,
-> not the backend. The per-circuit ratios above are the result.
+</details>
 
 ### 15.4 Tier assignment
 
@@ -5987,6 +6075,16 @@ construction; the tier follows from the peak rank the StatevectorSqueeze pass
 leaves behind. **Read the measured LDS size, not the fixture name.**
 
 ### 15.5 Launch geometry and resource footprint
+
+> **Provenance note for §15.5–15.7.** The counter tables in these three
+> sections are from job **50793**, the pre-pool-fix run, because the counter
+> passes were collected there and have not been re-collected. For the six QV
+> circuits this means the **grids and time ratios in these tables are the
+> pre-fix ones** (`qv24` at 168 workgroups, ratio 0.882). The per-kernel
+> resource footprints — LDS, scratch, VGPR, SGPR — are properties of the
+> compiled kernel and are unaffected by the grid, as are the VALU/SALU
+> instruction counts. §15.3 carries the current timings; where a row here shows
+> a QV time ratio, read §15.3's table instead.
 
 | circuit | V2 LDS | SVM LDS | V2 scr | SVM scr | V2 VGPR | SVM VGPR | SGPR |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -6160,7 +6258,7 @@ failure:
 | **SVM** | one interpreter kernel, three tiers, bytecode in HBM | the baseline. Correct, general, and paying interpretation cost on every instruction of every shot. |
 | **Hybrid** | interpreter + per-circuit HIP source compiled at runtime | worked, did not push execution further. Compilation cost and HIP's launch path ate the gain. |
 | **V1** | per-circuit MLIR → single monolithic kernel, no interpreter, no runtime | **failed.** Unrolling the circuit into straight-line IR produced kernels too large to compile or schedule. |
-| **V2** | per-circuit specialization *over* a runtime, direct C → amdgcn, HSA dispatch | **0.573 geometric mean against SVM, 26 of 26 circuits faster.** |
+| **V2** | per-circuit specialization *over* a runtime, direct C → amdgcn, HSA dispatch | **0.531 geometric mean against SVM, 26 of 26 circuits faster.** |
 
 The load-bearing lesson sits between V1 and V2, and it is not "MLIR was the
 wrong tool." It is that **specialization and unrolling are separable, and V1
@@ -6250,31 +6348,50 @@ essentially zero elsewhere) and a residual L2 deficit (91 % against SVM's 98 %,
 down from 71.5 % pre-fence but not gone). Three independent signals, one circuit
 family, no explanation. This is the largest unexplained result in the report.
 
-**3. The specializer does not yet bake per-circuit LDS sizing.** It knows each
+**3. `global_load_lds` — the one latency formulation not yet refuted.** §14.5a
+records three failed attacks on the global tier's latency gap, but the
+mechanisms that killed them are specific: the register pipeline died of VGPR
+pressure at the 128 cap, and V1's F8 LDS tiling died of 3 barriers per tile
+against an L2 that already prefetches a stride. An asynchronous global→LDS DMA
+avoids both — it never allocates a VGPR and needs one fence, not three. It is
+untried because it competes for the same latency gap the pool fix has partially
+closed, and the gap should be re-measured before it is spent. **First step is a
+counter pass, not an implementation.**
+
+**4. Ranks 25 and 26 are unmeasured, not unaffected.** Job 51184 confirms both
+fixtures reach peak_rank 25/26 and that the budget behaves (296 wgs / 111.0 GB
+and 144 wgs / 108.0 GB), but its old-vs-new arms show no difference — and the
+arms ran **8 and 4 shots against 296 and 144 workgroups**. With 37× more
+workgroups than shots the pool cannot be the limiter, so the experiment cannot
+observe the variable it was built for. This is an **inconclusive** result, not a
+negative one; it needs a re-run at shots ≥ 2,000, which at rank 26 costs hours,
+not minutes.
+
+**5. The specializer does not yet bake per-circuit LDS sizing.** It knows each
 circuit's peak rank and could size the coop tier's LDS exactly; it currently
 inherits a conservative static bound (§9.3). A known, bounded win nobody has
 taken.
 
-**4. `batched16` is conditional, not a missed win.** HSA batched dispatch
+**6. `batched16` is conditional, not a missed win.** HSA batched dispatch
 measures 2,320 ns against the persistent path's 6,326 — 2.7× — but V2 issues
 **one dispatch per run**, so there is nothing to amortize. It would pay only if
 V2 moved to a multi-dispatch structure (chunked shot batches for progress
 reporting, or memory-bounded rank-26 runs). Capability, not usage.
 
-**5. The residual f32-vs-f64 branch-probability effect.** §12 established that
+**7. The residual f32-vs-f64 branch-probability effect.** §12 established that
 the d5 divergence was *not* precision — it was a threshold constant calibrated
 for f64 and left in place when storage moved to f32. The genuine precision
 effect predicted in §12.1, branch probabilities good to ~1e-6 relative, remains
 real and unobserved: nothing in this corpus has isolated an instance. Bounded,
 rare, and still open.
 
-**6. The `rocprofv3` VGPR discrepancy.** The profiler reports 52–64 VGPRs and
+**8. The `rocprofv3` VGPR discrepancy.** The profiler reports 52–64 VGPRs and
 `Accum_VGPR_Count = 0` where the `.hsaco` metadata reports 104–128 plus 40–64
 AGPRs, for kernels whose scratch sizes match one-to-one. Not a threat to any
 conclusion — the metadata is authoritative and the spill counts come from it —
 but the report should not carry two numbers for one quantity indefinitely.
 
-**7. `SQ_WAVES` on persistent global-tier kernels.** The counter does not
+**9. `SQ_WAVES` on persistent global-tier kernels.** The counter does not
 reconcile with launch geometry above rank 19: three identical 512-workgroup SVM
 grids report 8,832 / 10,240 / 8,000 waves where geometry implies 2,048, while on
 the other 20 circuits it equals workgroups × 4 exactly. §14.5 retracted a claim

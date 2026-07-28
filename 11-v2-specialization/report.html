@@ -484,38 +484,39 @@ V2 versus the SVM interpreter:</p>
 <tr>
 <td>Large surface codes, global tier</td>
 <td>5</td>
-<td><strong>0.256 – 0.310</strong></td>
-<td>V2 is <strong>3.2–3.9× faster</strong></td>
+<td><strong>0.257 – 0.305</strong></td>
+<td>V2 is <strong>3.3–3.9× faster</strong></td>
 </tr>
 <tr>
 <td>Mid-size surface + QV10, coop tier</td>
 <td>5</td>
-<td>0.319 – 0.534</td>
-<td>V2 is <strong>1.9–3.1× faster</strong></td>
+<td>0.316 – 0.530</td>
+<td>V2 is <strong>1.9–3.2× faster</strong></td>
 </tr>
 <tr>
 <td>Register tier (<code>four_t</code>, <code>frame_h</code>, <code>circuit_d3</code>, <code>surface_d7_t5</code>)</td>
 <td>4</td>
-<td>0.509 – 0.742</td>
-<td>V2 is <strong>1.3–2.0× faster</strong></td>
+<td>0.497 – 0.617</td>
+<td>V2 is <strong>1.6–2.0× faster</strong></td>
 </tr>
 <tr>
 <td><code>circuit_d5</code> + <code>cultivation_d5</code>, coop tier</td>
 <td>6</td>
-<td>0.786 – 0.856</td>
+<td>0.794 – 0.857</td>
 <td>V2 is <strong>1.2–1.3× faster</strong> (post-fence, §1.3(d))</td>
 </tr>
 <tr>
 <td>Quantum-volume, global tier rank 20–24</td>
 <td>6</td>
-<td>0.732 – 0.990</td>
-<td>V2 wins <strong>1–37 %</strong>, shrinking with rank (§10.6)</td>
+<td>0.422 – 0.849</td>
+<td>V2 is <strong>1.2–2.4× faster</strong> (post pool fix, §14.5)</td>
 </tr>
 </tbody>
 </table>
-<p><strong>mean 0.626, median 0.670, wins 26/26</strong> — all 26 circuits, both backends, one
-job (50793), one node (<code>smci350-rck-g03-d13-21</code>), zero profiler aborts. Every
-circuit dispatches <code>clifft_v2_spec</code>; none falls back to the interpreter.</p>
+<p><strong>mean 0.575, median 0.538, geomean 0.531, wins 26/26</strong> — all 26 circuits, both
+backends, one job (51181), one node (<code>smci350-rck-g03-d13-21</code>), zero profiler
+aborts. Every circuit dispatches <code>clifft_v2_spec</code>; none falls back to the
+interpreter.</p>
 <p><strong>26 circuits, 26 wins.</strong> The five regimes sum to exactly 26, and membership is
 assigned by <em>measured launch geometry</em> rather than by circuit name — the census
 of §10.5 is precisely the finding that names are unreliable here. (This bit
@@ -607,20 +608,34 @@ measured grids:</p>
 </tr>
 </tbody>
 </table>
-<p>Five for five, including the XCD-alignment rounding. So the QV circuits lose
-occupancy geometrically as rank climbs — the pool halves with every added qubit
-— and that compounds with the register spilling of §10.6. Two independent
-mechanisms degrade the same six circuits, which is why their ratios approach 1.0
-from a corpus whose median is 0.670.</p>
-<p>The halving is real, but the 32 GB it halves against turned out to be a
-hardcoded constant on a 288 GB device rather than a property of the problem.
-Sweeping past it recovers up to <strong>2.09×</strong> at rank 24; see §14.5's correction.</p>
+<p>Five for five, including the XCD-alignment rounding. So the QV circuits lost
+occupancy geometrically as rank climbed — the pool halved with every added
+qubit — and that compounded with the register spilling of §10.6. Two
+independent mechanisms degraded the same six circuits, which is why their
+ratios once approached 1.0 from a corpus whose median was 0.670.</p>
+<p><strong>The halving was real; the 32 GB it halved against was not.</strong> It was a
+hardcoded constant on a 288 GB device — 11 % of the VRAM — and deriving the
+budget from the device instead (§14.5) moved the three worst circuits in the
+corpus to among its best: <code>qv24_L4</code> 0.882 → <strong>0.422</strong>, <code>qv23_L5</code> 0.990 →
+<strong>0.546</strong>, <code>qv22_L6</code> 0.980 → <strong>0.733</strong>. The grids above are the <em>pre-fix</em> ones,
+retained because they are what the formula was validated against; §14.5 gives
+the current derivation and §15.3 both tables side by side.</p>
+<p>That fix is also the only one of four attempts that worked. The tier runs at
+<strong>766 GB/s of ~8 TB/s — 9.6 %</strong> — so it is latency-bound, not bandwidth-bound,
+and Little's law leaves concurrency as the only available term: register
+prefetch, LDS staging and HBM stack placement were each implemented or
+researched and each failed, for three unrelated mechanisms. §14.5a is the
+characterization and Figure 14.2 draws it.</p>
 <p>All 26 are <strong>byte-exact</strong> against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).</p>
 <blockquote>
-<p><strong>Provenance.</strong> The ratios above are job <strong>50793</strong>
-(<code>20260727T125310Z_report-final-allfixtures</code>): 26 circuits, both backends,
-one node, commit <code>79d4463</code> clean, zero <code>rocprofv3</code> aborts. It replaces two
+<p><strong>Provenance.</strong> The ratios above are job <strong>51181</strong>
+(<code>20260728T063156Z_postpoolfix</code>): 26 circuits, both backends, one node
+(<code>smci350-rck-g03-d13-21</code>), commit <code>2f45cce</code> clean, zero <code>rocprofv3</code> aborts.
+It supersedes job <strong>50793</strong> (<code>20260727T125310Z_report-final-allfixtures</code>,
+commit <code>79d4463</code>), which is identical in method and differs only in carrying
+the 32 GB pool budget; §15.3 keeps its table for the comparison. 50793 in turn
+replaced two
 earlier attempts — a retracted run that dispatched stale kernels (§14.0's
 §0 notice) and job 50785, which ran only 18 of 26 because eight fixture paths
 had gone stale, aborted silently, and reported "wins 18/18" over the
@@ -800,7 +815,7 @@ exists. The 1.7× gain was real; the assumption that an SVM baseline transfers
 across nodes was not.</p>
 <p>So the headline "20 of 26" in §1.2 is a <em>pre-fix</em> figure. Post-fix, the corpus
 stands at <strong>26 of 26 — every circuit measured, every circuit a V2 win</strong>, mean
-0.626, median 0.670. An intermediate draft of this paragraph read "25 of 26
+0.575, median 0.538. An intermediate draft of this paragraph read "25 of 26
 measured", correctly refusing to assume <code>cultivation_d5</code> from the five circuits
 that shared its specialization; job 50793 paired it and it wins at 0.786.
 <strong>§1.2's table is the conservative reading, not the optimistic one</strong>, and §15
@@ -829,6 +844,15 @@ same-stream agreement to <strong>36/36 exact</strong>. (§12)</p>
   The workload is a butterfly reduction over amplitudes, not a GEMM.
   Any claim that the matrix cores can be brought to bear here is unsupported by
   this corpus. (§14.6)</li>
+<li><strong>Three attempts to hide memory latency all failed, for three unrelated
+  reasons.</strong> The global tier runs at 766 GB/s of ~8 TB/s — 9.6 % — so it is
+  latency-bound, and the obvious responses do not work: software-pipelined
+  prefetch is 7–10 % <em>slower</em> because both arms sit at the 128 VGPR cap and the
+  prefetch is funded by 223 extra spills; LDS staging was measured at −66 % in
+  V1 because the butterfly is strided and the L2 prefetcher already handles it;
+  HBM stack placement has nothing to place, since workgroups share no data and
+  NPS1 interleaves across all eight stacks anyway. Only raising <strong>concurrency</strong>
+  worked. (§14.5a)</li>
 </ul>
 <hr />
 <h2 id="2-the-svm-what-is-actually-being-simulated">2. The SVM: what is actually being simulated</h2>
@@ -7707,8 +7731,8 @@ enforced rather than merely intended:</p>
    <em>weakest</em> wins, so their absence moved the median from 0.670 to 0.518. A
    silent loss of data flattered the result by 23 %.</p>
 <h3 id="142-the-result">14.2 The result</h3>
-<p><strong>Mean 0.626, median 0.670, wins 26/26.</strong> Every circuit dispatches
-<code>clifft_v2_spec</code>; not one falls back to the interpreter.</p>
+<p><strong>Mean 0.575, median 0.538, geomean 0.531, wins 26/26.</strong> Every circuit
+dispatches <code>clifft_v2_spec</code>; not one falls back to the interpreter.</p>
 <table>
 <thead>
 <tr>
@@ -7721,190 +7745,195 @@ enforced rather than merely intended:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>surface_d11_t19</code></td>
-<td style="text-align: right;">20,423</td>
-<td style="text-align: right;">79,842</td>
-<td style="text-align: right;"><strong>0.256</strong></td>
+<td><code>surface_d11_t15</code></td>
+<td style="text-align: right;">19,542</td>
+<td style="text-align: right;">76,054</td>
+<td style="text-align: right;"><strong>0.257</strong></td>
 <td style="text-align: right;">3.9×</td>
 </tr>
 <tr>
-<td><code>surface_d11_t15</code></td>
-<td style="text-align: right;">19,589</td>
-<td style="text-align: right;">75,947</td>
-<td style="text-align: right;">0.258</td>
+<td><code>surface_d11_t19</code></td>
+<td style="text-align: right;">20,591</td>
+<td style="text-align: right;">79,850</td>
+<td style="text-align: right;"><strong>0.258</strong></td>
 <td style="text-align: right;">3.9×</td>
 </tr>
 <tr>
 <td><code>surface_d9_t19</code></td>
-<td style="text-align: right;">11,926</td>
-<td style="text-align: right;">45,208</td>
-<td style="text-align: right;">0.264</td>
+<td style="text-align: right;">11,894</td>
+<td style="text-align: right;">45,415</td>
+<td style="text-align: right;">0.262</td>
 <td style="text-align: right;">3.8×</td>
 </tr>
 <tr>
 <td><code>surface_d9_t15</code></td>
-<td style="text-align: right;">11,369</td>
-<td style="text-align: right;">41,325</td>
-<td style="text-align: right;">0.275</td>
-<td style="text-align: right;">3.6×</td>
+<td style="text-align: right;">11,264</td>
+<td style="text-align: right;">41,444</td>
+<td style="text-align: right;">0.272</td>
+<td style="text-align: right;">3.7×</td>
 </tr>
 <tr>
 <td><code>surface_d7_t19</code></td>
-<td style="text-align: right;">6,247</td>
-<td style="text-align: right;">20,152</td>
-<td style="text-align: right;">0.310</td>
-<td style="text-align: right;">3.2×</td>
+<td style="text-align: right;">6,167</td>
+<td style="text-align: right;">20,205</td>
+<td style="text-align: right;">0.305</td>
+<td style="text-align: right;">3.3×</td>
 </tr>
 <tr>
 <td><code>qv10</code></td>
-<td style="text-align: right;">1,386</td>
-<td style="text-align: right;">4,350</td>
-<td style="text-align: right;">0.319</td>
-<td style="text-align: right;">3.1×</td>
+<td style="text-align: right;">1,381</td>
+<td style="text-align: right;">4,365</td>
+<td style="text-align: right;">0.316</td>
+<td style="text-align: right;">3.2×</td>
+</tr>
+<tr>
+<td><code>qv24_L4_seed42</code></td>
+<td style="text-align: right;">3,468,136</td>
+<td style="text-align: right;">8,216,125</td>
+<td style="text-align: right;">0.422</td>
+<td style="text-align: right;">2.4×</td>
 </tr>
 <tr>
 <td><code>surface_d11_t10</code></td>
-<td style="text-align: right;">37,986</td>
-<td style="text-align: right;">81,369</td>
-<td style="text-align: right;">0.467</td>
+<td style="text-align: right;">38,044</td>
+<td style="text-align: right;">81,648</td>
+<td style="text-align: right;">0.466</td>
 <td style="text-align: right;">2.1×</td>
 </tr>
 <tr>
 <td><code>surface_d9_t10</code></td>
-<td style="text-align: right;">21,632</td>
-<td style="text-align: right;">44,094</td>
-<td style="text-align: right;">0.491</td>
+<td style="text-align: right;">21,409</td>
+<td style="text-align: right;">44,120</td>
+<td style="text-align: right;">0.485</td>
+<td style="text-align: right;">2.1×</td>
+</tr>
+<tr>
+<td><code>four_t</code></td>
+<td style="text-align: right;">10.0</td>
+<td style="text-align: right;">20.0</td>
+<td style="text-align: right;">0.497</td>
 <td style="text-align: right;">2.0×</td>
 </tr>
 <tr>
 <td><code>circuit_d3_p0.001</code></td>
-<td style="text-align: right;">221</td>
-<td style="text-align: right;">434</td>
-<td style="text-align: right;">0.509</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">427</td>
+<td style="text-align: right;">0.506</td>
 <td style="text-align: right;">2.0×</td>
 </tr>
 <tr>
 <td><code>surface_d7_t15</code></td>
-<td style="text-align: right;">11,225</td>
-<td style="text-align: right;">21,998</td>
-<td style="text-align: right;">0.510</td>
+<td style="text-align: right;">11,172</td>
+<td style="text-align: right;">22,046</td>
+<td style="text-align: right;">0.507</td>
 <td style="text-align: right;">2.0×</td>
 </tr>
 <tr>
 <td><code>surface_d7_t10</code></td>
-<td style="text-align: right;">11,044</td>
-<td style="text-align: right;">20,674</td>
-<td style="text-align: right;">0.534</td>
+<td style="text-align: right;">10,961</td>
+<td style="text-align: right;">20,669</td>
+<td style="text-align: right;">0.530</td>
 <td style="text-align: right;">1.9×</td>
 </tr>
 <tr>
-<td><code>four_t</code></td>
-<td style="text-align: right;">13.1</td>
-<td style="text-align: right;">22.3</td>
-<td style="text-align: right;">0.587</td>
-<td style="text-align: right;">1.7×</td>
+<td><code>qv23_L5_seed42</code></td>
+<td style="text-align: right;">3,347,600</td>
+<td style="text-align: right;">6,134,932</td>
+<td style="text-align: right;">0.546</td>
+<td style="text-align: right;">1.8×</td>
 </tr>
 <tr>
 <td><code>surface_d7_t5</code></td>
-<td style="text-align: right;">2,051</td>
-<td style="text-align: right;">3,372</td>
-<td style="text-align: right;">0.608</td>
+<td style="text-align: right;">2,017</td>
+<td style="text-align: right;">3,348</td>
+<td style="text-align: right;">0.602</td>
+<td style="text-align: right;">1.7×</td>
+</tr>
+<tr>
+<td><code>frame_h</code></td>
+<td style="text-align: right;">9.7</td>
+<td style="text-align: right;">15.7</td>
+<td style="text-align: right;">0.617</td>
 <td style="text-align: right;">1.6×</td>
 </tr>
 <tr>
 <td><code>qv20_L8_seed42</code></td>
-<td style="text-align: right;">1,583,246</td>
-<td style="text-align: right;">2,162,954</td>
-<td style="text-align: right;">0.732</td>
+<td style="text-align: right;">1,581,187</td>
+<td style="text-align: right;">2,157,406</td>
+<td style="text-align: right;">0.733</td>
+<td style="text-align: right;">1.4×</td>
+</tr>
+<tr>
+<td><code>qv22_L6_seed42</code></td>
+<td style="text-align: right;">2,371,700</td>
+<td style="text-align: right;">3,236,704</td>
+<td style="text-align: right;">0.733</td>
 <td style="text-align: right;">1.4×</td>
 </tr>
 <tr>
 <td><code>qv21_L8_seed42</code></td>
-<td style="text-align: right;">2,977,386</td>
-<td style="text-align: right;">4,045,316</td>
-<td style="text-align: right;">0.736</td>
+<td style="text-align: right;">2,982,497</td>
+<td style="text-align: right;">4,042,831</td>
+<td style="text-align: right;">0.738</td>
 <td style="text-align: right;">1.4×</td>
 </tr>
 <tr>
-<td><code>frame_h</code></td>
-<td style="text-align: right;">12.1</td>
-<td style="text-align: right;">16.3</td>
-<td style="text-align: right;">0.742</td>
-<td style="text-align: right;">1.3×</td>
-</tr>
-<tr>
 <td><code>cultivation_d5</code></td>
-<td style="text-align: right;">16,421</td>
-<td style="text-align: right;">20,901</td>
-<td style="text-align: right;">0.786</td>
+<td style="text-align: right;">16,612</td>
+<td style="text-align: right;">20,913</td>
+<td style="text-align: right;">0.794</td>
 <td style="text-align: right;">1.3×</td>
 </tr>
 <tr>
 <td><code>circuit_d5_p0.005</code></td>
-<td style="text-align: right;">8,727</td>
-<td style="text-align: right;">10,714</td>
-<td style="text-align: right;">0.815</td>
+<td style="text-align: right;">8,976</td>
+<td style="text-align: right;">10,671</td>
+<td style="text-align: right;">0.841</td>
 <td style="text-align: right;">1.2×</td>
 </tr>
 <tr>
 <td><code>circuit_d5_p0.003</code></td>
-<td style="text-align: right;">8,809</td>
-<td style="text-align: right;">10,516</td>
-<td style="text-align: right;">0.838</td>
-<td style="text-align: right;">1.2×</td>
-</tr>
-<tr>
-<td><code>circuit_d5_p0.002</code></td>
-<td style="text-align: right;">8,730</td>
-<td style="text-align: right;">10,319</td>
-<td style="text-align: right;">0.846</td>
-<td style="text-align: right;">1.2×</td>
-</tr>
-<tr>
-<td><code>circuit_d5_p0.001</code></td>
-<td style="text-align: right;">8,600</td>
-<td style="text-align: right;">10,158</td>
-<td style="text-align: right;">0.847</td>
+<td style="text-align: right;">8,859</td>
+<td style="text-align: right;">10,494</td>
+<td style="text-align: right;">0.844</td>
 <td style="text-align: right;">1.2×</td>
 </tr>
 <tr>
 <td><code>qv20_seed42</code></td>
-<td style="text-align: right;">1,804,649</td>
-<td style="text-align: right;">2,123,250</td>
+<td style="text-align: right;">1,804,028</td>
+<td style="text-align: right;">2,125,582</td>
+<td style="text-align: right;">0.849</td>
+<td style="text-align: right;">1.2×</td>
+</tr>
+<tr>
+<td><code>circuit_d5_p0.001</code></td>
+<td style="text-align: right;">8,640</td>
+<td style="text-align: right;">10,162</td>
 <td style="text-align: right;">0.850</td>
 <td style="text-align: right;">1.2×</td>
 </tr>
 <tr>
-<td><code>circuit_d5_p0.0005</code></td>
-<td style="text-align: right;">8,643</td>
-<td style="text-align: right;">10,102</td>
-<td style="text-align: right;">0.856</td>
+<td><code>circuit_d5_p0.002</code></td>
+<td style="text-align: right;">8,788</td>
+<td style="text-align: right;">10,311</td>
+<td style="text-align: right;">0.852</td>
 <td style="text-align: right;">1.2×</td>
 </tr>
 <tr>
-<td><code>qv24_L4_seed42</code></td>
-<td style="text-align: right;">7,241,815</td>
-<td style="text-align: right;">8,211,443</td>
-<td style="text-align: right;">0.882</td>
-<td style="text-align: right;">1.1×</td>
-</tr>
-<tr>
-<td><code>qv22_L6_seed42</code></td>
-<td style="text-align: right;">3,179,445</td>
-<td style="text-align: right;">3,243,842</td>
-<td style="text-align: right;">0.980</td>
-<td style="text-align: right;">1.0×</td>
-</tr>
-<tr>
-<td><code>qv23_L5_seed42</code></td>
-<td style="text-align: right;">6,086,167</td>
-<td style="text-align: right;">6,146,952</td>
-<td style="text-align: right;">0.990</td>
-<td style="text-align: right;">1.0×</td>
+<td><code>circuit_d5_p0.0005</code></td>
+<td style="text-align: right;">8,642</td>
+<td style="text-align: right;">10,088</td>
+<td style="text-align: right;">0.857</td>
+<td style="text-align: right;">1.2×</td>
 </tr>
 </tbody>
 </table>
-<p>The spread — 3.9× down to 1.01× — is the chapter's real subject. A single
+<p>Note where the QV circuits now sit. Before the pool fix they occupied the last
+three rows of this table at 0.882–0.990; <code>qv24_L4</code> is now <strong>seventh from the
+top</strong> at 0.422, ahead of every surface-code circuit except the five deepest.
+Their remaining spread — 0.422 to 0.849 — no longer tracks rank monotonically,
+which is the sign that the occupancy mechanism has stopped dominating them.</p>
+<p>The spread — 3.9× down to 1.2× — is the chapter's real subject. A single
 average would hide the entire mechanism.</p>
 <h3 id="143-where-the-time-goes-the-scalar-pipe">14.3 Where the time goes: the scalar pipe</h3>
 <p>The strongest and most consistent signal in the corpus is <strong>not</strong> the vector
@@ -8649,14 +8678,10 @@ what the ratio requires.</p>
 <h3 id="153-the-complete-result-table">15.3 The complete result table</h3>
 <p>Every circuit. Kernel time is <code>per_dispatch_ns_median</code>; each backend issues
 exactly one dispatch of the kernel under test.</p>
-<blockquote>
-<p><strong>These numbers predate the pool fix of §14.5.</strong> They were measured with the
-32 GB budget, which the sweep showed costs up to 2.09× at rank 24. The six QV
-circuits — the ones setting the weak end of the spread — are precisely the
-ones affected, so the geomean below is a <strong>lower bound</strong> on the corrected
-figure. The corpus is being re-run; until it completes, the table stands as
-the last fully measured state rather than the current one.</p>
-</blockquote>
+<p>These are the <strong>post-pool-fix</strong> numbers (run <code>20260728T063156Z_postpoolfix</code>,
+commit <code>2f45cce</code>, clean tree, one node). The pre-fix table this replaces is kept
+below, because the difference between the two is itself the measurement of
+§14.5's correction.</p>
 <table>
 <thead>
 <tr>
@@ -8675,238 +8700,238 @@ the last fully measured state rather than the current one.</p>
 <td><code>circuit_d3_p0.001</code></td>
 <td>register</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">220.7</td>
-<td style="text-align: right;">433.6</td>
-<td style="text-align: right;">0.509</td>
+<td style="text-align: right;">215.9</td>
+<td style="text-align: right;">427.0</td>
+<td style="text-align: right;">0.506</td>
 </tr>
 <tr>
 <td style="text-align: right;">2</td>
 <td><code>circuit_d5_p0.0005</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">8,643.0</td>
-<td style="text-align: right;">10,101.6</td>
-<td style="text-align: right;">0.856</td>
+<td style="text-align: right;">8,641.6</td>
+<td style="text-align: right;">10,087.7</td>
+<td style="text-align: right;">0.857</td>
 </tr>
 <tr>
 <td style="text-align: right;">3</td>
 <td><code>circuit_d5_p0.001</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">8,599.8</td>
-<td style="text-align: right;">10,158.4</td>
-<td style="text-align: right;">0.847</td>
+<td style="text-align: right;">8,639.9</td>
+<td style="text-align: right;">10,161.7</td>
+<td style="text-align: right;">0.850</td>
 </tr>
 <tr>
 <td style="text-align: right;">4</td>
 <td><code>circuit_d5_p0.002</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">8,729.9</td>
-<td style="text-align: right;">10,318.6</td>
-<td style="text-align: right;">0.846</td>
+<td style="text-align: right;">8,788.4</td>
+<td style="text-align: right;">10,311.0</td>
+<td style="text-align: right;">0.852</td>
 </tr>
 <tr>
 <td style="text-align: right;">5</td>
 <td><code>circuit_d5_p0.003</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">8,808.8</td>
-<td style="text-align: right;">10,516.1</td>
-<td style="text-align: right;">0.838</td>
+<td style="text-align: right;">8,858.8</td>
+<td style="text-align: right;">10,493.9</td>
+<td style="text-align: right;">0.844</td>
 </tr>
 <tr>
 <td style="text-align: right;">6</td>
 <td><code>circuit_d5_p0.005</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">8,727.0</td>
-<td style="text-align: right;">10,713.5</td>
-<td style="text-align: right;">0.815</td>
+<td style="text-align: right;">8,975.9</td>
+<td style="text-align: right;">10,671.0</td>
+<td style="text-align: right;">0.841</td>
 </tr>
 <tr>
 <td style="text-align: right;">7</td>
 <td><code>cultivation_d5</code></td>
 <td>coop</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">16,421.3</td>
-<td style="text-align: right;">20,900.8</td>
-<td style="text-align: right;">0.786</td>
+<td style="text-align: right;">16,612.0</td>
+<td style="text-align: right;">20,912.9</td>
+<td style="text-align: right;">0.794</td>
 </tr>
 <tr>
 <td style="text-align: right;">8</td>
 <td><code>four_t</code></td>
 <td>register</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">13.1</td>
-<td style="text-align: right;">22.3</td>
-<td style="text-align: right;">0.587</td>
+<td style="text-align: right;">10.0</td>
+<td style="text-align: right;">20.0</td>
+<td style="text-align: right;">0.497</td>
 </tr>
 <tr>
 <td style="text-align: right;">9</td>
 <td><code>frame_h</code></td>
 <td>register</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">12.1</td>
-<td style="text-align: right;">16.3</td>
-<td style="text-align: right;">0.742</td>
+<td style="text-align: right;">9.7</td>
+<td style="text-align: right;">15.7</td>
+<td style="text-align: right;">0.617</td>
 </tr>
 <tr>
 <td style="text-align: right;">10</td>
 <td><code>qv10</code></td>
 <td>coop</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">1,385.6</td>
-<td style="text-align: right;">4,349.7</td>
-<td style="text-align: right;">0.319</td>
+<td style="text-align: right;">1,381.0</td>
+<td style="text-align: right;">4,364.8</td>
+<td style="text-align: right;">0.316</td>
 </tr>
 <tr>
 <td style="text-align: right;">11</td>
 <td><code>qv20_L8_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">2,000</td>
-<td style="text-align: right;">1,583,246.4</td>
-<td style="text-align: right;">2,162,954.0</td>
-<td style="text-align: right;">0.732</td>
+<td style="text-align: right;">1,581,186.8</td>
+<td style="text-align: right;">2,157,405.6</td>
+<td style="text-align: right;">0.733</td>
 </tr>
 <tr>
 <td style="text-align: right;">12</td>
 <td><code>qv20_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">2,000</td>
-<td style="text-align: right;">1,804,648.5</td>
-<td style="text-align: right;">2,123,250.3</td>
-<td style="text-align: right;">0.850</td>
+<td style="text-align: right;">1,804,027.8</td>
+<td style="text-align: right;">2,125,582.2</td>
+<td style="text-align: right;">0.849</td>
 </tr>
 <tr>
 <td style="text-align: right;">13</td>
 <td><code>qv21_L8_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">2,000</td>
-<td style="text-align: right;">2,977,385.5</td>
-<td style="text-align: right;">4,045,316.0</td>
-<td style="text-align: right;">0.736</td>
+<td style="text-align: right;">2,982,497.2</td>
+<td style="text-align: right;">4,042,830.8</td>
+<td style="text-align: right;">0.738</td>
 </tr>
 <tr>
 <td style="text-align: right;">14</td>
 <td><code>qv22_L6_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">1,000</td>
-<td style="text-align: right;">3,179,444.7</td>
-<td style="text-align: right;">3,243,841.8</td>
-<td style="text-align: right;">0.980</td>
+<td style="text-align: right;">2,371,700.3</td>
+<td style="text-align: right;">3,236,704.0</td>
+<td style="text-align: right;"><strong>0.733</strong></td>
 </tr>
 <tr>
 <td style="text-align: right;">15</td>
 <td><code>qv23_L5_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">1,000</td>
-<td style="text-align: right;">6,086,167.4</td>
-<td style="text-align: right;">6,146,952.4</td>
-<td style="text-align: right;">0.990</td>
+<td style="text-align: right;">3,347,599.5</td>
+<td style="text-align: right;">6,134,932.1</td>
+<td style="text-align: right;"><strong>0.546</strong></td>
 </tr>
 <tr>
 <td style="text-align: right;">16</td>
 <td><code>qv24_L4_seed42</code></td>
 <td>global</td>
 <td style="text-align: right;">500</td>
-<td style="text-align: right;">7,241,815.1</td>
-<td style="text-align: right;">8,211,443.4</td>
-<td style="text-align: right;">0.882</td>
+<td style="text-align: right;">3,468,136.4</td>
+<td style="text-align: right;">8,216,125.0</td>
+<td style="text-align: right;"><strong>0.422</strong></td>
 </tr>
 <tr>
 <td style="text-align: right;">17</td>
 <td><code>surface_d11_t10</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">37,986.3</td>
-<td style="text-align: right;">81,369.2</td>
-<td style="text-align: right;">0.467</td>
+<td style="text-align: right;">38,043.6</td>
+<td style="text-align: right;">81,647.9</td>
+<td style="text-align: right;">0.466</td>
 </tr>
 <tr>
 <td style="text-align: right;">18</td>
 <td><code>surface_d11_t15</code></td>
 <td>global</td>
 <td style="text-align: right;">5,000</td>
-<td style="text-align: right;">19,589.4</td>
-<td style="text-align: right;">75,946.8</td>
-<td style="text-align: right;">0.258</td>
+<td style="text-align: right;">19,542.0</td>
+<td style="text-align: right;">76,053.5</td>
+<td style="text-align: right;">0.257</td>
 </tr>
 <tr>
 <td style="text-align: right;">19</td>
 <td><code>surface_d11_t19</code></td>
 <td>global</td>
 <td style="text-align: right;">5,000</td>
-<td style="text-align: right;">20,423.1</td>
-<td style="text-align: right;">79,842.1</td>
-<td style="text-align: right;">0.256</td>
+<td style="text-align: right;">20,590.8</td>
+<td style="text-align: right;">79,850.4</td>
+<td style="text-align: right;">0.258</td>
 </tr>
 <tr>
 <td style="text-align: right;">20</td>
 <td><code>surface_d7_t10</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">11,044.2</td>
-<td style="text-align: right;">20,673.5</td>
-<td style="text-align: right;">0.534</td>
+<td style="text-align: right;">10,960.9</td>
+<td style="text-align: right;">20,668.7</td>
+<td style="text-align: right;">0.530</td>
 </tr>
 <tr>
 <td style="text-align: right;">21</td>
 <td><code>surface_d7_t15</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">11,225.3</td>
-<td style="text-align: right;">21,997.6</td>
-<td style="text-align: right;">0.510</td>
+<td style="text-align: right;">11,172.1</td>
+<td style="text-align: right;">22,046.2</td>
+<td style="text-align: right;">0.507</td>
 </tr>
 <tr>
 <td style="text-align: right;">22</td>
 <td><code>surface_d7_t19</code></td>
 <td>global</td>
 <td style="text-align: right;">5,000</td>
-<td style="text-align: right;">6,246.9</td>
-<td style="text-align: right;">20,152.3</td>
-<td style="text-align: right;">0.310</td>
+<td style="text-align: right;">6,167.3</td>
+<td style="text-align: right;">20,205.0</td>
+<td style="text-align: right;">0.305</td>
 </tr>
 <tr>
 <td style="text-align: right;">23</td>
 <td><code>surface_d7_t5</code></td>
 <td>register</td>
 <td style="text-align: right;">20,000</td>
-<td style="text-align: right;">2,051.1</td>
-<td style="text-align: right;">3,372.2</td>
-<td style="text-align: right;">0.608</td>
+<td style="text-align: right;">2,017.3</td>
+<td style="text-align: right;">3,348.4</td>
+<td style="text-align: right;">0.602</td>
 </tr>
 <tr>
 <td style="text-align: right;">24</td>
 <td><code>surface_d9_t10</code></td>
 <td>coop</td>
 <td style="text-align: right;">10,000</td>
-<td style="text-align: right;">21,631.9</td>
-<td style="text-align: right;">44,093.9</td>
-<td style="text-align: right;">0.491</td>
+<td style="text-align: right;">21,408.8</td>
+<td style="text-align: right;">44,120.4</td>
+<td style="text-align: right;">0.485</td>
 </tr>
 <tr>
 <td style="text-align: right;">25</td>
 <td><code>surface_d9_t15</code></td>
 <td>global</td>
 <td style="text-align: right;">5,000</td>
-<td style="text-align: right;">11,368.7</td>
-<td style="text-align: right;">41,325.4</td>
-<td style="text-align: right;">0.275</td>
+<td style="text-align: right;">11,263.9</td>
+<td style="text-align: right;">41,444.0</td>
+<td style="text-align: right;">0.272</td>
 </tr>
 <tr>
 <td style="text-align: right;">26</td>
 <td><code>surface_d9_t19</code></td>
 <td>global</td>
 <td style="text-align: right;">5,000</td>
-<td style="text-align: right;">11,925.6</td>
-<td style="text-align: right;">45,207.5</td>
-<td style="text-align: right;">0.264</td>
+<td style="text-align: right;">11,894.4</td>
+<td style="text-align: right;">45,415.0</td>
+<td style="text-align: right;">0.262</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Aggregates.</strong> Arithmetic mean 0.626, median 0.670, <strong>wins 26 / 26</strong>.</p>
+<p><strong>Aggregates.</strong> Arithmetic mean 0.575, median 0.538, <strong>wins 26 / 26</strong>.</p>
 <p>Geometric mean — the correct average for a set of ratios, and the one that does
 not let a single large speedup dominate:</p>
 <table>
@@ -8923,45 +8948,136 @@ not let a single large speedup dominate:</p>
 <tr>
 <td>register</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">0.606</td>
-<td style="text-align: right;">0.509</td>
-<td style="text-align: right;">0.742</td>
+<td style="text-align: right;">0.553</td>
+<td style="text-align: right;">0.497</td>
+<td style="text-align: right;">0.617</td>
 </tr>
 <tr>
 <td>coop</td>
 <td style="text-align: right;">11</td>
-<td style="text-align: right;">0.633</td>
-<td style="text-align: right;">0.319</td>
-<td style="text-align: right;">0.856</td>
+<td style="text-align: right;">0.635</td>
+<td style="text-align: right;">0.316</td>
+<td style="text-align: right;">0.857</td>
 </tr>
 <tr>
 <td>global</td>
 <td style="text-align: right;">11</td>
-<td style="text-align: right;">0.508</td>
-<td style="text-align: right;">0.256</td>
-<td style="text-align: right;">0.990</td>
+<td style="text-align: right;"><strong>0.437</strong></td>
+<td style="text-align: right;">0.257</td>
+<td style="text-align: right;">0.849</td>
 </tr>
 <tr>
 <td><strong>all</strong></td>
 <td style="text-align: right;"><strong>26</strong></td>
-<td style="text-align: right;"><strong>0.573</strong></td>
-<td style="text-align: right;">0.256</td>
-<td style="text-align: right;">0.990</td>
+<td style="text-align: right;"><strong>0.531</strong></td>
+<td style="text-align: right;">0.257</td>
+<td style="text-align: right;">0.857</td>
 </tr>
 </tbody>
 </table>
-<p>The global tier has both the best geomean <em>and</em> the widest spread — it contains
-the surface circuits that fold hardest and the QV circuits that resist most.
-Tier alone does not predict speedup; instruction mix (§14.4) and pool occupancy
-(§14.5) do.</p>
+<p><strong>What the pool fix changed, measured on the whole corpus.</strong> The three circuits
+that were the corpus's <em>weakest</em> are now among its strongest, and nothing else
+moved:</p>
+<table>
+<thead>
+<tr>
+<th>circuit</th>
+<th style="text-align: right;">pre-fix</th>
+<th style="text-align: right;">post-fix</th>
+<th style="text-align: right;">change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qv24_L4_seed42</code></td>
+<td style="text-align: right;">0.882</td>
+<td style="text-align: right;"><strong>0.422</strong></td>
+<td style="text-align: right;">2.09×</td>
+</tr>
+<tr>
+<td><code>qv23_L5_seed42</code></td>
+<td style="text-align: right;">0.990</td>
+<td style="text-align: right;"><strong>0.546</strong></td>
+<td style="text-align: right;">1.81×</td>
+</tr>
+<tr>
+<td><code>qv22_L6_seed42</code></td>
+<td style="text-align: right;">0.980</td>
+<td style="text-align: right;"><strong>0.733</strong></td>
+<td style="text-align: right;">1.34×</td>
+</tr>
+<tr>
+<td>geomean, global tier</td>
+<td style="text-align: right;">0.508</td>
+<td style="text-align: right;"><strong>0.437</strong></td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td><strong>geomean, all 26</strong></td>
+<td style="text-align: right;"><strong>0.573</strong></td>
+<td style="text-align: right;"><strong>0.531</strong></td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table>
+<p>The worst ratio in the corpus improves from 0.990 to 0.857, and the spread
+collapses accordingly: before the fix the global tier ran from 0.256 to 0.990,
+after it from 0.257 to 0.849. The circuits that "resisted" were not resisting a
+property of their instruction mix. <strong>The 22 non-QV circuits are unchanged within
+noise</strong>, which is the control this comparison needs — the fix touches only the
+grid the global tier launches, and only where the budget rather than the 2,048
+cap was binding.</p>
+<p>The global tier now has both the best geomean <em>and</em> the narrowest justification
+for its spread: it contains the surface circuits that fold hardest and the QV
+circuits that are still rank-limited. Tier alone does not predict speedup;
+instruction mix (§14.4) and pool occupancy (§14.5) do.</p>
 <blockquote>
 <p><strong>Total kernel time across the corpus is a misleading statistic, and is
-reported here only to be dismissed.</strong> Summing all 26: V2 23.088 s against SVM
-26.445 s, a ratio of 0.873. That number is dominated by the six QV circuits,
-which alone account for 22.9 s of V2's 23.1 s because they are run at high
-rank for thousands of shots. It describes the composition of this fixture list,
-not the backend. The per-circuit ratios above are the result.</p>
+reported here only to be dismissed.</strong> Summing all 26: V2 15.770 s against SVM
+26.426 s, a ratio of 0.597. That number is dominated by the six QV circuits,
+which alone account for 15.6 s of V2's 15.8 s because they are run at high
+rank for thousands of shots. It describes the composition of this fixture
+list, not the backend. The per-circuit ratios above are the result. (Note how
+far this statistic moved — 0.873 to 0.597 — for a fix that changed 4 of 26
+circuits: the dismissal above is exactly why.)</p>
 </blockquote>
+<details>
+<summary><b>The pre-fix table</b> — measured with the 32 GB budget, retained for comparison</summary>
+
+| # | circuit | tier | shots | V2 (µs) | SVM (µs) | V2/SVM |
+|---:|---|---|---:|---:|---:|---:|
+| 1 | `circuit_d3_p0.001` | register | 20,000 | 220.7 | 433.6 | 0.509 |
+| 2 | `circuit_d5_p0.0005` | coop | 10,000 | 8,643.0 | 10,101.6 | 0.856 |
+| 3 | `circuit_d5_p0.001` | coop | 10,000 | 8,599.8 | 10,158.4 | 0.847 |
+| 4 | `circuit_d5_p0.002` | coop | 10,000 | 8,729.9 | 10,318.6 | 0.846 |
+| 5 | `circuit_d5_p0.003` | coop | 10,000 | 8,808.8 | 10,516.1 | 0.838 |
+| 6 | `circuit_d5_p0.005` | coop | 10,000 | 8,727.0 | 10,713.5 | 0.815 |
+| 7 | `cultivation_d5` | coop | 20,000 | 16,421.3 | 20,900.8 | 0.786 |
+| 8 | `four_t` | register | 20,000 | 13.1 | 22.3 | 0.587 |
+| 9 | `frame_h` | register | 20,000 | 12.1 | 16.3 | 0.742 |
+| 10 | `qv10` | coop | 20,000 | 1,385.6 | 4,349.7 | 0.319 |
+| 11 | `qv20_L8_seed42` | global | 2,000 | 1,583,246.4 | 2,162,954.0 | 0.732 |
+| 12 | `qv20_seed42` | global | 2,000 | 1,804,648.5 | 2,123,250.3 | 0.850 |
+| 13 | `qv21_L8_seed42` | global | 2,000 | 2,977,385.5 | 4,045,316.0 | 0.736 |
+| 14 | `qv22_L6_seed42` | global | 1,000 | 3,179,444.7 | 3,243,841.8 | 0.980 |
+| 15 | `qv23_L5_seed42` | global | 1,000 | 6,086,167.4 | 6,146,952.4 | 0.990 |
+| 16 | `qv24_L4_seed42` | global | 500 | 7,241,815.1 | 8,211,443.4 | 0.882 |
+| 17 | `surface_d11_t10` | coop | 10,000 | 37,986.3 | 81,369.2 | 0.467 |
+| 18 | `surface_d11_t15` | global | 5,000 | 19,589.4 | 75,946.8 | 0.258 |
+| 19 | `surface_d11_t19` | global | 5,000 | 20,423.1 | 79,842.1 | 0.256 |
+| 20 | `surface_d7_t10` | coop | 10,000 | 11,044.2 | 20,673.5 | 0.534 |
+| 21 | `surface_d7_t15` | coop | 10,000 | 11,225.3 | 21,997.6 | 0.510 |
+| 22 | `surface_d7_t19` | global | 5,000 | 6,246.9 | 20,152.3 | 0.310 |
+| 23 | `surface_d7_t5` | register | 20,000 | 2,051.1 | 3,372.2 | 0.608 |
+| 24 | `surface_d9_t10` | coop | 10,000 | 21,631.9 | 44,093.9 | 0.491 |
+| 25 | `surface_d9_t15` | global | 5,000 | 11,368.7 | 41,325.4 | 0.275 |
+| 26 | `surface_d9_t19` | global | 5,000 | 11,925.6 | 45,207.5 | 0.264 |
+
+Aggregates: arithmetic mean 0.626, median 0.670, wins 26/26. Geomean by tier —
+register 0.606, coop 0.633, global 0.508, **all 0.573**.
+
+</details>
+
 <h3 id="154-tier-assignment">15.4 Tier assignment</h3>
 <p>Tier is a function of <code>peak_rank</code> alone (<code>v2_kernel.cc:312-321</code>):</p>
 <div class="codehilite"><pre><span></span><code><span class="k">constexpr</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">kRegMaxRank</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
@@ -8978,6 +9094,17 @@ with the other <code>surface_d7_*</code> circuits. The name encodes the circuit'
 construction; the tier follows from the peak rank the StatevectorSqueeze pass
 leaves behind. <strong>Read the measured LDS size, not the fixture name.</strong></p>
 <h3 id="155-launch-geometry-and-resource-footprint">15.5 Launch geometry and resource footprint</h3>
+<blockquote>
+<p><strong>Provenance note for §15.5–15.7.</strong> The counter tables in these three
+sections are from job <strong>50793</strong>, the pre-pool-fix run, because the counter
+passes were collected there and have not been re-collected. For the six QV
+circuits this means the <strong>grids and time ratios in these tables are the
+pre-fix ones</strong> (<code>qv24</code> at 168 workgroups, ratio 0.882). The per-kernel
+resource footprints — LDS, scratch, VGPR, SGPR — are properties of the
+compiled kernel and are unaffected by the grid, as are the VALU/SALU
+instruction counts. §15.3 carries the current timings; where a row here shows
+a QV time ratio, read §15.3's table instead.</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -9718,7 +9845,7 @@ failure:</p>
 <tr>
 <td><strong>V2</strong></td>
 <td>per-circuit specialization <em>over</em> a runtime, direct C → amdgcn, HSA dispatch</td>
-<td><strong>0.573 geometric mean against SVM, 26 of 26 circuits faster.</strong></td>
+<td><strong>0.531 geometric mean against SVM, 26 of 26 circuits faster.</strong></td>
 </tr>
 </tbody>
 </table>
@@ -9818,27 +9945,44 @@ The same six circuits carry the entire busy-cycle residual (17.9–28.2 %, and
 essentially zero elsewhere) and a residual L2 deficit (91 % against SVM's 98 %,
 down from 71.5 % pre-fence but not gone). Three independent signals, one circuit
 family, no explanation. This is the largest unexplained result in the report.</p>
-<p><strong>3. The specializer does not yet bake per-circuit LDS sizing.</strong> It knows each
+<p><strong>3. <code>global_load_lds</code> — the one latency formulation not yet refuted.</strong> §14.5a
+records three failed attacks on the global tier's latency gap, but the
+mechanisms that killed them are specific: the register pipeline died of VGPR
+pressure at the 128 cap, and V1's F8 LDS tiling died of 3 barriers per tile
+against an L2 that already prefetches a stride. An asynchronous global→LDS DMA
+avoids both — it never allocates a VGPR and needs one fence, not three. It is
+untried because it competes for the same latency gap the pool fix has partially
+closed, and the gap should be re-measured before it is spent. <strong>First step is a
+counter pass, not an implementation.</strong></p>
+<p><strong>4. Ranks 25 and 26 are unmeasured, not unaffected.</strong> Job 51184 confirms both
+fixtures reach peak_rank 25/26 and that the budget behaves (296 wgs / 111.0 GB
+and 144 wgs / 108.0 GB), but its old-vs-new arms show no difference — and the
+arms ran <strong>8 and 4 shots against 296 and 144 workgroups</strong>. With 37× more
+workgroups than shots the pool cannot be the limiter, so the experiment cannot
+observe the variable it was built for. This is an <strong>inconclusive</strong> result, not a
+negative one; it needs a re-run at shots ≥ 2,000, which at rank 26 costs hours,
+not minutes.</p>
+<p><strong>5. The specializer does not yet bake per-circuit LDS sizing.</strong> It knows each
 circuit's peak rank and could size the coop tier's LDS exactly; it currently
 inherits a conservative static bound (§9.3). A known, bounded win nobody has
 taken.</p>
-<p><strong>4. <code>batched16</code> is conditional, not a missed win.</strong> HSA batched dispatch
+<p><strong>6. <code>batched16</code> is conditional, not a missed win.</strong> HSA batched dispatch
 measures 2,320 ns against the persistent path's 6,326 — 2.7× — but V2 issues
 <strong>one dispatch per run</strong>, so there is nothing to amortize. It would pay only if
 V2 moved to a multi-dispatch structure (chunked shot batches for progress
 reporting, or memory-bounded rank-26 runs). Capability, not usage.</p>
-<p><strong>5. The residual f32-vs-f64 branch-probability effect.</strong> §12 established that
+<p><strong>7. The residual f32-vs-f64 branch-probability effect.</strong> §12 established that
 the d5 divergence was <em>not</em> precision — it was a threshold constant calibrated
 for f64 and left in place when storage moved to f32. The genuine precision
 effect predicted in §12.1, branch probabilities good to ~1e-6 relative, remains
 real and unobserved: nothing in this corpus has isolated an instance. Bounded,
 rare, and still open.</p>
-<p><strong>6. The <code>rocprofv3</code> VGPR discrepancy.</strong> The profiler reports 52–64 VGPRs and
+<p><strong>8. The <code>rocprofv3</code> VGPR discrepancy.</strong> The profiler reports 52–64 VGPRs and
 <code>Accum_VGPR_Count = 0</code> where the <code>.hsaco</code> metadata reports 104–128 plus 40–64
 AGPRs, for kernels whose scratch sizes match one-to-one. Not a threat to any
 conclusion — the metadata is authoritative and the spill counts come from it —
 but the report should not carry two numbers for one quantity indefinitely.</p>
-<p><strong>7. <code>SQ_WAVES</code> on persistent global-tier kernels.</strong> The counter does not
+<p><strong>9. <code>SQ_WAVES</code> on persistent global-tier kernels.</strong> The counter does not
 reconcile with launch geometry above rank 19: three identical 512-workgroup SVM
 grids report 8,832 / 10,240 / 8,000 waves where geometry implies 2,048, while on
 the other 20 circuits it equals workgroups × 4 exactly. §14.5 retracted a claim
