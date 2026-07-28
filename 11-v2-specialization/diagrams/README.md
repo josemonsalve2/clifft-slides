@@ -1,6 +1,6 @@
 # Figures — deck 11 / V2 report
 
-37 SVGs live here. **30 are used**; 7 are deliberately not. This file records
+38 SVGs live here. **31 are used**; 7 are deliberately not. This file records
 which is which, so an unused figure is not mistaken for an oversight and
 re-added.
 
@@ -48,6 +48,7 @@ second slide that reuse is left unnumbered so each number has one definition.
 | `dispatch-latency.svg` | 13.1 | per-dispatch latency, six modes |
 | `hsa-aql-dispatch-path.svg` | 13.2 | what an AQL dispatch actually does |
 | `xcd-pool-underfill.svg` | 14.1 | pool underfill across 8 XCDs / 256 CUs |
+| `latency-not-bandwidth.svg` | 14.2 | 766 GB/s of ~8 TB/s — the tier is latency-bound |
 
 Figures 6.2, 7.2, 7.5, 9.2, 10.2, 13.2 and 14.1 were added in the round-2 figure
 pass (specs `../.figspec/20-`…`26-`), which prioritized **mechanism** — why a
@@ -56,6 +57,9 @@ Figures 6.3, 7.3, 8.2 and 11.2 followed in a third pass (specs `27-`…`30-`),
 covering the four mechanisms that had text but no picture: what SROA buys the
 vectorizer, how constant flags erase control flow, how the correctness gate
 caches its verdict, and how an incomplete cache key preserved a stale one.
+Figure 14.2 followed in a fourth pass (spec `31-`), characterizing the global
+tier's limit as latency rather than bandwidth — the one counter that decided
+three separate locality proposals.
 
 ## Not used, on purpose (7)
 

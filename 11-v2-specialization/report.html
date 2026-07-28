@@ -239,7 +239,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <body>
 <nav id="toc">
   <div class="toc-title">Contents</div>
-  <ul><li><a href="#the-clifft-gpu-backend-svm-hybrid-mlir-v1-and-the-v2-rebuild">The clifft GPU Backend: SVM, Hybrid, MLIR V1, and the V2 Rebuild</a></li><ul><li><a href="#provenance-of-the-performance-numbers">⚠ Provenance of the performance numbers</a></li></ul><li><a href="#a-note-on-method-before-anything-else">A note on method, before anything else</a></li><li><a href="#table-of-contents">Table of contents</a></li><li><a href="#1-executive-summary">1. Executive summary</a></li><ul><li><a href="#11-the-four-generations">1.1 The four generations</a></li><li><a href="#12-the-headline-number">1.2 The headline number</a></li><li><a href="#13-the-five-results-this-report-argues-for">1.3 The five results this report argues for</a></li><li><a href="#14-what-did-not-work">1.4 What did not work</a></li></ul><li><a href="#2-the-svm-what-is-actually-being-simulated">2. The SVM: what is actually being simulated</a></li><ul><li><a href="#21-the-factored-state">2.1 The factored state</a></li><li><a href="#22-the-bytecode">2.2 The bytecode</a></li><li><a href="#23-the-interpreter-loop-and-why-its-shape-matters">2.3 The interpreter loop, and why its shape matters</a></li><li><a href="#24-the-prng-and-why-it-must-be-bit-exact">2.4 The PRNG, and why it must be bit-exact</a></li><li><a href="#25-what-this-means-for-a-gpu">2.5 What this means for a GPU</a></li></ul><li><a href="#3-the-original-gpu-svm-one-interpreter-three-tiers">3. The original GPU SVM: one interpreter, three tiers</a></li><ul><li><a href="#31-the-kernel-is-a-forpc-switch">3.1 The kernel is a for(pc) switch</a></li><li><a href="#32-three-tiers-because-the-working-set-spans-107">3.2 Three tiers, because the working set spans 10^7</a></li><li><a href="#33-the-cooperative-reduction">3.3 The cooperative reduction</a></li><li><a href="#34-what-the-svm-backend-does-well">3.4 What the SVM backend does well</a></li><li><a href="#35-what-it-leaves-on-the-table">3.5 What it leaves on the table</a></li></ul><li><a href="#4-hybrid-compiling-the-circuit-into-hip-and-why-it-stalled">4. Hybrid: compiling the circuit into HIP, and why it stalled</a></li><ul><li><a href="#41-the-idea">4.1 The idea</a></li><li><a href="#42-the-compile-path-and-the-first-appearance-of-an-hsahip-split">4.2 The compile path — and the first appearance of an HSA/HIP split</a></li><li><a href="#43-the-result-correct-competitive-never-ahead">4.3 The result: correct, competitive, never ahead</a></li><li><a href="#44-why-it-stalled-the-density-measurement">4.4 Why it stalled — the density measurement</a></li></ul><li><a href="#5-v1-the-mlir-backend-and-its-failure">5. V1: the MLIR backend and its failure</a></li><ul><li><a href="#51-the-original-idea">5.1 The original idea</a></li><li><a href="#52-what-was-actually-built-three-verified-findings">5.2 What was actually built — three verified findings</a></li><li><a href="#53-the-actual-failure-unrolling-the-operand-sequence">5.3 The actual failure: unrolling the operand sequence</a></li><li><a href="#54-the-performance-result">5.4 The performance result</a></li><li><a href="#55-the-spill-claim-real-but-mis-attributed">5.5 The spill claim: real, but mis-attributed</a></li><li><a href="#56-the-duplication-tax">5.6 The duplication tax</a></li><li><a href="#57-the-three-lessons-v2-is-built-on">5.7 The three lessons V2 is built on</a></li></ul><li><a href="#6-v2-the-architecture">6. V2: the architecture</a></li><ul><li><a href="#61-the-one-rule-stated-precisely">6.1 The one rule, stated precisely</a></li><li><a href="#62-one-operand-library-compiled-two-ways">6.2 One operand library, compiled two ways</a></li><li><a href="#63-what-the-specializer-emits">6.3 What the specializer emits</a></li><li><a href="#64-the-compile-pipeline-no-mlir-no-hip">6.4 The compile pipeline — no MLIR, no HIP</a></li><li><a href="#65-the-correctness-gate">6.5 The correctness gate</a></li><li><a href="#66-the-specializer-is-opt-in">6.6 The specializer is opt-in</a></li><li><a href="#67-the-three-tier-wrappers">6.7 The three tier wrappers</a></li></ul><li><a href="#7-what-v2-specializes-eight-classes-eight-experiments">7. What V2 specializes — eight classes, eight experiments</a></li><ul><li><a href="#71-the-experiment">7.1 The experiment</a></li><li><a href="#72-a-measurement-note-because-an-earlier-draft-of-this-chapter-got-it-wrong">7.2 A measurement note, because an earlier draft of this chapter got it wrong</a></li><li><a href="#73-s1-frame-operand-folding">7.3 S1 — frame operand folding</a></li><li><a href="#74-s2-flag-folding-on-dormant-measurements">7.4 S2 — flag folding on dormant measurements</a></li><li><a href="#75-s3-static-rank-tracking-the-load-bearing-one">7.5 S3 — static rank tracking (the load-bearing one)</a></li><li><a href="#76-s4-rank-folded-cooperative-reduction">7.6 S4 — rank-folded cooperative reduction</a></li><li><a href="#77-s5-scatter-index-folding">7.7 S5 — scatter-index folding</a></li><li><a href="#78-s6-fused-matrix-table-lookup-a-bounded-gain">7.8 S6 — fused-matrix table lookup (a bounded gain)</a></li><li><a href="#79-s7-the-noise-runtime-loop-the-negative-result">7.9 S7 — the noise runtime loop (the negative result)</a></li><li><a href="#710-s8-pauli-mask-index-folding-a-bounded-gain-for-a-different-reason">7.10 S8 — Pauli-mask index folding (a bounded gain, for a different reason)</a></li></ul><li><a href="#8-progressive-lowering-what-the-compiler-does-with-it">8. Progressive lowering: what the compiler does with it</a></li><ul><li><a href="#81-the-corpus">8.1 The corpus</a></li><li><a href="#82-line-counts-through-both-pipelines">8.2 Line counts through both pipelines</a></li><li><a href="#83-v1s-mlir-stage-what-canonicalize-and-cse-actually-did">8.3 V1's MLIR stage: what canonicalize and cse actually did</a></li><li><a href="#84-v1-translate-opt-o2-where-the-real-work-happened">8.4 V1: translate → opt -O2, where the real work happened</a></li><li><a href="#85-v2-emittedc-clango0-clango2">8.5 V2: emitted.c → clangO0 → clangO2</a></li><li><a href="#86-the-f64-gulf-and-why-it-is-not-a-precision-difference">8.6 The f64 gulf, and why it is not a precision difference</a></li><li><a href="#87-what-the-two-pipelines-diffs-collectively-show">8.7 What the two pipelines' diffs collectively show</a></li></ul><li><a href="#9-optimizations-tier-by-tier">9. Optimizations, tier by tier</a></li><ul><li><a href="#91-the-progression">9.1 The progression</a></li><li><a href="#92-p0-the-shot-packed-register-tier-283-12">9.2 P0 — the shot-packed register tier (28.3× → 1.2×)</a></li><li><a href="#93-p1ap1b-lds-reclamation-on-the-coop-tier">9.3 P1a/P1b — LDS reclamation on the coop tier</a></li><li><a href="#94-the-specializer-in-four-commits">9.4 The specializer, in four commits</a></li><li><a href="#95-the-noise-fence-9d9cc68-and-what-it-was-actually-fixing">9.5 The noise fence (9d9cc68) — and what it was actually fixing</a></li><li><a href="#96-one-more-correctness-fix-that-looked-like-a-performance-result-842d646">9.6 One more correctness fix that looked like a performance result (842d646)</a></li><li><a href="#97-where-the-wins-came-from-summarized">9.7 Where the wins came from, summarized</a></li></ul><li><a href="#10-extending-past-rank-19">10. Extending past rank 19</a></li><ul><li><a href="#101-why-the-cap-could-not-simply-be-raised">10.1 Why the cap could not simply be raised</a></li><li><a href="#102-the-fix-b266f80">10.2 The fix (b266f80)</a></li><li><a href="#103-the-gate-had-the-same-bug">10.3 The gate had the same bug</a></li><li><a href="#104-finding-a-circuit-that-actually-reaches-rank-20">10.4 Finding a circuit that actually reaches rank 20</a></li><li><a href="#105-the-census-22-of-353">10.5 The census — 22 of 353</a></li><li><a href="#106-what-rank-2026-actually-costs">10.6 What rank 20–26 actually costs</a></li></ul><li><a href="#11-pitfalls">11. Pitfalls</a></li><ul><li><a href="#111-the-noise-regression-and-the-theory-that-was-wrong">11.1 The noise regression, and the theory that was wrong</a></li><li><a href="#112-the-real-bug-a-barrier-that-ordered-execution-but-not-memory">11.2 The real bug: a barrier that ordered execution but not memory</a></li><li><a href="#113-the-threshold-that-was-calibrated-for-the-wrong-precision">11.3 The threshold that was calibrated for the wrong precision</a></li><li><a href="#114-the-pitfall-that-nearly-reached-this-report-a-stale-specialization-cache">11.4 The pitfall that nearly reached this report: a stale specialization cache</a></li><li><a href="#115-the-same-bug-in-the-build-system-three-minutes-later">11.5 The same bug, in the build system, three minutes later</a></li><li><a href="#116-the-common-thread">11.6 The common thread</a></li></ul><li><a href="#12-the-gap-f32-vs-f64-and-how-it-was-narrowed">12. The gap: f32 vs f64, and how it was narrowed</a></li><ul><li><a href="#121-why-a-precision-difference-becomes-a-correctness-difference">12.1 Why a precision difference becomes a correctness difference</a></li><li><a href="#122-the-dominant-cause-a-constant-that-outlived-its-precision">12.2 The dominant cause: a constant that outlived its precision</a></li><li><a href="#123-the-ab-that-confirmed-it">12.3 The A/B that confirmed it</a></li><li><a href="#124-post-fix-verification-separating-logic-from-statistics">12.4 Post-fix verification: separating logic from statistics</a></li><li><a href="#125-what-narrowing-the-gap-actually-meant">12.5 What "narrowing the gap" actually meant</a></li></ul><li><a href="#13-removing-hip-introducing-hsa">13. Removing HIP, introducing HSA</a></li><ul><li><a href="#131-what-hip-actually-does-per-launch">13.1 What HIP actually does per launch</a></li><li><a href="#132-the-experiment">13.2 The experiment</a></li><li><a href="#133-the-result">13.3 The result</a></li><li><a href="#134-reading-the-result-honestly">13.4 Reading the result honestly</a></li><li><a href="#134a-how-much-of-this-does-v2-actually-collect">13.4a How much of this does V2 actually collect?</a></li><li><a href="#135-what-the-no-hip-policy-has-cost">13.5 What the no-HIP policy has cost</a></li><li><a href="#136-what-is-still-unmeasured">13.6 What is still unmeasured</a></li></ul><li><a href="#14-performance-evaluation-v2-against-svm">14. Performance evaluation: V2 against SVM</a></li><ul><li><a href="#141-method">14.1 Method</a></li><li><a href="#142-the-result">14.2 The result</a></li><li><a href="#143-where-the-time-goes-the-scalar-pipe">14.3 Where the time goes: the scalar pipe</a></li><li><a href="#144-why-the-speedup-varies-instruction-mix">14.4 Why the speedup varies: instruction mix</a></li><li><a href="#145-why-the-qv-family-resists-the-resident-pool-shrinks">14.5 Why the QV family resists: the resident pool shrinks</a></li><li><a href="#146-what-v2-does-not-spend">14.6 What V2 does not spend</a></li><li><a href="#147-a-sanity-check-does-the-counter-model-explain-the-time">14.7 A sanity check: does the counter model explain the time?</a></li><li><a href="#148-one-result-that-does-not-fit">14.8 One result that does not fit</a></li></ul><li><a href="#15-the-full-benchmark-report">15. The full benchmark report</a></li><ul><li><a href="#151-provenance">15.1 Provenance</a></li><li><a href="#152-what-each-run-does">15.2 What each run does</a></li><li><a href="#153-the-complete-result-table">15.3 The complete result table</a></li><li><a href="#154-tier-assignment">15.4 Tier assignment</a></li><li><a href="#155-launch-geometry-and-resource-footprint">15.5 Launch geometry and resource footprint</a></li><li><a href="#156-the-complete-counter-table">15.6 The complete counter table</a></li><li><a href="#157-cache-and-activity-counters">15.7 Cache and activity counters</a></li><li><a href="#158-reproduction">15.8 Reproduction</a></li></ul><li><a href="#16-conclusions-and-open-items">16. Conclusions and open items</a></li><ul><li><a href="#161-what-was-built-and-what-it-is-worth">16.1 What was built, and what it is worth</a></li><li><a href="#162-where-the-speedup-comes-from">16.2 Where the speedup comes from</a></li><li><a href="#163-where-it-does-not-come-from">16.3 Where it does not come from</a></li><li><a href="#164-open-items">16.4 Open items</a></li><li><a href="#165-what-this-report-is-and-how-to-check-it">16.5 What this report is, and how to check it</a></li></ul></ul>
+  <ul><li><a href="#the-clifft-gpu-backend-svm-hybrid-mlir-v1-and-the-v2-rebuild">The clifft GPU Backend: SVM, Hybrid, MLIR V1, and the V2 Rebuild</a></li><ul><li><a href="#provenance-of-the-performance-numbers">⚠ Provenance of the performance numbers</a></li></ul><li><a href="#a-note-on-method-before-anything-else">A note on method, before anything else</a></li><li><a href="#table-of-contents">Table of contents</a></li><li><a href="#1-executive-summary">1. Executive summary</a></li><ul><li><a href="#11-the-four-generations">1.1 The four generations</a></li><li><a href="#12-the-headline-number">1.2 The headline number</a></li><li><a href="#13-the-five-results-this-report-argues-for">1.3 The five results this report argues for</a></li><li><a href="#14-what-did-not-work">1.4 What did not work</a></li></ul><li><a href="#2-the-svm-what-is-actually-being-simulated">2. The SVM: what is actually being simulated</a></li><ul><li><a href="#21-the-factored-state">2.1 The factored state</a></li><li><a href="#22-the-bytecode">2.2 The bytecode</a></li><li><a href="#23-the-interpreter-loop-and-why-its-shape-matters">2.3 The interpreter loop, and why its shape matters</a></li><li><a href="#24-the-prng-and-why-it-must-be-bit-exact">2.4 The PRNG, and why it must be bit-exact</a></li><li><a href="#25-what-this-means-for-a-gpu">2.5 What this means for a GPU</a></li></ul><li><a href="#3-the-original-gpu-svm-one-interpreter-three-tiers">3. The original GPU SVM: one interpreter, three tiers</a></li><ul><li><a href="#31-the-kernel-is-a-forpc-switch">3.1 The kernel is a for(pc) switch</a></li><li><a href="#32-three-tiers-because-the-working-set-spans-107">3.2 Three tiers, because the working set spans 10^7</a></li><li><a href="#33-the-cooperative-reduction">3.3 The cooperative reduction</a></li><li><a href="#34-what-the-svm-backend-does-well">3.4 What the SVM backend does well</a></li><li><a href="#35-what-it-leaves-on-the-table">3.5 What it leaves on the table</a></li></ul><li><a href="#4-hybrid-compiling-the-circuit-into-hip-and-why-it-stalled">4. Hybrid: compiling the circuit into HIP, and why it stalled</a></li><ul><li><a href="#41-the-idea">4.1 The idea</a></li><li><a href="#42-the-compile-path-and-the-first-appearance-of-an-hsahip-split">4.2 The compile path — and the first appearance of an HSA/HIP split</a></li><li><a href="#43-the-result-correct-competitive-never-ahead">4.3 The result: correct, competitive, never ahead</a></li><li><a href="#44-why-it-stalled-the-density-measurement">4.4 Why it stalled — the density measurement</a></li></ul><li><a href="#5-v1-the-mlir-backend-and-its-failure">5. V1: the MLIR backend and its failure</a></li><ul><li><a href="#51-the-original-idea">5.1 The original idea</a></li><li><a href="#52-what-was-actually-built-three-verified-findings">5.2 What was actually built — three verified findings</a></li><li><a href="#53-the-actual-failure-unrolling-the-operand-sequence">5.3 The actual failure: unrolling the operand sequence</a></li><li><a href="#54-the-performance-result">5.4 The performance result</a></li><li><a href="#55-the-spill-claim-real-but-mis-attributed">5.5 The spill claim: real, but mis-attributed</a></li><li><a href="#56-the-duplication-tax">5.6 The duplication tax</a></li><li><a href="#57-the-three-lessons-v2-is-built-on">5.7 The three lessons V2 is built on</a></li></ul><li><a href="#6-v2-the-architecture">6. V2: the architecture</a></li><ul><li><a href="#61-the-one-rule-stated-precisely">6.1 The one rule, stated precisely</a></li><li><a href="#62-one-operand-library-compiled-two-ways">6.2 One operand library, compiled two ways</a></li><li><a href="#63-what-the-specializer-emits">6.3 What the specializer emits</a></li><li><a href="#64-the-compile-pipeline-no-mlir-no-hip">6.4 The compile pipeline — no MLIR, no HIP</a></li><li><a href="#65-the-correctness-gate">6.5 The correctness gate</a></li><li><a href="#66-the-specializer-is-opt-in">6.6 The specializer is opt-in</a></li><li><a href="#67-the-three-tier-wrappers">6.7 The three tier wrappers</a></li></ul><li><a href="#7-what-v2-specializes-eight-classes-eight-experiments">7. What V2 specializes — eight classes, eight experiments</a></li><ul><li><a href="#71-the-experiment">7.1 The experiment</a></li><li><a href="#72-a-measurement-note-because-an-earlier-draft-of-this-chapter-got-it-wrong">7.2 A measurement note, because an earlier draft of this chapter got it wrong</a></li><li><a href="#73-s1-frame-operand-folding">7.3 S1 — frame operand folding</a></li><li><a href="#74-s2-flag-folding-on-dormant-measurements">7.4 S2 — flag folding on dormant measurements</a></li><li><a href="#75-s3-static-rank-tracking-the-load-bearing-one">7.5 S3 — static rank tracking (the load-bearing one)</a></li><li><a href="#76-s4-rank-folded-cooperative-reduction">7.6 S4 — rank-folded cooperative reduction</a></li><li><a href="#77-s5-scatter-index-folding">7.7 S5 — scatter-index folding</a></li><li><a href="#78-s6-fused-matrix-table-lookup-a-bounded-gain">7.8 S6 — fused-matrix table lookup (a bounded gain)</a></li><li><a href="#79-s7-the-noise-runtime-loop-the-negative-result">7.9 S7 — the noise runtime loop (the negative result)</a></li><li><a href="#710-s8-pauli-mask-index-folding-a-bounded-gain-for-a-different-reason">7.10 S8 — Pauli-mask index folding (a bounded gain, for a different reason)</a></li></ul><li><a href="#8-progressive-lowering-what-the-compiler-does-with-it">8. Progressive lowering: what the compiler does with it</a></li><ul><li><a href="#81-the-corpus">8.1 The corpus</a></li><li><a href="#82-line-counts-through-both-pipelines">8.2 Line counts through both pipelines</a></li><li><a href="#83-v1s-mlir-stage-what-canonicalize-and-cse-actually-did">8.3 V1's MLIR stage: what canonicalize and cse actually did</a></li><li><a href="#84-v1-translate-opt-o2-where-the-real-work-happened">8.4 V1: translate → opt -O2, where the real work happened</a></li><li><a href="#85-v2-emittedc-clango0-clango2">8.5 V2: emitted.c → clangO0 → clangO2</a></li><li><a href="#86-the-f64-gulf-and-why-it-is-not-a-precision-difference">8.6 The f64 gulf, and why it is not a precision difference</a></li><li><a href="#87-what-the-two-pipelines-diffs-collectively-show">8.7 What the two pipelines' diffs collectively show</a></li></ul><li><a href="#9-optimizations-tier-by-tier">9. Optimizations, tier by tier</a></li><ul><li><a href="#91-the-progression">9.1 The progression</a></li><li><a href="#92-p0-the-shot-packed-register-tier-283-12">9.2 P0 — the shot-packed register tier (28.3× → 1.2×)</a></li><li><a href="#93-p1ap1b-lds-reclamation-on-the-coop-tier">9.3 P1a/P1b — LDS reclamation on the coop tier</a></li><li><a href="#94-the-specializer-in-four-commits">9.4 The specializer, in four commits</a></li><li><a href="#95-the-noise-fence-9d9cc68-and-what-it-was-actually-fixing">9.5 The noise fence (9d9cc68) — and what it was actually fixing</a></li><li><a href="#96-one-more-correctness-fix-that-looked-like-a-performance-result-842d646">9.6 One more correctness fix that looked like a performance result (842d646)</a></li><li><a href="#97-where-the-wins-came-from-summarized">9.7 Where the wins came from, summarized</a></li></ul><li><a href="#10-extending-past-rank-19">10. Extending past rank 19</a></li><ul><li><a href="#101-why-the-cap-could-not-simply-be-raised">10.1 Why the cap could not simply be raised</a></li><li><a href="#102-the-fix-b266f80">10.2 The fix (b266f80)</a></li><li><a href="#103-the-gate-had-the-same-bug">10.3 The gate had the same bug</a></li><li><a href="#104-finding-a-circuit-that-actually-reaches-rank-20">10.4 Finding a circuit that actually reaches rank 20</a></li><li><a href="#105-the-census-22-of-353">10.5 The census — 22 of 353</a></li><li><a href="#106-what-rank-2026-actually-costs">10.6 What rank 20–26 actually costs</a></li></ul><li><a href="#11-pitfalls">11. Pitfalls</a></li><ul><li><a href="#111-the-noise-regression-and-the-theory-that-was-wrong">11.1 The noise regression, and the theory that was wrong</a></li><li><a href="#112-the-real-bug-a-barrier-that-ordered-execution-but-not-memory">11.2 The real bug: a barrier that ordered execution but not memory</a></li><li><a href="#113-the-threshold-that-was-calibrated-for-the-wrong-precision">11.3 The threshold that was calibrated for the wrong precision</a></li><li><a href="#114-the-pitfall-that-nearly-reached-this-report-a-stale-specialization-cache">11.4 The pitfall that nearly reached this report: a stale specialization cache</a></li><li><a href="#115-the-same-bug-in-the-build-system-three-minutes-later">11.5 The same bug, in the build system, three minutes later</a></li><li><a href="#116-the-common-thread">11.6 The common thread</a></li></ul><li><a href="#12-the-gap-f32-vs-f64-and-how-it-was-narrowed">12. The gap: f32 vs f64, and how it was narrowed</a></li><ul><li><a href="#121-why-a-precision-difference-becomes-a-correctness-difference">12.1 Why a precision difference becomes a correctness difference</a></li><li><a href="#122-the-dominant-cause-a-constant-that-outlived-its-precision">12.2 The dominant cause: a constant that outlived its precision</a></li><li><a href="#123-the-ab-that-confirmed-it">12.3 The A/B that confirmed it</a></li><li><a href="#124-post-fix-verification-separating-logic-from-statistics">12.4 Post-fix verification: separating logic from statistics</a></li><li><a href="#125-what-narrowing-the-gap-actually-meant">12.5 What "narrowing the gap" actually meant</a></li></ul><li><a href="#13-removing-hip-introducing-hsa">13. Removing HIP, introducing HSA</a></li><ul><li><a href="#131-what-hip-actually-does-per-launch">13.1 What HIP actually does per launch</a></li><li><a href="#132-the-experiment">13.2 The experiment</a></li><li><a href="#133-the-result">13.3 The result</a></li><li><a href="#134-reading-the-result-honestly">13.4 Reading the result honestly</a></li><li><a href="#134a-how-much-of-this-does-v2-actually-collect">13.4a How much of this does V2 actually collect?</a></li><li><a href="#135-what-the-no-hip-policy-has-cost">13.5 What the no-HIP policy has cost</a></li><li><a href="#136-what-is-still-unmeasured">13.6 What is still unmeasured</a></li></ul><li><a href="#14-performance-evaluation-v2-against-svm">14. Performance evaluation: V2 against SVM</a></li><ul><li><a href="#141-method">14.1 Method</a></li><li><a href="#142-the-result">14.2 The result</a></li><li><a href="#143-where-the-time-goes-the-scalar-pipe">14.3 Where the time goes: the scalar pipe</a></li><li><a href="#144-why-the-speedup-varies-instruction-mix">14.4 Why the speedup varies: instruction mix</a></li><li><a href="#145-why-the-qv-family-resists-the-resident-pool-shrinks">14.5 Why the QV family resists: the resident pool shrinks</a></li><li><a href="#145a-characterizing-the-limit-latency-not-bandwidth">14.5a Characterizing the limit: latency, not bandwidth</a></li><li><a href="#146-what-v2-does-not-spend">14.6 What V2 does not spend</a></li><li><a href="#147-a-sanity-check-does-the-counter-model-explain-the-time">14.7 A sanity check: does the counter model explain the time?</a></li><li><a href="#148-one-result-that-does-not-fit">14.8 One result that does not fit</a></li></ul><li><a href="#15-the-full-benchmark-report">15. The full benchmark report</a></li><ul><li><a href="#151-provenance">15.1 Provenance</a></li><li><a href="#152-what-each-run-does">15.2 What each run does</a></li><li><a href="#153-the-complete-result-table">15.3 The complete result table</a></li><li><a href="#154-tier-assignment">15.4 Tier assignment</a></li><li><a href="#155-launch-geometry-and-resource-footprint">15.5 Launch geometry and resource footprint</a></li><li><a href="#156-the-complete-counter-table">15.6 The complete counter table</a></li><li><a href="#157-cache-and-activity-counters">15.7 Cache and activity counters</a></li><li><a href="#158-reproduction">15.8 Reproduction</a></li></ul><li><a href="#16-conclusions-and-open-items">16. Conclusions and open items</a></li><ul><li><a href="#161-what-was-built-and-what-it-is-worth">16.1 What was built, and what it is worth</a></li><li><a href="#162-where-the-speedup-comes-from">16.2 Where the speedup comes from</a></li><li><a href="#163-where-it-does-not-come-from">16.3 Where it does not come from</a></li><li><a href="#164-open-items">16.4 Open items</a></li><li><a href="#165-what-this-report-is-and-how-to-check-it">16.5 What this report is, and how to check it</a></li></ul></ul>
 </nav>
 <div id="main"><div class="wrap">
 <div class="masthead">
@@ -612,6 +612,9 @@ occupancy geometrically as rank climbs — the pool halves with every added qubi
 — and that compounds with the register spilling of §10.6. Two independent
 mechanisms degrade the same six circuits, which is why their ratios approach 1.0
 from a corpus whose median is 0.670.</p>
+<p>The halving is real, but the 32 GB it halves against turned out to be a
+hardcoded constant on a 288 GB device rather than a property of the problem.
+Sweeping past it recovers up to <strong>2.09×</strong> at rank 24; see §14.5's correction.</p>
 <p>All 26 are <strong>byte-exact</strong> against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).</p>
 <blockquote>
@@ -2636,8 +2639,13 @@ across the device's eight compute dies.</p>
 costs nothing in occupancy; from 21 up, every added qubit halves the resident
 pool. §10 shows this table's five measurable rows (20–24) reproducing exactly in
 the observed <code>Grid_Size_X ÷ 256</code>, and §15 shows the performance decay that
-follows from it — a geometric loss that is <em>by design</em>, not a bug, and is why
-§10 covers what made rank &gt; 19 possible at all rather than what made it fast.</p>
+follows from it.</p>
+<p>This section originally called that decay <em>by design, not a bug</em>. The halving is
+by design; the <strong>32 GB it halves against was not</strong> — it is a hardcoded constant
+against a 288 GB device, so the pool ran at ~11 % of available VRAM. §14.5's
+correction has the sweep: up to 2.09× at rank 24, with the budget now derived
+from the HSA-reported pool size. The table above still describes the shipped
+constant, which is what the five measured grids were produced by.</p>
 <hr />
 <h2 id="7-what-v2-specializes-eight-classes-eight-experiments">7. What V2 specializes — eight classes, eight experiments</h2>
 <p>Chapter 6 described the mechanism: the specializer emits one <code>v2_op_*()</code> call
@@ -5662,6 +5670,13 @@ resident workgroups. The XCD-alignment step (<code>kNumXCDs = 8</code>) keeps th
 spread evenly across the device's eight compute dies.</p>
 <p>One constraint worth recording: the cap is kept <code>≤ 30</code> so <code>1u &lt;&lt; rank</code> stays
 inside a <code>u32</code>.</p>
+<blockquote>
+<p>The 32 GB in the snippet above is what this change shipped, and it is what
+§14.5 later measures as <strong>undersized by roughly 4×</strong> — 32 GB of a 288 GB
+device. The budget is now derived from the HSA-reported pool size instead
+(commit <code>906853e</code>); the code here is kept as-shipped because the bug it
+introduced is the subject of §14.5's correction.</p>
+</blockquote>
 <figure>
 <img src="diagrams/hbm-budget-pool.svg" alt="Resident pool size vs circuit rank under the 32 GB budget" width="100%">
 <figcaption><b>Figure 10.1</b> — Resident workgroup pool under the 32 GB budget.
@@ -8138,19 +8153,111 @@ down to a multiple of <code>kNumXCDs = 8</code> (<code>v2_kernel.cc:436-445</cod
 </tbody>
 </table>
 <p>Five predictions, five exact matches. Every added qubit halves the pool. By rank
-24 there are 168 workgroups on a device with 256 CUs — <strong>the machine cannot be
-filled</strong>, and no amount of instruction-level improvement changes that. This is
-the clearest single explanation for the QV band, and it is structural rather
-than incidental: it follows from the budget constant and the rank, both known
-before the kernel launches.</p>
+24 there are 168 workgroups on a device with 256 CUs (confirmed from HSA's
+<code>HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT</code>, not from the marketing sheet) — <strong>the
+machine cannot be filled</strong>, and no amount of instruction-level improvement
+changes that. This is the clearest single explanation for the QV band.</p>
+<blockquote>
+<p><strong>Correction (job 51166/51171).</strong> The paragraph above originally called this
+<em>structural</em>. It is not — it is a <strong>bug</strong>, and the word "structural" is what
+kept it from being found. The 32 GB is a hardcoded constant on a <strong>288 GB</strong>
+device: the pool was using 11 % of the VRAM available to it. Nothing about
+the rank forces that; only the constant does.</p>
+<p>Sweeping <code>V2_GLOBAL_WGS</code> past the default, on one node, three runs per arm,
+reporting <code>v2_kernel_seconds</code>:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">rank</th>
+<th>circuit</th>
+<th style="text-align: right;">default wgs</th>
+<th style="text-align: right;">default</th>
+<th style="text-align: right;">best</th>
+<th style="text-align: right;">best wgs</th>
+<th style="text-align: right;">gain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">20</td>
+<td><code>qv20_seed42</code></td>
+<td style="text-align: right;">2,048</td>
+<td style="text-align: right;">1.805 s</td>
+<td style="text-align: right;">1.797 s</td>
+<td style="text-align: right;">4,096</td>
+<td style="text-align: right;">— (saturated)</td>
+</tr>
+<tr>
+<td style="text-align: right;">21</td>
+<td><code>qv21_L8</code></td>
+<td style="text-align: right;">1,360</td>
+<td style="text-align: right;">2.980 s</td>
+<td style="text-align: right;">2.719 s</td>
+<td style="text-align: right;">2,048</td>
+<td style="text-align: right;">1.10×</td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td><code>qv22_L6</code></td>
+<td style="text-align: right;">680</td>
+<td style="text-align: right;">3.177 s</td>
+<td style="text-align: right;">2.213 s</td>
+<td style="text-align: right;">1,360</td>
+<td style="text-align: right;">1.44×</td>
+</tr>
+<tr>
+<td style="text-align: right;">23</td>
+<td><code>qv23_L5</code></td>
+<td style="text-align: right;">336</td>
+<td style="text-align: right;">6.165 s</td>
+<td style="text-align: right;">3.098 s</td>
+<td style="text-align: right;">1,360</td>
+<td style="text-align: right;"><strong>1.99×</strong></td>
+</tr>
+<tr>
+<td style="text-align: right;">24</td>
+<td><code>qv24_L4</code></td>
+<td style="text-align: right;">168</td>
+<td style="text-align: right;">7.242 s</td>
+<td style="text-align: right;">3.468 s</td>
+<td style="text-align: right;">680</td>
+<td style="text-align: right;"><strong>2.09×</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The deficit grows with rank exactly as the halving predicts, reaching 2.09× at
+rank 24 — so the mechanism identified above was right, while the conclusion
+drawn from it was wrong. The curve peaks and then degrades (rank 21: 2.719 s
+at 2,048 → 2.964 s at 4,096 → 3.025 s at 8,192), so the 2,048 cap stays.</p>
+<p>Worth recording why an in-tree sweep (<code>wgsweep_50152.log</code>) had already
+concluded the pool was fine: it swept ranks 11–14, where the 2,048 cap binds
+<em>before</em> the budget does. The measurement was correct and taken where the
+effect does not exist. The budget only binds from rank 21 up, and those
+circuits had never been swept.</p>
+<p>The fix (commit <code>906853e</code>) derives the budget from the device rather than
+raising one constant to another — a constant is what caused this:</p>
+<p><code>cpp
+constexpr uint64_t kBudgetNumer = 4, kBudgetDenom = 9;
+const uint64_t vram = rt.device_pool_bytes();   // HSA-reported pool size
+const uint64_t budget = vram ? (vram / kBudgetDenom) * kBudgetNumer
+                             : (32ull &lt;&lt; 30);   // query failure -&gt; old behaviour</code></p>
+<p>4/9 of a 288 GB pool is 128 GB, which reproduces the measured optimum at ranks
+20, 21, 23 and 24 and picks 2,048 against a measured 1,360 at rank 22 — where
+2,048 timed 2.194/2.373/2.381 s against 1,360's 2.213 s, i.e. within noise. On
+a 192 GB MI300X the same fraction yields a proportionally smaller pool with no
+re-tuning. <code>V2_DUMP_WGS=1</code> prints the derivation, since a device-derived
+number is no longer readable from the source alone.</p>
+</blockquote>
 <figure>
 <img src="diagrams/xcd-pool-underfill.svg" alt="Resident workgroup pool against 8 XCDs and 256 CUs, ranks 20 through 24" width="100%">
 <figcaption><b>Figure 14.1</b> — The pool formula drawn against the device. Each
 added qubit doubles bytes per workgroup and so halves the resident pool against
 the fixed 32 GB budget: 2,048 workgroups at rank 20 multiply-occupy every CU;
 168 at rank 24 leave 88 CUs with no resident workgroup at all. The formula
-predicted all five grids exactly, which is what makes this structural rather
-than incidental — both inputs are known before the kernel launches.</figcaption>
+predicted all five grids exactly. As the correction above records, the halving
+is real but the 32 GB it halves against was a hardcoded constant on a 288 GB
+device, not a property of the problem — raising it to a device-derived 4/9
+recovers up to 2.09× at rank 24.</figcaption>
 </figure>
 
 <p><strong>The second mechanism is register spilling, and it is measured, not inferred.</strong>
@@ -8279,6 +8386,105 @@ pass-C cycle count by a pass-A wave count that disagrees with the launch
 geometry does not measure per-wave cost. The claim was removed rather than
 repaired.</p>
 </blockquote>
+<h3 id="145a-characterizing-the-limit-latency-not-bandwidth">14.5a Characterizing the limit: latency, not bandwidth</h3>
+<p>The two mechanisms above — a pool that shrinks with rank, and a register
+allocator that spills past rank 22 — are both <em>symptoms</em>. This section states
+the underlying characterization, because it is what decides which optimizations
+are worth attempting at all, and it decided three of them at once.</p>
+<p><strong>The measurement.</strong> One counter pass on <code>qv23_L5</code> (rank 23), the same node and
+the same kernel invocation as its duration:</p>
+<div class="codehilite"><pre><span></span><code>FETCH_SIZE       2,375,156,452 KB   =  2.43 TB
+kernel duration  3,173,389,086 ns   =  3.173 s
+                                    →  766 GB/s
+TCC_REQ_sum      125,637,003,143
+TCC_MISS_sum      39,048,149,329    →  68.9 % L2 hit rate
+</code></pre></div>
+
+<p>766 GB/s against an MI350X's ~8 TB/s of HBM3E is <strong>9.6 %</strong>. The global tier —
+the tier that §14.5 has just spent two mechanisms explaining as slow — is using
+under a tenth of the memory bandwidth available to it. It is not
+bandwidth-bound. It is <strong>latency-bound</strong>: short of <em>outstanding requests</em>, not
+of bytes per second.</p>
+<p>The arithmetic intensity says the same thing from the other side. The butterfly
+is 0.9 flop/byte at U2 and 1.9 at U4, against a machine balance near 20 — about
+10× onto the memory-bound side of the roofline ridge. A workload that far to
+the left of the ridge <em>should</em> saturate bandwidth. This one reaches 9.6 % of it.
+The gap between "should be bandwidth-bound" and "is nowhere near bandwidth"
+is exactly the latency gap.</p>
+<figure>
+<img src="diagrams/latency-not-bandwidth.svg" alt="Memory bandwidth drawn as a flow: a wide supply band tapering to a thin achieved ribbon, with the unused headroom dominating" width="100%">
+<figcaption><b>Figure 14.2</b> — The characterization, drawn as flow rather than
+as a roofline. The supply band is the device's ~8 TB/s; the thin red ribbon is
+the 766 GB/s actually achieved; the dashed envelope between them is 7.2 TB/s of
+bandwidth that is present and idle while the kernel runs. Because throughput is
+concurrency ÷ latency, and the pipe is 90 % empty, only the concurrency term is
+available to move — which is why the three interventions aimed at latency and
+locality all failed and the one aimed at residency returned 2.09×.</figcaption>
+</figure>
+
+<p><strong>Why this single number decided three proposals.</strong> Little's law:
+throughput = concurrency ÷ latency. With 90 % of the pipe empty, no intervention
+that makes each byte <em>cheaper to reach</em> can help — the kernel is not short of
+cheap bytes. Only concurrency is left. Each of the three latency/locality
+proposals was implemented or researched, and each failed for its own mechanism,
+which is worth recording separately because the mechanisms do not transfer to
+each other:</p>
+<p><strong>1. Register prefetch — killed by the VGPR cap.</strong> Software-pipelining the U4
+butterfly to load iteration <code>i + V2_STRIDE</code>'s quad before computing iteration
+<code>i</code>. Compiled in isolation the change looks free: 12 loads → 8, 12 <code>s_waitcnt</code>
+→ 8, at a cost of 12 VGPRs out of 128. In the real specialized kernel at rank
+22 those 12 registers do not exist. Both arms report <code>.vgpr_count 128</code> — pinned
+at the cap — and the prefetch is funded entirely out of scratch:
+<code>.vgpr_spill_count</code> <strong>152 → 375</strong>. It prefetches 4 amplitudes from HBM by
+spilling 223 more values to HBM. <code>FETCH_SIZE</code> confirms the bytes are unchanged
+(2,375,292,491 → 2,375,404,660 KB, 0.005 %) and the time is worse: <strong>+10.3 %</strong>
+at rank 21, <strong>+8.4 %</strong> at rank 22, <strong>+7.3 %</strong> at rank 24. Byte-exactness held in
+every arm, so this is a clean performance falsification and not a correctness
+artifact. The code is retained behind <code>V2_U4_PREFETCH</code>, default off.</p>
+<blockquote>
+<p><strong>The methodology lesson, which is the durable part.</strong> <code>u4_isa_diff.sh</code>
+compiles the operand in isolation, where it allocates 42 of 128 VGPRs and the
+extra registers genuinely are free. That measurement was correct and
+irrelevant: register pressure is a whole-kernel property, and an isolated op
+cannot observe it. An ISA diff of a fragment predicts the <em>instruction
+change</em> and says nothing about whether the allocator can afford it.</p>
+</blockquote>
+<p><strong>2. LDS staging — killed twice, and not by the same thing.</strong> Staging amplitude
+tiles through LDS is the natural response to the prefetch failure, since LDS is
+a separate 64 KB/workgroup resource that consumes no VGPRs: the mechanism above
+does not refute it. It is refuted independently. It was already built and
+measured in the V1 work as failure F8, "LDS-Pipelined Tiling": <strong>−66.1 %</strong> on
+D5, <strong>−16.5 %</strong> on D7, <strong>−6.6 %</strong> on the QEC circuit. The recorded root cause is
+not register pressure but a false premise — the butterfly access is <em>strided
+and predictable</em>, so the L2 prefetcher already handles it, and the 3 barriers
+per tile that tiling adds are pure cost against a benefit that was never there.
+V2's structure closes it further: the coop tier already holds the entire
+statevector in <code>lds_v[V2_MAX_AMP]</code>, so there is nothing to stage, and in the
+global tier a rank-22 workgroup owns a 48 MB slice against 64 KB of LDS — 0.13 %
+— so a tile captures nothing a cache line was not already carrying.</p>
+<p><strong>3. HBM stack placement — killed by the flow itself.</strong> Mapping amplitude slices
+onto HBM stacks so that a workgroup's data sits on the stack nearest its XCD.
+Published NPS4 partitioning gains are 5–15 %, and those are gains against a
+<em>saturated</em> pipe; at 9.6 % occupancy there is no queue to shorten. Two
+structural facts close it independently: the global tier has <strong>no
+cross-workgroup sharing</strong> to co-locate — each workgroup owns a private
+contiguous slice and the only inter-workgroup traffic is one atomic on
+<code>work_counter[0]</code> — and NPS1, the default mode, interleaves physical addresses
+across all eight stacks at sub-page granularity, which makes per-stack placement
+not merely ineffective but <em>inexpressible</em>.</p>
+<p><strong>What was left, and what it returned.</strong> Concurrency. Rank 24 went from 168
+resident workgroups to 680 — <strong>4.05× more work in flight</strong> — for
+<strong>7.242 s → 3.468 s, 2.09×</strong>. That is the same fix §14.5's correction records,
+seen from the side that explains <em>why</em> it was the one that worked: it is the
+only one of the four that changed the numerator.</p>
+<p>This also bounds what remains. The three failures do not prove the tier cannot
+be improved; they prove that <em>these</em> levers are spent. One formulation is
+genuinely untried: hipKittens-style <code>global_load_lds</code>, an asynchronous DMA that
+lands in LDS without passing through a VGPR and needs one fence rather than
+three — it sidesteps both the cap that killed proposal 1 and the barriers that
+killed F8. It is not attempted here because it competes for the same latency
+gap the pool fix has just partially closed, and the honest ordering is to
+re-measure the gap before spending another arm on it. §16.4 keeps it open.</p>
 <h3 id="146-what-v2-does-not-spend">14.6 What V2 does <em>not</em> spend</h3>
 <p>Three counters are worth reporting for what they rule out.</p>
 <p><strong>MFMA = 0 on all 52 cells.</strong> 26 circuits × 2 backends, none missing. Neither
@@ -8443,6 +8649,14 @@ what the ratio requires.</p>
 <h3 id="153-the-complete-result-table">15.3 The complete result table</h3>
 <p>Every circuit. Kernel time is <code>per_dispatch_ns_median</code>; each backend issues
 exactly one dispatch of the kernel under test.</p>
+<blockquote>
+<p><strong>These numbers predate the pool fix of §14.5.</strong> They were measured with the
+32 GB budget, which the sweep showed costs up to 2.09× at rank 24. The six QV
+circuits — the ones setting the weak end of the spread — are precisely the
+ones affected, so the geomean below is a <strong>lower bound</strong> on the corrected
+figure. The corpus is being re-run; until it completes, the table stands as
+the last fully measured state rather than the current one.</p>
+</blockquote>
 <table>
 <thead>
 <tr>

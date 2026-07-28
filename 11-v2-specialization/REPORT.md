@@ -5630,6 +5630,116 @@ isolated, and §16 keeps that as the top open item.
 > geometry does not measure per-wave cost. The claim was removed rather than
 > repaired.
 
+### 14.5a Characterizing the limit: latency, not bandwidth
+
+The two mechanisms above — a pool that shrinks with rank, and a register
+allocator that spills past rank 22 — are both *symptoms*. This section states
+the underlying characterization, because it is what decides which optimizations
+are worth attempting at all, and it decided three of them at once.
+
+**The measurement.** One counter pass on `qv23_L5` (rank 23), the same node and
+the same kernel invocation as its duration:
+
+```
+FETCH_SIZE       2,375,156,452 KB   =  2.43 TB
+kernel duration  3,173,389,086 ns   =  3.173 s
+                                    →  766 GB/s
+TCC_REQ_sum      125,637,003,143
+TCC_MISS_sum      39,048,149,329    →  68.9 % L2 hit rate
+```
+
+766 GB/s against an MI350X's ~8 TB/s of HBM3E is **9.6 %**. The global tier —
+the tier that §14.5 has just spent two mechanisms explaining as slow — is using
+under a tenth of the memory bandwidth available to it. It is not
+bandwidth-bound. It is **latency-bound**: short of *outstanding requests*, not
+of bytes per second.
+
+The arithmetic intensity says the same thing from the other side. The butterfly
+is 0.9 flop/byte at U2 and 1.9 at U4, against a machine balance near 20 — about
+10× onto the memory-bound side of the roofline ridge. A workload that far to
+the left of the ridge *should* saturate bandwidth. This one reaches 9.6 % of it.
+The gap between "should be bandwidth-bound" and "is nowhere near bandwidth"
+is exactly the latency gap.
+
+<figure>
+<img src="diagrams/latency-not-bandwidth.svg" alt="Memory bandwidth drawn as a flow: a wide supply band tapering to a thin achieved ribbon, with the unused headroom dominating" width="100%">
+<figcaption><b>Figure 14.2</b> — The characterization, drawn as flow rather than
+as a roofline. The supply band is the device's ~8 TB/s; the thin red ribbon is
+the 766 GB/s actually achieved; the dashed envelope between them is 7.2 TB/s of
+bandwidth that is present and idle while the kernel runs. Because throughput is
+concurrency ÷ latency, and the pipe is 90 % empty, only the concurrency term is
+available to move — which is why the three interventions aimed at latency and
+locality all failed and the one aimed at residency returned 2.09×.</figcaption>
+</figure>
+
+**Why this single number decided three proposals.** Little's law:
+throughput = concurrency ÷ latency. With 90 % of the pipe empty, no intervention
+that makes each byte *cheaper to reach* can help — the kernel is not short of
+cheap bytes. Only concurrency is left. Each of the three latency/locality
+proposals was implemented or researched, and each failed for its own mechanism,
+which is worth recording separately because the mechanisms do not transfer to
+each other:
+
+**1. Register prefetch — killed by the VGPR cap.** Software-pipelining the U4
+butterfly to load iteration `i + V2_STRIDE`'s quad before computing iteration
+`i`. Compiled in isolation the change looks free: 12 loads → 8, 12 `s_waitcnt`
+→ 8, at a cost of 12 VGPRs out of 128. In the real specialized kernel at rank
+22 those 12 registers do not exist. Both arms report `.vgpr_count 128` — pinned
+at the cap — and the prefetch is funded entirely out of scratch:
+`.vgpr_spill_count` **152 → 375**. It prefetches 4 amplitudes from HBM by
+spilling 223 more values to HBM. `FETCH_SIZE` confirms the bytes are unchanged
+(2,375,292,491 → 2,375,404,660 KB, 0.005 %) and the time is worse: **+10.3 %**
+at rank 21, **+8.4 %** at rank 22, **+7.3 %** at rank 24. Byte-exactness held in
+every arm, so this is a clean performance falsification and not a correctness
+artifact. The code is retained behind `V2_U4_PREFETCH`, default off.
+
+> **The methodology lesson, which is the durable part.** `u4_isa_diff.sh`
+> compiles the operand in isolation, where it allocates 42 of 128 VGPRs and the
+> extra registers genuinely are free. That measurement was correct and
+> irrelevant: register pressure is a whole-kernel property, and an isolated op
+> cannot observe it. An ISA diff of a fragment predicts the *instruction
+> change* and says nothing about whether the allocator can afford it.
+
+**2. LDS staging — killed twice, and not by the same thing.** Staging amplitude
+tiles through LDS is the natural response to the prefetch failure, since LDS is
+a separate 64 KB/workgroup resource that consumes no VGPRs: the mechanism above
+does not refute it. It is refuted independently. It was already built and
+measured in the V1 work as failure F8, "LDS-Pipelined Tiling": **−66.1 %** on
+D5, **−16.5 %** on D7, **−6.6 %** on the QEC circuit. The recorded root cause is
+not register pressure but a false premise — the butterfly access is *strided
+and predictable*, so the L2 prefetcher already handles it, and the 3 barriers
+per tile that tiling adds are pure cost against a benefit that was never there.
+V2's structure closes it further: the coop tier already holds the entire
+statevector in `lds_v[V2_MAX_AMP]`, so there is nothing to stage, and in the
+global tier a rank-22 workgroup owns a 48 MB slice against 64 KB of LDS — 0.13 %
+— so a tile captures nothing a cache line was not already carrying.
+
+**3. HBM stack placement — killed by the flow itself.** Mapping amplitude slices
+onto HBM stacks so that a workgroup's data sits on the stack nearest its XCD.
+Published NPS4 partitioning gains are 5–15 %, and those are gains against a
+*saturated* pipe; at 9.6 % occupancy there is no queue to shorten. Two
+structural facts close it independently: the global tier has **no
+cross-workgroup sharing** to co-locate — each workgroup owns a private
+contiguous slice and the only inter-workgroup traffic is one atomic on
+`work_counter[0]` — and NPS1, the default mode, interleaves physical addresses
+across all eight stacks at sub-page granularity, which makes per-stack placement
+not merely ineffective but *inexpressible*.
+
+**What was left, and what it returned.** Concurrency. Rank 24 went from 168
+resident workgroups to 680 — **4.05× more work in flight** — for
+**7.242 s → 3.468 s, 2.09×**. That is the same fix §14.5's correction records,
+seen from the side that explains *why* it was the one that worked: it is the
+only one of the four that changed the numerator.
+
+This also bounds what remains. The three failures do not prove the tier cannot
+be improved; they prove that *these* levers are spent. One formulation is
+genuinely untried: hipKittens-style `global_load_lds`, an asynchronous DMA that
+lands in LDS without passing through a VGPR and needs one fence rather than
+three — it sidesteps both the cap that killed proposal 1 and the barriers that
+killed F8. It is not attempted here because it competes for the same latency
+gap the pool fix has just partially closed, and the honest ordering is to
+re-measure the gap before spending another arm on it. §16.4 keeps it open.
+
 ### 14.6 What V2 does *not* spend
 
 Three counters are worth reporting for what they rule out.
