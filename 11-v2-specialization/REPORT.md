@@ -175,6 +175,10 @@ occupancy geometrically as rank climbs — the pool halves with every added qubi
 mechanisms degrade the same six circuits, which is why their ratios approach 1.0
 from a corpus whose median is 0.670.
 
+The halving is real, but the 32 GB it halves against turned out to be a
+hardcoded constant on a 288 GB device rather than a property of the problem.
+Sweeping past it recovers up to **2.09×** at rank 24; see §14.5's correction.
+
 All 26 are **byte-exact** against the SVM interpreter and against the f64 CPU
 reference (modulo the documented f32/f64 branch divergence of §12).
 
@@ -1734,8 +1738,14 @@ Evaluating that arithmetic gives the resident pool at every global-tier rank:
 costs nothing in occupancy; from 21 up, every added qubit halves the resident
 pool. §10 shows this table's five measurable rows (20–24) reproducing exactly in
 the observed `Grid_Size_X ÷ 256`, and §15 shows the performance decay that
-follows from it — a geometric loss that is *by design*, not a bug, and is why
-§10 covers what made rank > 19 possible at all rather than what made it fast.
+follows from it.
+
+This section originally called that decay *by design, not a bug*. The halving is
+by design; the **32 GB it halves against was not** — it is a hardcoded constant
+against a 288 GB device, so the pool ran at ~11 % of available VRAM. §14.5's
+correction has the sweep: up to 2.09× at rank 24, with the budget now derived
+from the HSA-reported pool size. The table above still describes the shipped
+constant, which is what the five measured grids were produced by.
 
 ---
 
@@ -4026,6 +4036,12 @@ spread evenly across the device's eight compute dies.
 One constraint worth recording: the cap is kept `≤ 30` so `1u << rank` stays
 inside a `u32`.
 
+> The 32 GB in the snippet above is what this change shipped, and it is what
+> §14.5 later measures as **undersized by roughly 4×** — 32 GB of a 288 GB
+> device. The budget is now derived from the HSA-reported pool size instead
+> (commit `906853e`); the code here is kept as-shipped because the bug it
+> introduced is the subject of §14.5's correction.
+
 <figure>
 <img src="diagrams/hbm-budget-pool.svg" alt="Resident pool size vs circuit rank under the 32 GB budget" width="100%">
 <figcaption><b>Figure 10.1</b> — Resident workgroup pool under the 32 GB budget.
@@ -5490,11 +5506,55 @@ Evaluating that arithmetic against the grids `rocprofv3` actually recorded:
 | 24 | 192 MB | 168 | **168** ✓ |
 
 Five predictions, five exact matches. Every added qubit halves the pool. By rank
-24 there are 168 workgroups on a device with 256 CUs — **the machine cannot be
-filled**, and no amount of instruction-level improvement changes that. This is
-the clearest single explanation for the QV band, and it is structural rather
-than incidental: it follows from the budget constant and the rank, both known
-before the kernel launches.
+24 there are 168 workgroups on a device with 256 CUs (confirmed from HSA's
+`HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT`, not from the marketing sheet) — **the
+machine cannot be filled**, and no amount of instruction-level improvement
+changes that. This is the clearest single explanation for the QV band.
+
+> **Correction (job 51166/51171).** The paragraph above originally called this
+> *structural*. It is not — it is a **bug**, and the word "structural" is what
+> kept it from being found. The 32 GB is a hardcoded constant on a **288 GB**
+> device: the pool was using 11 % of the VRAM available to it. Nothing about
+> the rank forces that; only the constant does.
+>
+> Sweeping `V2_GLOBAL_WGS` past the default, on one node, three runs per arm,
+> reporting `v2_kernel_seconds`:
+>
+> | rank | circuit | default wgs | default | best | best wgs | gain |
+> |---:|---|---:|---:|---:|---:|---:|
+> | 20 | `qv20_seed42` | 2,048 | 1.805 s | 1.797 s | 4,096 | — (saturated) |
+> | 21 | `qv21_L8` | 1,360 | 2.980 s | 2.719 s | 2,048 | 1.10× |
+> | 22 | `qv22_L6` | 680 | 3.177 s | 2.213 s | 1,360 | 1.44× |
+> | 23 | `qv23_L5` | 336 | 6.165 s | 3.098 s | 1,360 | **1.99×** |
+> | 24 | `qv24_L4` | 168 | 7.242 s | 3.468 s | 680 | **2.09×** |
+>
+> The deficit grows with rank exactly as the halving predicts, reaching 2.09× at
+> rank 24 — so the mechanism identified above was right, while the conclusion
+> drawn from it was wrong. The curve peaks and then degrades (rank 21: 2.719 s
+> at 2,048 → 2.964 s at 4,096 → 3.025 s at 8,192), so the 2,048 cap stays.
+>
+> Worth recording why an in-tree sweep (`wgsweep_50152.log`) had already
+> concluded the pool was fine: it swept ranks 11–14, where the 2,048 cap binds
+> *before* the budget does. The measurement was correct and taken where the
+> effect does not exist. The budget only binds from rank 21 up, and those
+> circuits had never been swept.
+>
+> The fix (commit `906853e`) derives the budget from the device rather than
+> raising one constant to another — a constant is what caused this:
+>
+> ```cpp
+> constexpr uint64_t kBudgetNumer = 4, kBudgetDenom = 9;
+> const uint64_t vram = rt.device_pool_bytes();   // HSA-reported pool size
+> const uint64_t budget = vram ? (vram / kBudgetDenom) * kBudgetNumer
+>                              : (32ull << 30);   // query failure -> old behaviour
+> ```
+>
+> 4/9 of a 288 GB pool is 128 GB, which reproduces the measured optimum at ranks
+> 20, 21, 23 and 24 and picks 2,048 against a measured 1,360 at rank 22 — where
+> 2,048 timed 2.194/2.373/2.381 s against 1,360's 2.213 s, i.e. within noise. On
+> a 192 GB MI300X the same fraction yields a proportionally smaller pool with no
+> re-tuning. `V2_DUMP_WGS=1` prints the derivation, since a device-derived
+> number is no longer readable from the source alone.
 
 <figure>
 <img src="diagrams/xcd-pool-underfill.svg" alt="Resident workgroup pool against 8 XCDs and 256 CUs, ranks 20 through 24" width="100%">
@@ -5502,8 +5562,10 @@ before the kernel launches.
 added qubit doubles bytes per workgroup and so halves the resident pool against
 the fixed 32 GB budget: 2,048 workgroups at rank 20 multiply-occupy every CU;
 168 at rank 24 leave 88 CUs with no resident workgroup at all. The formula
-predicted all five grids exactly, which is what makes this structural rather
-than incidental — both inputs are known before the kernel launches.</figcaption>
+predicted all five grids exactly. As the correction above records, the halving
+is real but the 32 GB it halves against was a hardcoded constant on a 288 GB
+device, not a property of the problem — raising it to a device-derived 4/9
+recovers up to 2.09× at rank 24.</figcaption>
 </figure>
 
 **The second mechanism is register spilling, and it is measured, not inferred.**
@@ -5734,6 +5796,13 @@ what the ratio requires.
 
 Every circuit. Kernel time is `per_dispatch_ns_median`; each backend issues
 exactly one dispatch of the kernel under test.
+
+> **These numbers predate the pool fix of §14.5.** They were measured with the
+> 32 GB budget, which the sweep showed costs up to 2.09× at rank 24. The six QV
+> circuits — the ones setting the weak end of the spread — are precisely the
+> ones affected, so the geomean below is a **lower bound** on the corrected
+> figure. The corpus is being re-run; until it completes, the table stands as
+> the last fully measured state rather than the current one.
 
 | # | circuit | tier | shots | V2 (µs) | SVM (µs) | V2/SVM |
 |---:|---|---|---:|---:|---:|---:|
